@@ -36,3 +36,34 @@ test "list with empty config prints no entries" {
     // the function doesn't crash with empty config
     _ = &cfg;
 }
+
+test "buildStorePath with various names and versions" {
+    const cases = [_]struct { name: []const u8, version: []const u8, expected: []const u8 }{
+        .{ .name = "node", .version = "22.15.0", .expected = "/tmp/.rawenv/store/node-22.15.0" },
+        .{ .name = "php", .version = "8.4", .expected = "/tmp/.rawenv/store/php-8.4" },
+        .{ .name = "postgresql", .version = "16", .expected = "/tmp/.rawenv/store/postgresql-16" },
+        .{ .name = "redis", .version = "7.2.4", .expected = "/tmp/.rawenv/store/redis-7.2.4" },
+    };
+    for (cases) |c| {
+        const path = try service.buildStorePath(testing.allocator, "/tmp", c.name, c.version);
+        defer testing.allocator.free(path);
+        try testing.expectEqualStrings(c.expected, path);
+    }
+}
+
+test "buildBinPath with different homes" {
+    const path1 = try service.buildBinPath(testing.allocator, "/home/alice");
+    defer testing.allocator.free(path1);
+    try testing.expectEqualStrings("/home/alice/.rawenv/bin", path1);
+
+    const path2 = try service.buildBinPath(testing.allocator, "/Users/bob");
+    defer testing.allocator.free(path2);
+    try testing.expectEqualStrings("/Users/bob/.rawenv/bin", path2);
+}
+
+test "buildPath contains existing PATH" {
+    const path = try shell.buildPath(testing.allocator, "/home/user");
+    defer testing.allocator.free(path);
+    // Should contain a colon separator (unix)
+    try testing.expect(std.mem.indexOf(u8, path, ":") != null);
+}

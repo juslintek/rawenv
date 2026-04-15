@@ -90,3 +90,56 @@ test "sha256 different data produces different hash" {
 
     try std.testing.expect(!std.mem.eql(u8, hash1, hash2));
 }
+
+test "full version 22.15.0 resolves same as short 22" {
+    const pkg_short = try resolver.resolve(std.testing.allocator, "node", "22");
+    defer std.testing.allocator.free(pkg_short.url);
+    const pkg_full = try resolver.resolve(std.testing.allocator, "node", "22.15.0");
+    defer std.testing.allocator.free(pkg_full.url);
+
+    try std.testing.expectEqualStrings(pkg_short.version, pkg_full.version);
+    try std.testing.expectEqualStrings(pkg_short.url, pkg_full.url);
+    try std.testing.expectEqualStrings(pkg_short.sha256, pkg_full.sha256);
+}
+
+test "resolveVersion returns input for unknown packages" {
+    const result = resolver.resolveVersion("python", "3.12");
+    try std.testing.expectEqualStrings("3.12", result);
+}
+
+test "resolveVersion returns input for unknown node version" {
+    const result = resolver.resolveVersion("node", "99");
+    try std.testing.expectEqualStrings("99", result);
+}
+
+test "resolveVersion maps node 22 to 22.15.0" {
+    const result = resolver.resolveVersion("node", "22");
+    try std.testing.expectEqualStrings("22.15.0", result);
+}
+
+test "parsePackageSpec with multiple @ signs" {
+    // "scope@org@1.0" — first @ splits name from version
+    const result = resolver.parsePackageSpec("scope@org@1.0").?;
+    try std.testing.expectEqualStrings("scope", result.name);
+    try std.testing.expectEqualStrings("org@1.0", result.version);
+}
+
+test "sha256 empty file" {
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+
+    const f = try tmp_dir.dir.createFile("empty.bin", .{});
+    f.close();
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const abs_path = try tmp_dir.dir.realpath("empty.bin", &path_buf);
+
+    const hash = try store.sha256File(std.testing.allocator, abs_path);
+    defer std.testing.allocator.free(hash);
+
+    // SHA256 of empty string
+    try std.testing.expectEqualStrings(
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        hash,
+    );
+}

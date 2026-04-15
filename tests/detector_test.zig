@@ -165,3 +165,145 @@ test "detect composer.json with php version" {
     try testing.expectEqualStrings("php", result.runtimes[0].key);
     try testing.expectEqualStrings("8.2", result.runtimes[0].value);
 }
+
+test "docker-compose with postgres + redis + mysql" {
+    var dir = try makeTmpDir();
+    defer dir.close();
+    defer cleanFile(dir, "docker-compose.yml");
+    cleanFile(dir, "package.json");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+
+    try dir.writeFile(.{
+        .sub_path = "docker-compose.yml",
+        .data =
+        \\services:
+        \\  db:
+        \\    image: postgres:16
+        \\  cache:
+        \\    image: redis:7
+        \\  legacy:
+        \\    image: mysql:8
+        ,
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(3, result.services.len);
+    try testing.expectEqualStrings("postgresql", result.services[0].key);
+    try testing.expectEqualStrings("16", result.services[0].value);
+    try testing.expectEqualStrings("redis", result.services[1].key);
+    try testing.expectEqualStrings("7", result.services[1].value);
+    try testing.expectEqualStrings("mysql", result.services[2].key);
+    try testing.expectEqualStrings("8", result.services[2].value);
+}
+
+test ".env with multiple URLs" {
+    var dir = try makeTmpDir();
+    defer dir.close();
+    defer cleanFile(dir, ".env");
+    cleanFile(dir, "package.json");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, "docker-compose.yml");
+
+    try dir.writeFile(.{
+        .sub_path = ".env",
+        .data = "DATABASE_URL=postgres://localhost/db\nREDIS_URL=redis://localhost:6379\nDATABASE_URL=mysql://localhost/other\n",
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    // postgresql detected first, redis detected, mysql not duplicated because DATABASE_URL with postgres already added postgresql
+    try testing.expect(result.services.len >= 2);
+    try testing.expectEqualStrings("postgresql", result.services[0].key);
+    try testing.expectEqualStrings("redis", result.services[1].key);
+}
+
+test "empty JSON file graceful handling" {
+    var dir = try makeTmpDir();
+    defer dir.close();
+    defer cleanFile(dir, "package.json");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+    cleanFile(dir, "docker-compose.yml");
+
+    try dir.writeFile(.{
+        .sub_path = "package.json",
+        .data = "",
+    });
+
+    // File exists but JSON parse fails → default node version used
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("node", result.runtimes[0].key);
+    try testing.expectEqualStrings("22", result.runtimes[0].value);
+}
+
+test "malformed JSON file graceful handling" {
+    var dir = try makeTmpDir();
+    defer dir.close();
+    defer cleanFile(dir, "package.json");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+    cleanFile(dir, "docker-compose.yml");
+
+    try dir.writeFile(.{
+        .sub_path = "package.json",
+        .data = "{invalid json!!!",
+    });
+
+    // File exists but malformed → default node version used
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("node", result.runtimes[0].key);
+    try testing.expectEqualStrings("22", result.runtimes[0].value);
+}
+
+test "composer.json without php require defaults to 8.4" {
+    var dir = try makeTmpDir();
+    defer dir.close();
+    defer cleanFile(dir, "composer.json");
+    cleanFile(dir, "package.json");
+    cleanFile(dir, ".env");
+    cleanFile(dir, "docker-compose.yml");
+
+    try dir.writeFile(.{
+        .sub_path = "composer.json",
+        .data = "{\"require\":{\"laravel/framework\":\"^11.0\"}}",
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("php", result.runtimes[0].key);
+    try testing.expectEqualStrings("8.4", result.runtimes[0].value);
+}
+
+test "malformed composer.json graceful handling" {
+    var dir = try makeTmpDir();
+    defer dir.close();
+    defer cleanFile(dir, "composer.json");
+    cleanFile(dir, "package.json");
+    cleanFile(dir, ".env");
+    cleanFile(dir, "docker-compose.yml");
+
+    try dir.writeFile(.{
+        .sub_path = "composer.json",
+        .data = "not json at all",
+    });
+
+    // File exists but malformed → default PHP version used
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("php", result.runtimes[0].key);
+    try testing.expectEqualStrings("8.4", result.runtimes[0].value);
+}

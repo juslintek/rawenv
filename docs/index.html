@@ -17,8 +17,10 @@
     <a href="/" class="logo">⚡ rawenv</a>
     <div class="nav-links">
       <a href="#features">Features</a>
+      <a href="#demo">Demo</a>
+      <a href="#commands">Commands</a>
       <a href="#compare">Compare</a>
-      <a href="https://github.com/rawenv/rawenv" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/juslintek/rawenv" target="_blank" rel="noopener">GitHub</a>
     </div>
   </div>
 </nav>
@@ -33,7 +35,7 @@
       <button onclick="navigator.clipboard.writeText('curl -fsSL rawenv.sh/install | sh')" aria-label="Copy install command">Copy</button>
     </div>
     <div class="hero-actions">
-      <a href="https://github.com/rawenv/rawenv" class="btn-primary" target="_blank" rel="noopener">Get Started</a>
+      <a href="https://github.com/juslintek/rawenv" class="btn-primary" target="_blank" rel="noopener">Get Started</a>
       <a href="#demo" class="btn-secondary">See it in action ↓</a>
     </div>
   </div>
@@ -45,34 +47,97 @@
     <div class="grid">
       <div class="card">
         <div class="card-icon">🔍</div>
-        <h3>Auto-detect</h3>
-        <p>Scans project files — package.json, Gemfile, go.mod, composer.json — and resolves the full dependency graph automatically.</p>
+        <h3>Auto-detect &amp; Discover</h3>
+        <p>Scans project files — package.json, Gemfile, go.mod — and resolves runtimes and services. Discover all projects on your machine.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">📦</div>
+        <h3>Package Store</h3>
+        <p>Install any runtime with <code>rawenv add node@22</code>. SHA256-verified downloads, extracted to a local store. No system pollution.</p>
       </div>
       <div class="card">
         <div class="card-icon">⚡</div>
-        <h3>Native Install</h3>
-        <p>Installs services directly on your OS via Homebrew, apt, or winget. No container layers. Native performance, always.</p>
+        <h3>Instant Activation</h3>
+        <p><code>rawenv up</code> activates all runtimes. <code>rawenv shell</code> drops you into an isolated shell with the right PATH. Sub-second startup.</p>
       </div>
       <div class="card">
         <div class="card-icon">🛡️</div>
         <h3>Isolation Cells</h3>
-        <p>OS-native sandboxing — macOS Sandbox, Linux namespaces, Windows AppContainers. Per-project isolation without VMs.</p>
+        <p>OS-native sandboxing — macOS Seatbelt, Linux namespaces + Landlock, Windows Job Objects. Per-project isolation without VMs.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🌐</div>
+        <h3>Networking</h3>
+        <p>Local DNS entries, Caddy reverse proxy generation, SSH tunneling, and service dependency mapping — all built in.</p>
       </div>
       <div class="card">
         <div class="card-icon">🤖</div>
         <h3>AI Assistant</h3>
-        <p>Built-in AI that reads your logs, suggests fixes, and explains errors. Cascading model fallback: local → API → cloud.</p>
+        <p>Built-in AI that reads your project context and answers questions. Cascading provider fallback: local → API → cloud.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🖥️</div>
+        <h3>TUI &amp; GUI</h3>
+        <p>Full terminal dashboard and native GUI window. Manage services, view logs, monitor resources, and chat with AI — visually.</p>
       </div>
       <div class="card">
         <div class="card-icon">🚀</div>
         <h3>Deploy</h3>
-        <p>Generate Terraform configs and Ansible playbooks from your rawenv.toml. One command to go from dev to production.</p>
+        <p>Generate Terraform configs, Ansible playbooks, and Containerfiles from your rawenv.toml. Dev to production in one command.</p>
       </div>
-      <div class="card">
-        <div class="card-icon">🌐</div>
-        <h3>Tunneling</h3>
-        <p>Expose local services with public URLs. Built-in reverse proxy, custom domains, and automatic TLS. Share instantly.</p>
+    </div>
+  </div>
+</section>
+
+<section id="tui-preview">
+  <div class="container" style="text-align:center;">
+    <h2>TUI Dashboard</h2>
+    <img src="../design/screens/tui-dashboard.svg" alt="rawenv TUI dashboard showing services, logs, and resource monitoring" style="max-width:100%;border-radius:12px;border:1px solid var(--border);">
+  </div>
+</section>
+
+<section id="demo">
+  <div class="container">
+    <h2>See it in action</h2>
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span>
+        <span class="terminal-title">rawenv — ~/projects/myapp</span>
       </div>
+      <div class="terminal-body" id="term-body">
+        <div class="term-line"><span class="prompt">$</span> <span class="typed"></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="commands">
+  <div class="container">
+    <h2>16 commands. Everything covered.</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Command</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>init</code></td><td>Detect project and generate rawenv.toml</td></tr>
+          <tr><td><code>add &lt;pkg&gt;@&lt;ver&gt;</code></td><td>Install a package (e.g. <code>rawenv add node@22</code>)</td></tr>
+          <tr><td><code>up</code></td><td>Activate all configured runtimes</td></tr>
+          <tr><td><code>services ls</code></td><td>List configured runtimes/services with status</td></tr>
+          <tr><td><code>shell</code></td><td>Enter rawenv shell with modified PATH</td></tr>
+          <tr><td><code>dns</code></td><td>Generate /etc/hosts entries for project</td></tr>
+          <tr><td><code>proxy</code></td><td>Generate Caddy reverse proxy config</td></tr>
+          <tr><td><code>tunnel &lt;port&gt;</code></td><td>Generate SSH tunnel command for a local port</td></tr>
+          <tr><td><code>connections</code></td><td>Show service dependency map</td></tr>
+          <tr><td><code>cell info</code></td><td>Show available isolation backends</td></tr>
+          <tr><td><code>discover</code></td><td>Scan for projects on this machine</td></tr>
+          <tr><td><code>tui</code></td><td>Launch TUI dashboard</td></tr>
+          <tr><td><code>gui</code></td><td>Launch GUI window</td></tr>
+          <tr><td><code>ai &quot;question&quot;</code></td><td>Ask AI assistant (one-shot)</td></tr>
+          <tr><td><code>deploy generate</code></td><td>Generate Terraform, Ansible, and Containerfile</td></tr>
+          <tr><td><code>deploy apply</code></td><td>Run deployment</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </section>
@@ -100,27 +165,12 @@
   </div>
 </section>
 
-<section id="demo">
-  <div class="container">
-    <h2>See it in action</h2>
-    <div class="terminal">
-      <div class="terminal-bar">
-        <span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span>
-        <span class="terminal-title">rawenv — ~/projects/myapp</span>
-      </div>
-      <div class="terminal-body" id="term-body">
-        <div class="term-line"><span class="prompt">$</span> <span class="typed" data-text="rawenv init"></span></div>
-      </div>
-    </div>
-  </div>
-</section>
-
 <footer>
   <div class="container footer-inner">
     <div class="footer-brand">⚡ rawenv <span class="text-muted">v0.1.0</span></div>
     <div class="footer-links">
-      <a href="https://github.com/rawenv/rawenv" target="_blank" rel="noopener">GitHub</a>
-      <a href="https://github.com/rawenv/rawenv/tree/main/docs" target="_blank" rel="noopener">Docs</a>
+      <a href="https://github.com/juslintek/rawenv" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/juslintek/rawenv/tree/main/docs" target="_blank" rel="noopener">Docs</a>
       <span class="text-muted">MIT License</span>
     </div>
   </div>
@@ -128,32 +178,35 @@
 
 <script>
 (function(){
-  const lines = [
+  var lines = [
     {cmd:"rawenv init", delay:600},
-    {out:"⚡ Detected: Node.js 20, PostgreSQL 16, Redis 7", delay:400},
-    {out:"  → Resolving dependencies...", delay:300},
-    {out:"  → Writing rawenv.toml", delay:200},
-    {out:"✓ Project initialized", delay:500, cls:"success"},
+    {out:"Created rawenv.toml", delay:300},
+    {out:"Detected runtimes:", delay:200},
+    {out:"  node 22", delay:150},
+    {out:"Detected services:", delay:200},
+    {out:"  postgresql 16", delay:150},
+    {out:"", delay:400},
+    {cmd:"rawenv add node@22", delay:600},
+    {out:"Downloading node@22.15.0...", delay:350},
+    {out:"Verifying SHA256...", delay:250},
+    {out:"Extracting...", delay:300},
+    {out:"Installed to ~/.rawenv/store/node-22.15.0/", delay:200, cls:"success"},
+    {out:"", delay:400},
     {cmd:"rawenv up", delay:600},
-    {out:"▸ Installing Node.js 20.11.0 (native)...", delay:350},
-    {out:"▸ Installing PostgreSQL 16.2 (native)...", delay:350},
-    {out:"▸ Installing Redis 7.2.4 (native)...", delay:300},
-    {out:"▸ Creating isolation cell (macOS Sandbox)...", delay:250},
-    {out:"✓ All services running", delay:0, cls:"success"},
-    {out:"", delay:100},
-    {out:"  Node.js    → http://localhost:3000", delay:80, cls:"info"},
-    {out:"  PostgreSQL → localhost:5432", delay:80, cls:"info"},
-    {out:"  Redis      → localhost:6379", delay:80, cls:"info"},
-    {out:"", delay:200},
-    {out:"Ready in 0.8s ⚡", delay:0, cls:"success"}
+    {out:"  \u2713 node@22 activated", delay:0, cls:"success"},
+    {out:"", delay:400},
+    {cmd:"rawenv shell", delay:600},
+    {out:"Entering rawenv shell...", delay:300},
+    {cmd:"which node", delay:400},
+    {out:"/Users/you/.rawenv/bin/node", delay:0, cls:"info"}
   ];
-  const body = document.getElementById("term-body");
-  let i = 0, started = false;
+  var body = document.getElementById("term-body");
+  var i = 0, started = false;
 
   function typeLine(){
     if(i >= lines.length) return;
-    const l = lines[i++];
-    const div = document.createElement("div");
+    var l = lines[i++];
+    var div = document.createElement("div");
     div.className = "term-line";
     if(l.cmd){
       div.innerHTML = '<span class="prompt">$</span> <span class="typed"></span>';
@@ -169,14 +222,13 @@
   }
 
   function typeText(el, text, cb){
-    let c = 0;
+    var c = 0;
     (function t(){
       if(c <= text.length){ el.textContent = text.slice(0,c++); setTimeout(t, 35); }
       else if(cb) cb();
     })();
   }
 
-  // Start on first cmd line only, reset body
   function start(){
     if(started) return;
     started = true;
@@ -185,7 +237,7 @@
     typeLine();
   }
 
-  const obs = new IntersectionObserver(function(entries){
+  var obs = new IntersectionObserver(function(entries){
     if(entries[0].isIntersecting) { start(); obs.disconnect(); }
   }, {threshold:0.3});
   obs.observe(document.getElementById("demo"));
