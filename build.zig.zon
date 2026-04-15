@@ -9,16 +9,4 @@
         "src",
         "tests",
     },
-    // GUI dependencies (uncomment when ready to enable full GUI rendering):
-    //
-    // .dependencies = .{
-    //     .zgui = .{
-    //         .url = "https://github.com/zig-gamedev/zgui/archive/refs/heads/main.tar.gz",
-    //         .hash = "...",
-    //     },
-    //     .raylib = .{
-    //         .url = "https://github.com/raysan5/raylib/archive/refs/tags/5.5.tar.gz",
-    //         .hash = "...",
-    //     },
-    // },
 }

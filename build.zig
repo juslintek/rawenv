@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -89,6 +90,26 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+
+    // Link system-installed raylib (opt-in: -Dgui=true)
+    const enable_gui = b.option(bool, "gui", "Link system raylib for GUI (requires: brew install raylib)") orelse false;
+    const has_raylib = enable_gui;
+    if (has_raylib) {
+        gui_mod.addSystemIncludePath(.{ .cwd_relative = "/opt/homebrew/include" });
+        gui_mod.addLibraryPath(.{ .cwd_relative = "/opt/homebrew/lib" });
+        gui_mod.linkSystemLibrary("raylib", .{});
+        if (target.result.os.tag == .macos) {
+            gui_mod.linkFramework("OpenGL", .{});
+            gui_mod.linkFramework("Cocoa", .{});
+            gui_mod.linkFramework("IOKit", .{});
+            gui_mod.linkFramework("CoreAudio", .{});
+            gui_mod.linkFramework("CoreVideo", .{});
+        }
+    }
+
+    const gui_options = b.addOptions();
+    gui_options.addOption(bool, "has_raylib", has_raylib);
+    gui_mod.addOptions("build_options", gui_options);
 
     // Deploy sub-modules need config
     const terraform_mod = b.createModule(.{
@@ -402,6 +423,9 @@ pub fn build(b: *std.Build) void {
             .target = cross_target,
             .optimize = .ReleaseSafe,
         });
+        const cross_gui_options = b.addOptions();
+        cross_gui_options.addOption(bool, "has_raylib", false);
+        cross_gui.addOptions("build_options", cross_gui_options);
         const cross_terraform = b.createModule(.{
             .root_source_file = b.path("src/deploy/terraform.zig"),
             .target = cross_target,
