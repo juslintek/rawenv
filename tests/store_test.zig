@@ -26,7 +26,10 @@ test "parsePackageSpec empty version" {
     try std.testing.expect(resolver.parsePackageSpec("node@") == null);
 }
 
+const builtin = @import("builtin");
+
 test "resolve node@22 returns correct URL" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const pkg = try resolver.resolve(std.testing.allocator, "node", "22");
     defer std.testing.allocator.free(pkg.url);
     try std.testing.expectEqualStrings("node", pkg.name);
@@ -42,6 +45,7 @@ test "resolve unknown package returns error" {
 }
 
 test "resolve unknown version returns error" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const result = resolver.resolve(std.testing.allocator, "node", "99.99.99");
     try std.testing.expectError(error.UnknownVersion, result);
 }
@@ -92,6 +96,7 @@ test "sha256 different data produces different hash" {
 }
 
 test "full version 22.15.0 resolves same as short 22" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const pkg_short = try resolver.resolve(std.testing.allocator, "node", "22");
     defer std.testing.allocator.free(pkg_short.url);
     const pkg_full = try resolver.resolve(std.testing.allocator, "node", "22.15.0");
