@@ -1,10 +1,17 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const config = @import("config");
 const detector = @import("detector");
 const resolver = @import("resolver");
 const store = @import("store");
 const service = @import("service");
 const shell = @import("shell");
+const dns = @import("dns");
+const proxy = @import("proxy");
+const tunnel = @import("tunnel");
+const connections = @import("connections");
+const cell = @import("cell");
+const discover = @import("discover");
 
 pub fn runInit(allocator: std.mem.Allocator, stdout: std.fs.File) !void {
     const cwd = std.fs.cwd();
@@ -122,4 +129,112 @@ pub fn runShell(allocator: std.mem.Allocator, stdout: std.fs.File) !void {
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
     try shell.enter(allocator, result.cfg, stdout);
+}
+
+pub fn runDns(allocator: std.mem.Allocator, stdout: std.fs.File) !void {
+    var result = (try loadConfig(allocator, stdout)) orelse return;
+    defer allocator.free(result.toml);
+    defer config.deinit(allocator, &result.cfg);
+
+    var svc_names: std.ArrayList([]const u8) = .empty;
+    defer svc_names.deinit(allocator);
+    for (result.cfg.services) |svc| try svc_names.append(allocator, svc.key);
+
+    const cfg = dns.DnsConfig{
+        .project = result.cfg.project_name,
+        .services = svc_names.items,
+    };
+    const entries = try dns.generateHostsEntries(allocator, cfg);
+    defer allocator.free(entries);
+    try stdout.writeAll(entries);
+}
+
+pub fn runProxy(allocator: std.mem.Allocator, stdout: std.fs.File) !void {
+    var result = (try loadConfig(allocator, stdout)) orelse return;
+    defer allocator.free(result.toml);
+    defer config.deinit(allocator, &result.cfg);
+
+    var p = proxy.Proxy.init(allocator);
+    defer p.deinit();
+
+    var port: u16 = 3000;
+    for (result.cfg.services) |svc| {
+        try p.addRoute(svc.key, port);
+        port += 1;
+    }
+
+    const caddy = try p.generateCaddyConfig(allocator);
+    defer allocator.free(caddy);
+    try stdout.writeAll(caddy);
+}
+
+pub fn runTunnel(allocator: std.mem.Allocator, stdout: std.fs.File, port_str: []const u8) !void {
+    const port = std.fmt.parseInt(u16, port_str, 10) catch {
+        try stdout.writeAll("Error: invalid port number\n");
+        return;
+    };
+    const cfg = tunnel.TunnelConfig{
+        .local_port = port,
+        .ssh_host = "tunnel.example.com",
+        .ssh_user = "rawenv",
+    };
+    const cmd = try cfg.generateSshCommand(allocator);
+    defer allocator.free(cmd);
+    try stdout.writeAll(cmd);
+    try stdout.writeAll("\n");
+}
+
+pub fn runConnections(allocator: std.mem.Allocator, stdout: std.fs.File) !void {
+    var result = (try loadConfig(allocator, stdout)) orelse return;
+    defer allocator.free(result.toml);
+    defer config.deinit(allocator, &result.cfg);
+
+    var map = connections.ConnectionMap.init(allocator);
+    defer map.deinit();
+    try map.parseServiceDeps(result.toml);
+
+    if (map.count() == 0) {
+        try stdout.writeAll("No service dependencies found.\n");
+        return;
+    }
+    for (map.links.items) |link| {
+        try stdout.writeAll(link.from);
+        try stdout.writeAll(" -> ");
+        try stdout.writeAll(link.to);
+        try stdout.writeAll("\n");
+    }
+}
+
+pub fn runCellInfo(_: std.mem.Allocator, stdout: std.fs.File) !void {
+    try stdout.writeAll("Isolation backends available on this OS:\n");
+    switch (builtin.os.tag) {
+        .macos => try stdout.writeAll("  seatbelt (sandbox-exec) — macOS App Sandbox\n"),
+        .linux => {
+            try stdout.writeAll("  cgroups v2 — memory/CPU limits\n");
+            try stdout.writeAll("  namespaces — PID/mount/network isolation\n");
+            try stdout.writeAll("  landlock — filesystem restriction\n");
+        },
+        .windows => try stdout.writeAll("  job objects — process memory/CPU limits\n"),
+        else => try stdout.writeAll("  none — unsupported OS\n"),
+    }
+}
+
+pub fn runDiscover(allocator: std.mem.Allocator, stdout: std.fs.File) !void {
+    const results = discover.discover(allocator) catch {
+        try stdout.writeAll("Error: discovery failed\n");
+        return;
+    };
+    defer discover.freeResults(allocator, results);
+
+    if (results.len == 0) {
+        try stdout.writeAll("No projects found.\n");
+        return;
+    }
+    for (results) |p| {
+        try stdout.writeAll(p.path);
+        try stdout.writeAll(" [");
+        try stdout.writeAll(p.stack);
+        if (p.has_rawenv_toml) try stdout.writeAll(", rawenv");
+        try stdout.writeAll("]\n");
+    }
 }

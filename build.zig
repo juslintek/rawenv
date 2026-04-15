@@ -135,6 +135,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // Discover module
+    const discover_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/discover.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     // Main executable
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/cli/main.zig"),
@@ -151,6 +158,12 @@ pub fn build(b: *std.Build) void {
             .{ .name = "gui", .module = gui_mod },
             .{ .name = "deploy", .module = deploy_mod },
             .{ .name = "ai", .module = ai_mod },
+            .{ .name = "dns", .module = dns_mod },
+            .{ .name = "proxy", .module = proxy_mod },
+            .{ .name = "tunnel", .module = tunnel_mod },
+            .{ .name = "connections", .module = connections_mod },
+            .{ .name = "cell", .module = cell_mod },
+            .{ .name = "discover", .module = discover_mod },
         },
     });
     const exe = b.addExecutable(.{ .name = "rawenv", .root_module = exe_mod });
@@ -189,6 +202,12 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "gui", .module = gui_mod },
                 .{ .name = "deploy", .module = deploy_mod },
                 .{ .name = "ai", .module = ai_mod },
+                .{ .name = "dns", .module = dns_mod },
+                .{ .name = "proxy", .module = proxy_mod },
+                .{ .name = "tunnel", .module = tunnel_mod },
+                .{ .name = "connections", .module = connections_mod },
+                .{ .name = "cell", .module = cell_mod },
+                .{ .name = "discover", .module = discover_mod },
             },
         }),
     });
@@ -422,6 +441,36 @@ pub fn build(b: *std.Build) void {
             .target = cross_target,
             .optimize = .ReleaseSafe,
         });
+        const cross_dns = b.createModule(.{
+            .root_source_file = b.path("src/network/dns.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_proxy = b.createModule(.{
+            .root_source_file = b.path("src/network/proxy.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_tunnel = b.createModule(.{
+            .root_source_file = b.path("src/network/tunnel.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_connections = b.createModule(.{
+            .root_source_file = b.path("src/network/connections.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_cell = b.createModule(.{
+            .root_source_file = b.path("src/cells/cell.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_discover = b.createModule(.{
+            .root_source_file = b.path("src/core/discover.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
         const cross_mod = b.createModule(.{
             .root_source_file = b.path("src/cli/main.zig"),
             .target = cross_target,
@@ -437,6 +486,12 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "gui", .module = cross_gui },
                 .{ .name = "deploy", .module = cross_deploy },
                 .{ .name = "ai", .module = cross_ai },
+                .{ .name = "dns", .module = cross_dns },
+                .{ .name = "proxy", .module = cross_proxy },
+                .{ .name = "tunnel", .module = cross_tunnel },
+                .{ .name = "connections", .module = cross_connections },
+                .{ .name = "cell", .module = cross_cell },
+                .{ .name = "discover", .module = cross_discover },
             },
         });
         const cross_exe = b.addExecutable(.{ .name = "rawenv", .root_module = cross_mod });

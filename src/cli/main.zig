@@ -19,6 +19,12 @@ const help =
     \\  up               Activate all configured runtimes
     \\  services ls      List configured runtimes/services with status
     \\  shell            Enter rawenv shell with modified PATH
+    \\  dns              Generate /etc/hosts entries for project
+    \\  proxy            Generate Caddy reverse proxy config
+    \\  tunnel <port>    Generate SSH tunnel command for a local port
+    \\  connections      Show service dependency map
+    \\  cell info        Show available isolation backends
+    \\  discover         Scan for projects on this machine
     \\  tui              Launch TUI dashboard
     \\  gui              Launch GUI window
     \\  ai "question"    Ask AI assistant (one-shot)
@@ -84,6 +90,51 @@ pub fn main() !void {
         if (std.mem.eql(u8, arg, "shell")) {
             commands.runShell(allocator, stdout) catch {
                 try stdout.writeAll("Error: shell failed\n");
+            };
+            return;
+        }
+        if (std.mem.eql(u8, arg, "dns")) {
+            commands.runDns(allocator, stdout) catch {
+                try stdout.writeAll("Error: dns failed\n");
+            };
+            return;
+        }
+        if (std.mem.eql(u8, arg, "proxy")) {
+            commands.runProxy(allocator, stdout) catch {
+                try stdout.writeAll("Error: proxy failed\n");
+            };
+            return;
+        }
+        if (std.mem.eql(u8, arg, "tunnel")) {
+            if (i + 1 < args.len) {
+                commands.runTunnel(allocator, stdout, args[i + 1]) catch {
+                    try stdout.writeAll("Error: tunnel failed\n");
+                };
+            } else {
+                try stdout.writeAll("Usage: rawenv tunnel <port>\n");
+            }
+            return;
+        }
+        if (std.mem.eql(u8, arg, "connections")) {
+            commands.runConnections(allocator, stdout) catch {
+                try stdout.writeAll("Error: connections failed\n");
+            };
+            return;
+        }
+        if (std.mem.eql(u8, arg, "cell")) {
+            const sub = if (i + 1 < args.len) args[i + 1] else "";
+            if (std.mem.eql(u8, sub, "info")) {
+                commands.runCellInfo(allocator, stdout) catch {
+                    try stdout.writeAll("Error: cell info failed\n");
+                };
+            } else {
+                try stdout.writeAll("Usage: rawenv cell info\n");
+            }
+            return;
+        }
+        if (std.mem.eql(u8, arg, "discover")) {
+            commands.runDiscover(allocator, stdout) catch {
+                try stdout.writeAll("Error: discover failed\n");
             };
             return;
         }
