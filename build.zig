@@ -163,6 +163,16 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // Platform: macOS module (links objc runtime on macOS targets)
+    const macos_mod = b.createModule(.{
+        .root_source_file = b.path("src/platform/macos.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    if (target.result.os.tag == .macos) {
+        macos_mod.linkSystemLibrary("objc", .{});
+    }
+
     // Main executable
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/cli/main.zig"),
@@ -185,6 +195,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "connections", .module = connections_mod },
             .{ .name = "cell", .module = cell_mod },
             .{ .name = "discover", .module = discover_mod },
+            .{ .name = "macos", .module = macos_mod },
         },
     });
     const exe = b.addExecutable(.{ .name = "rawenv", .root_module = exe_mod });
@@ -229,6 +240,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "connections", .module = connections_mod },
                 .{ .name = "cell", .module = cell_mod },
                 .{ .name = "discover", .module = discover_mod },
+                .{ .name = "macos", .module = macos_mod },
             },
         }),
     });
@@ -495,6 +507,14 @@ pub fn build(b: *std.Build) void {
             .target = cross_target,
             .optimize = .ReleaseSafe,
         });
+        const cross_macos = b.createModule(.{
+            .root_source_file = b.path("src/platform/macos.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        if (ct[2] == .macos) {
+            cross_macos.linkSystemLibrary("objc", .{});
+        }
         const cross_mod = b.createModule(.{
             .root_source_file = b.path("src/cli/main.zig"),
             .target = cross_target,
@@ -516,6 +536,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "connections", .module = cross_connections },
                 .{ .name = "cell", .module = cross_cell },
                 .{ .name = "discover", .module = cross_discover },
+                .{ .name = "macos", .module = cross_macos },
             },
         });
         const cross_exe = b.addExecutable(.{ .name = "rawenv", .root_module = cross_mod });

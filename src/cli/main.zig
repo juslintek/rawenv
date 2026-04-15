@@ -27,6 +27,7 @@ const help =
     \\  discover         Scan for projects on this machine
     \\  tui              Launch TUI dashboard
     \\  gui              Launch GUI window
+    \\  menubar          Launch macOS menu bar status item
     \\  ai "question"    Ask AI assistant (one-shot)
     \\  deploy generate  Generate IaC files
     \\  deploy apply     Run deployment
@@ -144,6 +145,12 @@ pub fn main() !void {
         }
         if (std.mem.eql(u8, arg, "gui")) {
             try gui.run();
+            return;
+        }
+        if (std.mem.eql(u8, arg, "menubar")) {
+            commands.runMenubar(allocator, stdout) catch {
+                try stdout.writeAll("Error: menubar failed\n");
+            };
             return;
         }
         if (std.mem.eql(u8, arg, "ai")) {

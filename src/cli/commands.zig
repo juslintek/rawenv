@@ -219,6 +219,15 @@ pub fn runCellInfo(_: std.mem.Allocator, stdout: std.fs.File) !void {
     }
 }
 
+pub fn runMenubar(allocator: std.mem.Allocator, stdout: std.fs.File) !void {
+    const macos = @import("macos");
+    if (comptime builtin.os.tag == .macos) {
+        try macos.runMenuBar(allocator);
+    } else {
+        try stdout.writeAll("Menu bar is only available on macOS\n");
+    }
+}
+
 pub fn runDiscover(allocator: std.mem.Allocator, stdout: std.fs.File) !void {
     const results = discover.discover(allocator) catch {
         try stdout.writeAll("Error: discovery failed\n");
