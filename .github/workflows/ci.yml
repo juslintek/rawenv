@@ -1,5 +1,4 @@
 name: CI
-
 on:
   push:
     branches: [main]
@@ -9,33 +8,16 @@ on:
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Cache zig
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/zig
-            .zig-cache
-          key: zig-${{ runner.os }}-${{ hashFiles('build.zig', 'build.zig.zon') }}
-          restore-keys: zig-${{ runner.os }}-
-
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.14.0
-
+          version: 0.15.2
       - name: Run tests
         run: zig build test
-
-      - name: Build (ReleaseSafe)
+      - name: Build
         run: zig build -Doptimize=ReleaseSafe
-
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: rawenv-${{ runner.os }}
-          path: zig-out/bin/rawenv*
