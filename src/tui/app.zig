@@ -166,6 +166,11 @@ pub fn view(writer: anytype, model: *const Model) !void {
 // --- Runtime ---
 
 pub fn run() !void {
+    if (comptime builtin.os.tag == .windows) {
+        const stdout = std.io.getStdOut().writer();
+        try stdout.writeAll("rawenv TUI is not yet supported on Windows. Use 'rawenv gui' instead.\n");
+        return;
+    }
     const stdin = std.fs.File.stdin();
     const stdout = std.fs.File.stdout();
     var model = Model{};
