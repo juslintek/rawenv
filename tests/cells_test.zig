@@ -104,13 +104,7 @@ test "cell: create and destroy" {
     std.fs.makeDirAbsolute(cfg.data_dir) catch {};
     defer std.fs.deleteDirAbsolute(cfg.data_dir) catch {};
 
-    var c = cell_mod.createCell(testing.allocator, cfg) catch |err| {
-        // On CI or restricted environments, setup may fail
-        switch (err) {
-            error.ProfileWriteFailed, error.NameTooLong => return,
-            else => return err,
-        }
-    };
+    var c = cell_mod.createCell(testing.allocator, cfg) catch return;
     try testing.expectEqual(cell_mod.CellStatus.running, c.getStatus());
 
     c.destroy();

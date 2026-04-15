@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const theme = @import("theme.zig");
 const widgets = @import("widgets.zig");
