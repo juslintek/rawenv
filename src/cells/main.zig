@@ -1,1 +1,1 @@
-// rawenv Cells (isolation/sandboxing) — placeholder
+pub const cell = @import("cell.zig");

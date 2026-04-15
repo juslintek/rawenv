@@ -7,6 +7,7 @@ const logs_view = @import("views/logs.zig");
 const config_view = @import("views/config.zig");
 const resources_view = @import("views/resources.zig");
 const ai_chat_view = @import("views/ai_chat.zig");
+const data_loader = @import("data_loader.zig");
 
 // --- Model ---
 
@@ -37,6 +38,33 @@ pub const Model = struct {
     ai_provider: usize = 0,
     chat_messages: []const ChatMessage = &default_chat,
     running: bool = true,
+    using_real_data: bool = false,
+    allocator: ?std.mem.Allocator = null,
+
+    /// Try to load real data from rawenv.toml and ~/.rawenv/; fall back to mock data.
+    pub fn initReal(allocator: std.mem.Allocator) Model {
+        var m = Model{ .allocator = allocator };
+        m.refresh();
+        return m;
+    }
+
+    /// Reload data from disk. Safe to call repeatedly.
+    pub fn refresh(self: *Model) void {
+        const alloc = self.allocator orelse return;
+        if (data_loader.loadServicesWithPorts(alloc)) |svcs| {
+            if (svcs.len > 0) {
+                self.services = svcs;
+                self.using_real_data = true;
+                if (self.selected_service >= svcs.len)
+                    self.selected_service = 0;
+                // Try loading real logs for selected service
+                const sel_name = svcs[self.selected_service].name;
+                if (data_loader.loadLogs(alloc, sel_name)) |logs| {
+                    self.log_buffer = logs;
+                }
+            }
+        }
+    }
 };
 
 pub const default_services = [_]Service{
@@ -119,6 +147,7 @@ fn handleKey(model: *Model, key: u8) void {
         'p' => if (model.active_tab == .resources) {
             model.resource_mode = .tree;
         },
+        'R' => model.refresh(),
         else => {},
     }
 }
@@ -133,7 +162,14 @@ pub fn view(writer: anytype, model: *const Model) !void {
     try theme.writeFg(writer, .{ .r = 255, .g = 255, .b = 255 });
     try writer.writeAll(" ⚡ rawenv my-app");
     try theme.writeFg(writer, theme.accent_secondary);
-    try writer.writeAll("  4/5 running · CPU 12% · MEM 462MB · q:quit");
+    {
+        var running: usize = 0;
+        for (model.services) |svc| {
+            if (std.mem.eql(u8, svc.status, "running")) running += 1;
+        }
+        try writer.print("  {d}/{d} running", .{ running, model.services.len });
+    }
+    try writer.writeAll(" · q:quit · R:refresh");
     try theme.writeReset(writer);
     try writer.writeAll("\n");
 
@@ -156,7 +192,7 @@ pub fn view(writer: anytype, model: *const Model) !void {
     try theme.writeFg(writer, theme.accent);
     try writer.writeAll(" rawenv v0.1.0 ");
     try theme.writeFg(writer, theme.text_secondary);
-    try writer.writeAll("Tab:switch j/k:nav Enter:toggle 1-5:tabs ?:help ");
+    try writer.writeAll("Tab:switch j/k:nav Enter:toggle 1-5:tabs R:refresh ?:help ");
     try theme.writeFg(writer, theme.success);
     try writer.writeAll("● utilio.test");
     try theme.writeReset(writer);
@@ -169,7 +205,9 @@ pub fn run() !void {
     if (comptime builtin.os.tag == .windows) return;
     const stdin = std.fs.File.stdin();
     const stdout = std.fs.File.stdout();
-    var model = Model{};
+    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
+    defer _ = gpa.deinit();
+    var model = Model.initReal(gpa.allocator());
 
     // Enable raw mode
     const original_termios = try std.posix.tcgetattr(stdin.handle);

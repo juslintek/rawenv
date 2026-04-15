@@ -1,8 +1,8 @@
 const std = @import("std");
 
 pub const Route = struct {
-    host: []const u8, // e.g. "myapp.test"
-    target_port: u16, // e.g. 3000
+    host: []const u8,
+    target_port: u16,
 };
 
 pub const ProxyConfig = struct {
@@ -27,13 +27,46 @@ pub const Proxy = struct {
     }
 
     pub fn resolveRoute(self: *const Proxy, host: []const u8) ?u16 {
-        // Strip port from host header if present
         const hostname = if (std.mem.indexOfScalar(u8, host, ':')) |i| host[0..i] else host;
         return self.config.routes.get(hostname);
     }
 
     pub fn deinit(self: *Proxy) void {
         self.config.routes.deinit(self.allocator);
+    }
+
+    /// Generate a Caddyfile-style reverse proxy config.
+    pub fn generateCaddyConfig(self: *const Proxy, allocator: std.mem.Allocator) ![]u8 {
+        var buf: std.ArrayList(u8) = .empty;
+        const w = buf.writer(allocator);
+        var it = self.config.routes.iterator();
+        while (it.next()) |entry| {
+            try w.print("{s} {{\n    reverse_proxy localhost:{d}\n}}\n\n", .{ entry.key_ptr.*, entry.value_ptr.* });
+        }
+        return buf.toOwnedSlice(allocator);
+    }
+
+    /// Generate an nginx-style reverse proxy config.
+    pub fn generateNginxConfig(self: *const Proxy, allocator: std.mem.Allocator) ![]u8 {
+        var buf: std.ArrayList(u8) = .empty;
+        const w = buf.writer(allocator);
+        var it = self.config.routes.iterator();
+        while (it.next()) |entry| {
+            try w.print(
+                \\server {{
+                \\    listen {d};
+                \\    server_name {s};
+                \\    location / {{
+                \\        proxy_pass http://localhost:{d};
+                \\        proxy_set_header Host $host;
+                \\        proxy_set_header X-Real-IP $remote_addr;
+                \\    }}
+                \\}}
+                \\
+                \\
+            , .{ self.config.listen_port, entry.key_ptr.*, entry.value_ptr.* });
+        }
+        return buf.toOwnedSlice(allocator);
     }
 
     /// Start the proxy server (blocking). Call from a dedicated thread.
@@ -54,17 +87,14 @@ pub const Proxy = struct {
         const n = try conn.stream.read(&buf);
         if (n == 0) return;
 
-        // Parse Host header
         const host = parseHostHeader(buf[0..n]) orelse return;
         const target_port = self.resolveRoute(host) orelse return;
 
-        // Forward to localhost:target_port
         const target_addr = std.net.Address.initIp4(.{ 127, 0, 0, 1 }, target_port);
         var upstream = try std.net.tcpConnectToAddress(target_addr);
         defer upstream.close();
         try upstream.writeAll(buf[0..n]);
 
-        // Relay response back
         while (true) {
             const rn = upstream.read(&buf) catch break;
             if (rn == 0) break;
@@ -73,7 +103,7 @@ pub const Proxy = struct {
     }
 };
 
-fn parseHostHeader(data: []const u8) ?[]const u8 {
+pub fn parseHostHeader(data: []const u8) ?[]const u8 {
     var it = std.mem.splitSequence(u8, data, "\r\n");
     _ = it.next(); // skip request line
     while (it.next()) |line| {
@@ -86,7 +116,6 @@ fn parseHostHeader(data: []const u8) ?[]const u8 {
 }
 
 /// Generate a self-signed TLS certificate for a .test domain.
-/// Shells out to openssl if available.
 pub fn generateSelfSignedCert(allocator: std.mem.Allocator, domain: []const u8, out_dir: []const u8) !struct { cert: []const u8, key: []const u8 } {
     const cert_path = try std.fmt.allocPrint(allocator, "{s}/{s}.crt", .{ out_dir, domain });
     errdefer allocator.free(cert_path);
@@ -109,10 +138,7 @@ pub fn generateSelfSignedCert(allocator: std.mem.Allocator, domain: []const u8, 
     return .{ .cert = cert_path, .key = key_path };
 }
 
-pub fn stopProxy() void {
-    // In a real implementation, signal the server thread to stop.
-    // For now this is a placeholder for the API surface.
-}
+pub fn stopProxy() void {}
 
 test "parseHostHeader" {
     const data = "GET / HTTP/1.1\r\nHost: myapp.test:3000\r\nAccept: */*\r\n\r\n";

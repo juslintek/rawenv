@@ -33,6 +33,15 @@ test "provider default config - custom is empty" {
     try testing.expectEqual(@as(usize, 0), cfg.model.len);
 }
 
+// === Env key names ===
+
+test "env key names" {
+    try testing.expectEqualStrings("GROQ_API_KEY", ai.provider.envKeyName(.groq));
+    try testing.expectEqualStrings("CEREBRAS_API_KEY", ai.provider.envKeyName(.cerebras));
+    try testing.expectEqualStrings("CLOUDFLARE_API_KEY", ai.provider.envKeyName(.cloudflare));
+    try testing.expectEqual(@as(usize, 0), ai.provider.envKeyName(.ollama).len);
+}
+
 // === Context assembly ===
 
 test "context contains project info" {

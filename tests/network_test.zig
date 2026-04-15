@@ -16,10 +16,7 @@ test "DNS - listDomains generates project and service domains" {
         .services = &services,
     };
     const domains = try cfg.listDomains(testing.allocator);
-    defer {
-        for (domains) |d| testing.allocator.free(d.domain);
-        testing.allocator.free(domains);
-    }
+    defer dns.DnsConfig.freeDomains(testing.allocator, domains);
 
     try testing.expectEqual(3, domains.len);
     try testing.expectEqualStrings("myapp.test", domains[0].domain);
@@ -31,10 +28,7 @@ test "DNS - listDomains generates project and service domains" {
 test "DNS - listDomains with no services" {
     const cfg = dns.DnsConfig{ .project = "solo", .services = &.{} };
     const domains = try cfg.listDomains(testing.allocator);
-    defer {
-        for (domains) |d| testing.allocator.free(d.domain);
-        testing.allocator.free(domains);
-    }
+    defer dns.DnsConfig.freeDomains(testing.allocator, domains);
     try testing.expectEqual(1, domains.len);
     try testing.expectEqualStrings("solo.test", domains[0].domain);
 }
@@ -67,6 +61,44 @@ test "DNS - Acrylic config format (Windows)" {
     defer testing.allocator.free(content);
 
     try testing.expect(std.mem.indexOf(u8, content, "127.0.0.1 win.test") != null);
+}
+
+test "DNS - generateHostsEntries" {
+    const services = [_][]const u8{"redis"};
+    const cfg = dns.DnsConfig{ .project = "myapp", .services = &services };
+    const content = try dns.generateHostsEntries(testing.allocator, cfg);
+    defer testing.allocator.free(content);
+
+    try testing.expect(std.mem.indexOf(u8, content, "127.0.0.1 myapp.test") != null);
+    try testing.expect(std.mem.indexOf(u8, content, "127.0.0.1 redis.myapp.test") != null);
+    try testing.expect(std.mem.indexOf(u8, content, "# rawenv:myapp") != null);
+    try testing.expect(std.mem.indexOf(u8, content, "# end-rawenv:myapp") != null);
+}
+
+test "DNS - checkExistingEntries finds existing domains" {
+    const hosts =
+        \\127.0.0.1 localhost
+        \\127.0.0.1 myapp.test
+        \\::1 localhost
+    ;
+    const cfg = dns.DnsConfig{ .project = "myapp", .services = &.{} };
+    const result = try dns.checkExistingEntries(testing.allocator, hosts, cfg);
+    defer testing.allocator.free(result);
+
+    try testing.expectEqual(1, result.len);
+    try testing.expect(result[0]); // myapp.test exists
+}
+
+test "DNS - checkExistingEntries detects missing domains" {
+    const hosts = "127.0.0.1 localhost\n";
+    const services = [_][]const u8{"redis"};
+    const cfg = dns.DnsConfig{ .project = "myapp", .services = &services };
+    const result = try dns.checkExistingEntries(testing.allocator, hosts, cfg);
+    defer testing.allocator.free(result);
+
+    try testing.expectEqual(2, result.len);
+    try testing.expect(!result[0]); // myapp.test missing
+    try testing.expect(!result[1]); // redis.myapp.test missing
 }
 
 // ============================================================
@@ -127,6 +159,41 @@ test "connections - ignores non-connection vars" {
     try testing.expectEqual(0, conns.len);
 }
 
+test "connections - ConnectionMap tracks service links" {
+    var map = connections.ConnectionMap.init(testing.allocator);
+    defer map.deinit();
+
+    try map.addLink("app", "postgresql", "postgres://localhost:5432/db");
+    try map.addLink("app", "redis", "redis://localhost:6379");
+
+    try testing.expectEqual(2, map.count());
+    try testing.expectEqualStrings("app", map.links.items[0].from);
+    try testing.expectEqualStrings("postgresql", map.links.items[0].to);
+}
+
+test "connections - ConnectionMap parseServiceDeps" {
+    var map = connections.ConnectionMap.init(testing.allocator);
+    defer map.deinit();
+
+    const toml =
+        \\[services.web]
+        \\port = 3000
+        \\depends_on = ["postgresql", "redis"]
+        \\
+        \\[services.worker]
+        \\depends_on = ["redis"]
+    ;
+    try map.parseServiceDeps(toml);
+
+    try testing.expectEqual(3, map.count());
+    try testing.expectEqualStrings("web", map.links.items[0].from);
+    try testing.expectEqualStrings("postgresql", map.links.items[0].to);
+    try testing.expectEqualStrings("web", map.links.items[1].from);
+    try testing.expectEqualStrings("redis", map.links.items[1].to);
+    try testing.expectEqualStrings("worker", map.links.items[2].from);
+    try testing.expectEqualStrings("redis", map.links.items[2].to);
+}
+
 // ============================================================
 // Proxy route matching tests
 // ============================================================
@@ -161,6 +228,30 @@ test "proxy - removeRoute" {
     try testing.expect(p.resolveRoute("myapp.test") == null);
 }
 
+test "proxy - generateCaddyConfig" {
+    var p = proxy.Proxy.init(testing.allocator);
+    defer p.deinit();
+
+    try p.addRoute("myapp.test", 3000);
+    const config = try p.generateCaddyConfig(testing.allocator);
+    defer testing.allocator.free(config);
+
+    try testing.expect(std.mem.indexOf(u8, config, "myapp.test") != null);
+    try testing.expect(std.mem.indexOf(u8, config, "reverse_proxy localhost:3000") != null);
+}
+
+test "proxy - generateNginxConfig" {
+    var p = proxy.Proxy.init(testing.allocator);
+    defer p.deinit();
+
+    try p.addRoute("myapp.test", 3000);
+    const config = try p.generateNginxConfig(testing.allocator);
+    defer testing.allocator.free(config);
+
+    try testing.expect(std.mem.indexOf(u8, config, "server_name myapp.test") != null);
+    try testing.expect(std.mem.indexOf(u8, config, "proxy_pass http://localhost:3000") != null);
+}
+
 // ============================================================
 // Tunnel manager tests
 // ============================================================
@@ -175,4 +266,36 @@ test "tunnel - closeTunnel on empty list is safe" {
     var tm = tunnel.TunnelManager.init(testing.allocator);
     defer tm.deinit();
     tm.closeTunnel(3000); // should not crash
+}
+
+test "tunnel - TunnelConfig generateSshCommand" {
+    const cfg = tunnel.TunnelConfig{
+        .local_port = 3000,
+        .ssh_host = "myserver.com",
+        .ssh_user = "deploy",
+    };
+    const cmd = try cfg.generateSshCommand(testing.allocator);
+    defer testing.allocator.free(cmd);
+
+    try testing.expectEqualStrings("ssh -R 3000:localhost:3000 deploy@myserver.com -N", cmd);
+}
+
+test "tunnel - TunnelConfig generateSshCommand with key and remote port" {
+    const cfg = tunnel.TunnelConfig{
+        .local_port = 3000,
+        .remote_port = 8080,
+        .ssh_host = "myserver.com",
+        .ssh_user = "deploy",
+        .ssh_key = "/home/deploy/.ssh/id_ed25519",
+    };
+    const cmd = try cfg.generateSshCommand(testing.allocator);
+    defer testing.allocator.free(cmd);
+
+    try testing.expectEqualStrings("ssh -i /home/deploy/.ssh/id_ed25519 -R 8080:localhost:3000 deploy@myserver.com -N", cmd);
+}
+
+test "tunnel - TunnelStatus enum values" {
+    const s: tunnel.TunnelStatus = .idle;
+    try testing.expect(s == .idle);
+    try testing.expect(tunnel.TunnelStatus.active != tunnel.TunnelStatus.failed);
 }

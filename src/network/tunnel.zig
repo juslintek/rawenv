@@ -1,12 +1,37 @@
 const std = @import("std");
 
+pub const TunnelStatus = enum { idle, connecting, active, failed };
+
+pub const TunnelConfig = struct {
+    local_port: u16,
+    remote_host: []const u8 = "localhost",
+    remote_port: ?u16 = null,
+    ssh_host: []const u8 = "",
+    ssh_user: []const u8 = "",
+    ssh_key: ?[]const u8 = null,
+
+    /// Generate the ssh -R command string for remote port forwarding.
+    pub fn generateSshCommand(self: TunnelConfig, allocator: std.mem.Allocator) ![]u8 {
+        const rport = self.remote_port orelse self.local_port;
+        if (self.ssh_key) |key| {
+            return std.fmt.allocPrint(allocator, "ssh -i {s} -R {d}:{s}:{d} {s}@{s} -N", .{
+                key, rport, self.remote_host, self.local_port, self.ssh_user, self.ssh_host,
+            });
+        }
+        return std.fmt.allocPrint(allocator, "ssh -R {d}:{s}:{d} {s}@{s} -N", .{
+            rport, self.remote_host, self.local_port, self.ssh_user, self.ssh_host,
+        });
+    }
+};
+
 pub const Tunnel = struct {
     local_port: u16,
     public_url: []const u8,
     backend: Backend,
+    status: TunnelStatus = .idle,
     process: ?std.process.Child = null,
 
-    pub const Backend = enum { bore, cloudflared };
+    pub const Backend = enum { bore, cloudflared, ssh };
 };
 
 pub const TunnelManager = struct {
@@ -48,6 +73,7 @@ pub const TunnelManager = struct {
             .local_port = local_port,
             .public_url = url,
             .backend = .bore,
+            .status = .active,
             .process = child,
         }) catch {
             self.allocator.free(url);
@@ -70,6 +96,7 @@ pub const TunnelManager = struct {
             .local_port = local_port,
             .public_url = url,
             .backend = .cloudflared,
+            .status = .active,
             .process = child,
         }) catch {
             self.allocator.free(url);

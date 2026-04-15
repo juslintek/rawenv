@@ -10,6 +10,75 @@ pub const Connection = struct {
     suggestion: ?[]const u8,
 };
 
+pub const ServiceLink = struct {
+    from: []const u8,
+    to: []const u8,
+    url: []const u8,
+};
+
+/// Tracks which services connect to which.
+pub const ConnectionMap = struct {
+    allocator: std.mem.Allocator,
+    links: std.ArrayList(ServiceLink),
+
+    pub fn init(allocator: std.mem.Allocator) ConnectionMap {
+        return .{ .allocator = allocator, .links = .empty };
+    }
+
+    pub fn deinit(self: *ConnectionMap) void {
+        self.links.deinit(self.allocator);
+    }
+
+    pub fn addLink(self: *ConnectionMap, from: []const u8, to: []const u8, url: []const u8) !void {
+        try self.links.append(self.allocator, .{ .from = from, .to = to, .url = url });
+    }
+
+    pub fn getLinksFrom(self: *const ConnectionMap, service: []const u8) []const ServiceLink {
+        // Return slice view — caller iterates over .links.items and filters
+        _ = service;
+        return self.links.items;
+    }
+
+    /// Parse a TOML-like services section to detect connections.
+    /// Format: lines like `depends_on = ["postgresql", "redis"]` under `[services.NAME]`.
+    pub fn parseServiceDeps(self: *ConnectionMap, content: []const u8) !void {
+        var current_service: ?[]const u8 = null;
+        var it = std.mem.splitScalar(u8, content, '\n');
+        while (it.next()) |raw_line| {
+            const line = std.mem.trim(u8, raw_line, &std.ascii.whitespace);
+            if (line.len > 2 and line[0] == '[') {
+                // [services.NAME]
+                const inner = std.mem.trim(u8, line[1 .. line.len - 1], &std.ascii.whitespace);
+                if (std.mem.startsWith(u8, inner, "services.")) {
+                    current_service = inner["services.".len..];
+                } else {
+                    current_service = null;
+                }
+            } else if (current_service) |svc| {
+                if (std.mem.startsWith(u8, line, "depends_on")) {
+                    // Parse array values
+                    if (std.mem.indexOf(u8, line, "[")) |start| {
+                        if (std.mem.indexOf(u8, line, "]")) |end| {
+                            var vals = std.mem.splitScalar(u8, line[start + 1 .. end], ',');
+                            while (vals.next()) |raw_val| {
+                                const val = std.mem.trim(u8, raw_val, &std.ascii.whitespace);
+                                const dep = std.mem.trim(u8, val, "\"'");
+                                if (dep.len > 0) {
+                                    try self.addLink(svc, dep, "");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn count(self: *const ConnectionMap) usize {
+        return self.links.items.len;
+    }
+};
+
 const known_vars = [_][]const u8{
     "DATABASE_URL",
     "REDIS_URL",

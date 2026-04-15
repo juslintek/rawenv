@@ -15,21 +15,21 @@ const test_config = CellConfig{
 
 // --- macOS Seatbelt profile generation tests ---
 
-test "macos: generate sandbox profile contains deny default" {
+test "macos: profile contains deny default" {
     if (builtin.os.tag != .macos) return error.SkipZigTest;
     const profile = try platform_impl.generateProfile(testing.allocator, test_config);
     defer testing.allocator.free(profile);
     try testing.expect(std.mem.indexOf(u8, profile, "(deny default)") != null);
 }
 
-test "macos: generate sandbox profile allows data_dir" {
+test "macos: profile allows data_dir read/write" {
     if (builtin.os.tag != .macos) return error.SkipZigTest;
     const profile = try platform_impl.generateProfile(testing.allocator, test_config);
     defer testing.allocator.free(profile);
     try testing.expect(std.mem.indexOf(u8, profile, "(allow file-read* file-write* (subpath \"/tmp/rawenv-test-cell\"))") != null);
 }
 
-test "macos: generate sandbox profile allows port" {
+test "macos: profile allows specific port" {
     if (builtin.os.tag != .macos) return error.SkipZigTest;
     const profile = try platform_impl.generateProfile(testing.allocator, test_config);
     defer testing.allocator.free(profile);
@@ -38,19 +38,29 @@ test "macos: generate sandbox profile allows port" {
 
 test "macos: profile with no port omits network rule" {
     if (builtin.os.tag != .macos) return error.SkipZigTest;
-    const no_port_config = CellConfig{
-        .name = "test",
-        .data_dir = "/tmp/test",
-        .allowed_port = 0,
-        .mem_limit_mb = 256,
-        .cpu_cores = 1,
-    };
-    const profile = try platform_impl.generateProfile(testing.allocator, no_port_config);
+    const cfg = CellConfig{ .name = "t", .data_dir = "/tmp/t", .allowed_port = 0, .mem_limit_mb = 256, .cpu_cores = 1 };
+    const profile = try platform_impl.generateProfile(testing.allocator, cfg);
     defer testing.allocator.free(profile);
     try testing.expect(std.mem.indexOf(u8, profile, "network*") == null);
 }
 
-// --- Linux cgroup config generation tests ---
+test "macos: sandboxCommand builds correct argv" {
+    if (builtin.os.tag != .macos) return error.SkipZigTest;
+    const cmd: []const []const u8 = &.{ "/usr/bin/pg_ctl", "start" };
+    const argv = try platform_impl.sandboxCommand(testing.allocator, test_config, cmd);
+    defer {
+        testing.allocator.free(argv[2]); // profile string
+        testing.allocator.free(argv);
+    }
+    try testing.expectEqualStrings("sandbox-exec", argv[0]);
+    try testing.expectEqualStrings("-p", argv[1]);
+    try testing.expect(std.mem.indexOf(u8, argv[2], "(deny default)") != null);
+    try testing.expectEqualStrings("--", argv[3]);
+    try testing.expectEqualStrings("/usr/bin/pg_ctl", argv[4]);
+    try testing.expectEqualStrings("start", argv[5]);
+}
+
+// --- Linux cgroup/namespace config tests ---
 
 test "linux: cgroup memory value" {
     if (builtin.os.tag != .linux) return error.SkipZigTest;
@@ -66,20 +76,38 @@ test "linux: cgroup cpu value" {
     try testing.expectEqualStrings("200000 100000", val);
 }
 
-test "linux: namespace flags" {
+test "linux: cgroupConfig struct" {
     if (builtin.os.tag != .linux) return error.SkipZigTest;
-    try testing.expect(platform_impl.NAMESPACE_FLAGS & platform_impl.CLONE_NEWUSER != 0);
-    try testing.expect(platform_impl.NAMESPACE_FLAGS & platform_impl.CLONE_NEWPID != 0);
-    try testing.expect(platform_impl.NAMESPACE_FLAGS & platform_impl.CLONE_NEWNS != 0);
+    const cfg = platform_impl.cgroupConfig(test_config);
+    try testing.expectEqual(@as(u64, 512 * 1024 * 1024), cfg.memory_max_bytes);
+    try testing.expectEqual(@as(u64, 200000), cfg.cpu_quota);
+    try testing.expectEqual(@as(u64, 100000), cfg.cpu_period);
 }
 
-// --- Windows AppContainer tests ---
+test "linux: namespaceFlags includes network when port set" {
+    if (builtin.os.tag != .linux) return error.SkipZigTest;
+    const flags = platform_impl.namespaceFlags(test_config);
+    try testing.expect(flags & platform_impl.CLONE_NEWUSER != 0);
+    try testing.expect(flags & platform_impl.CLONE_NEWPID != 0);
+    try testing.expect(flags & platform_impl.CLONE_NEWNS != 0);
+    try testing.expect(flags & platform_impl.CLONE_NEWNET != 0);
+}
 
-test "windows: job limits computation" {
+test "linux: landlockConfig returns data_dir" {
+    if (builtin.os.tag != .linux) return error.SkipZigTest;
+    const ll = platform_impl.landlockConfig(test_config);
+    try testing.expectEqualStrings("/tmp/rawenv-test-cell", ll.data_dir);
+    try testing.expect(ll.read_only_paths.len > 0);
+}
+
+// --- Windows job object config tests ---
+
+test "windows: jobLimits computation" {
     if (builtin.os.tag != .windows) return error.SkipZigTest;
-    const limits = platform_impl.computeJobLimits(test_config);
+    const limits = platform_impl.jobLimits(test_config);
     try testing.expectEqual(@as(u64, 512 * 1024 * 1024), limits.process_memory);
     try testing.expectEqual(@as(u32, 2), limits.active_processes);
+    try testing.expect(limits.limit_flags & platform_impl.JOB_OBJECT_LIMIT_PROCESS_MEMORY != 0);
 }
 
 test "windows: container profile name" {
@@ -91,24 +119,20 @@ test "windows: container profile name" {
 
 // --- Cross-platform Cell abstraction tests ---
 
-test "cell: create and destroy" {
-    const cfg = CellConfig{
-        .name = "unit-test",
-        .data_dir = "/tmp/rawenv-cell-test",
-        .allowed_port = 8080,
-        .mem_limit_mb = 256,
-        .cpu_cores = 1,
-    };
+test "cell: create returns created status" {
+    const c = cell_mod.Cell.create(testing.allocator, test_config);
+    try testing.expectEqual(cell_mod.CellStatus.created, c.getStatus());
+}
 
-    // Ensure data_dir exists for macOS profile write
-    std.fs.makeDirAbsolute(cfg.data_dir) catch {};
-    defer std.fs.deleteDirAbsolute(cfg.data_dir) catch {};
-
-    var c = cell_mod.createCell(testing.allocator, cfg) catch return;
-    try testing.expectEqual(cell_mod.CellStatus.running, c.getStatus());
-
+test "cell: destroy sets stopped" {
+    var c = cell_mod.Cell.create(testing.allocator, test_config);
     c.destroy();
     try testing.expectEqual(cell_mod.CellStatus.stopped, c.getStatus());
+}
+
+test "cell: createCell compat" {
+    const c = try cell_mod.createCell(testing.allocator, test_config);
+    try testing.expectEqual(cell_mod.CellStatus.created, c.getStatus());
 }
 
 // --- Integration test: sandbox prevents writes outside data_dir ---
@@ -119,7 +143,6 @@ test "integration: sandboxed process cannot write outside data_dir" {
     const data_dir = "/tmp/rawenv-sandbox-test";
     const outside_file = "/tmp/rawenv-sandbox-outside.txt";
 
-    // Clean up from previous runs
     std.fs.deleteFileAbsolute(outside_file) catch {};
     std.fs.deleteTreeAbsolute(data_dir) catch {};
     std.fs.makeDirAbsolute(data_dir) catch return;
@@ -128,29 +151,15 @@ test "integration: sandboxed process cannot write outside data_dir" {
         std.fs.deleteFileAbsolute(outside_file) catch {};
     }
 
-    const cfg = CellConfig{
-        .name = "sandbox-test",
-        .data_dir = data_dir,
-        .allowed_port = 0,
-        .mem_limit_mb = 128,
-        .cpu_cores = 1,
-    };
+    const cfg = CellConfig{ .name = "sandbox-test", .data_dir = data_dir, .allowed_port = 0, .mem_limit_mb = 128, .cpu_cores = 1 };
 
-    // Generate and write profile
     const profile = try platform_impl.generateProfile(testing.allocator, cfg);
     defer testing.allocator.free(profile);
 
-    const profile_path = data_dir ++ "/.rawenv_sandbox.sb";
-    {
-        const f = try std.fs.createFileAbsolute(profile_path, .{});
-        defer f.close();
-        try f.writeAll(profile);
-    }
-
-    // Run a command inside the sandbox that tries to write outside data_dir
+    // Run sandbox-exec with -p (inline profile) to write outside data_dir
     const result = std.process.Child.run(.{
         .allocator = testing.allocator,
-        .argv = &.{ "sandbox-exec", "-f", profile_path, "--", "/bin/sh", "-c", "echo hacked > " ++ outside_file },
+        .argv = &.{ "sandbox-exec", "-p", profile, "--", "/bin/sh", "-c", "echo hacked > " ++ outside_file },
     }) catch return; // sandbox-exec may not be available
     defer {
         testing.allocator.free(result.stdout);

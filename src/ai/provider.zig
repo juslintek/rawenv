@@ -6,6 +6,7 @@ pub const ProviderConfig = struct {
     endpoint: []const u8,
     api_key: []const u8 = "",
     model: []const u8,
+    max_tokens: u32 = 500,
 };
 
 pub const Message = struct {
@@ -33,6 +34,16 @@ pub fn defaultConfig(p: Provider) ProviderConfig {
     };
 }
 
+pub fn envKeyName(p: Provider) []const u8 {
+    return switch (p) {
+        .groq => "GROQ_API_KEY",
+        .cerebras => "CEREBRAS_API_KEY",
+        .cloudflare => "CLOUDFLARE_API_KEY",
+        .ollama => "",
+        .custom => "",
+    };
+}
+
 pub const SendError = error{
     HttpError,
     RateLimited,
@@ -41,53 +52,65 @@ pub const SendError = error{
 } || std.mem.Allocator.Error;
 
 pub fn sendMessage(allocator: std.mem.Allocator, cfg: ProviderConfig, messages: []const Message) SendError!struct { body: []u8, status: std.http.Status } {
-    // Build JSON payload
-    var payload_buf: std.ArrayList(u8) = .empty;
-    defer payload_buf.deinit(allocator);
-    const w = payload_buf.writer(allocator);
+    // Build JSON payload using Allocating writer
+    var payload: std.Io.Writer.Allocating = .init(allocator);
+    defer payload.deinit();
+    const pw = &payload.writer;
 
-    w.writeAll("{\"model\":\"") catch return SendError.HttpError;
-    w.writeAll(cfg.model) catch return SendError.HttpError;
-    w.writeAll("\",\"messages\":[") catch return SendError.HttpError;
+    pw.writeAll("{\"model\":\"") catch return error.HttpError;
+    writeJsonEscaped(pw, cfg.model) catch return error.HttpError;
+    pw.print("\",\"max_tokens\":{d},\"temperature\":0.7,\"messages\":[", .{cfg.max_tokens}) catch return error.HttpError;
     for (messages, 0..) |msg, i| {
-        if (i > 0) w.writeByte(',') catch return SendError.HttpError;
-        w.writeAll("{\"role\":\"") catch return SendError.HttpError;
-        w.writeAll(msg.roleStr()) catch return SendError.HttpError;
-        w.writeAll("\",\"content\":\"") catch return SendError.HttpError;
-        writeJsonEscaped(w, msg.content) catch return SendError.HttpError;
-        w.writeAll("\"}") catch return SendError.HttpError;
+        if (i > 0) pw.writeByte(',') catch return error.HttpError;
+        pw.writeAll("{\"role\":\"") catch return error.HttpError;
+        pw.writeAll(msg.roleStr()) catch return error.HttpError;
+        pw.writeAll("\",\"content\":\"") catch return error.HttpError;
+        writeJsonEscaped(pw, msg.content) catch return error.HttpError;
+        pw.writeAll("\"}") catch return error.HttpError;
     }
-    w.writeAll("],\"max_tokens\":500,\"temperature\":0.7}") catch return SendError.HttpError;
+    pw.writeAll("]}") catch return error.HttpError;
+    pw.flush() catch return error.HttpError;
 
-    var client = std.http.Client{ .allocator = allocator };
-    defer client.deinit();
+    // Build auth header value
+    var auth_buf: [512]u8 = undefined;
+    const auth_val = if (cfg.api_key.len > 0) std.fmt.bufPrint(&auth_buf, "Bearer {s}", .{cfg.api_key}) catch return error.HttpError else null;
 
-    const auth_header: []const std.http.Header = if (cfg.api_key.len > 0) &.{
+    const extra_headers: []const std.http.Header = if (auth_val) |av| &.{
         .{ .name = "Content-Type", .value = "application/json" },
-        .{ .name = "Authorization", .value = cfg.api_key },
+        .{ .name = "Authorization", .value = av },
     } else &.{
         .{ .name = "Content-Type", .value = "application/json" },
     };
 
-    // Response writer
-    var resp_writer = std.Io.Writer.Allocating.init(allocator);
-    defer resp_writer.deinit();
+    var client: std.http.Client = .{ .allocator = allocator };
+    defer client.deinit();
+
+    var resp: std.Io.Writer.Allocating = .init(allocator);
+    errdefer resp.deinit();
 
     const result = client.fetch(.{
         .location = .{ .url = cfg.endpoint },
         .method = .POST,
-        .payload = payload_buf.items,
-        .extra_headers = auth_header,
-        .response_writer = &resp_writer.writer,
-    }) catch return SendError.ConnectionRefused;
+        .payload = payload.written(),
+        .extra_headers = extra_headers,
+        .response_writer = &resp.writer,
+    }) catch return error.ConnectionRefused;
 
-    if (result.status == .too_many_requests) return SendError.RateLimited;
-    if (result.status != .ok) return SendError.HttpError;
+    resp.writer.flush() catch return error.HttpError;
 
-    return .{ .body = try resp_writer.toOwnedSlice(), .status = result.status };
+    if (result.status == .too_many_requests) {
+        resp.deinit();
+        return error.RateLimited;
+    }
+    if (result.status != .ok) {
+        resp.deinit();
+        return error.HttpError;
+    }
+
+    return .{ .body = resp.toOwnedSlice() catch return error.OutOfMemory, .status = result.status };
 }
 
-fn writeJsonEscaped(writer: anytype, s: []const u8) !void {
+fn writeJsonEscaped(writer: *std.Io.Writer, s: []const u8) !void {
     for (s) |c| {
         switch (c) {
             '"' => try writer.writeAll("\\\""),

@@ -21,6 +21,16 @@ const cascade_order = [_]provider.Provider{ .groq, .cerebras, .cloudflare, .olla
 pub fn trySend(allocator: std.mem.Allocator, messages: []const provider.Message, configs: ?[]const ProviderOverride) CascadeError!CascadeResult {
     for (cascade_order) |p| {
         var cfg = provider.defaultConfig(p);
+
+        // Load API key from env var
+        const env_name = provider.envKeyName(p);
+        const env_key = if (env_name.len > 0) std.process.getEnvVarOwned(allocator, env_name) catch null else null;
+        defer if (env_key) |k| allocator.free(k);
+
+        if (env_key) |k| {
+            cfg.api_key = k;
+        }
+
         // Apply overrides if provided
         if (configs) |overrides| {
             for (overrides) |ov| {
@@ -33,9 +43,11 @@ pub fn trySend(allocator: std.mem.Allocator, messages: []const provider.Message,
             }
         }
 
+        // Skip providers that need an API key but don't have one (except ollama)
+        if (cfg.api_key.len == 0 and p != .ollama) continue;
+
         const result = provider.sendMessage(allocator, cfg, messages) catch |err| switch (err) {
-            provider.SendError.RateLimited, provider.SendError.HttpError, provider.SendError.ConnectionRefused => continue,
-            provider.SendError.ParseError => continue,
+            error.RateLimited, error.HttpError, error.ConnectionRefused, error.ParseError => continue,
             error.OutOfMemory => return error.OutOfMemory,
         };
 

@@ -20,7 +20,53 @@ pub const DnsConfig = struct {
         }
         return list.toOwnedSlice(allocator);
     }
+
+    pub fn freeDomains(allocator: std.mem.Allocator, domains: []DnsEntry) void {
+        for (domains) |d| allocator.free(d.domain);
+        allocator.free(domains);
+    }
 };
+
+/// Generate /etc/hosts-style entries for the project.
+pub fn generateHostsEntries(allocator: std.mem.Allocator, cfg: DnsConfig) ![]u8 {
+    var buf: std.ArrayList(u8) = .empty;
+    const w = buf.writer(allocator);
+    const domains = try cfg.listDomains(allocator);
+    defer DnsConfig.freeDomains(allocator, domains);
+    try w.print("# rawenv:{s}\n", .{cfg.project});
+    for (domains) |entry| {
+        try w.print("{s} {s}\n", .{ entry.ip, entry.domain });
+    }
+    try w.print("# end-rawenv:{s}\n", .{cfg.project});
+    return buf.toOwnedSlice(allocator);
+}
+
+/// Check which entries from cfg already exist in hosts_content.
+pub fn checkExistingEntries(allocator: std.mem.Allocator, hosts_content: []const u8, cfg: DnsConfig) ![]bool {
+    const domains = try cfg.listDomains(allocator);
+    defer DnsConfig.freeDomains(allocator, domains);
+    const result = try allocator.alloc(bool, domains.len);
+    for (domains, 0..) |entry, i| {
+        result[i] = hostsContainsDomain(hosts_content, entry.domain);
+    }
+    return result;
+}
+
+fn hostsContainsDomain(content: []const u8, domain: []const u8) bool {
+    var it = std.mem.splitScalar(u8, content, '\n');
+    while (it.next()) |raw_line| {
+        const line = std.mem.trim(u8, raw_line, &std.ascii.whitespace);
+        if (line.len == 0 or line[0] == '#') continue;
+        // Check if domain appears as a token in the line
+        if (std.mem.indexOf(u8, line, domain)) |pos| {
+            const end = pos + domain.len;
+            const before_ok = pos == 0 or line[pos - 1] == ' ' or line[pos - 1] == '\t';
+            const after_ok = end == line.len or line[end] == ' ' or line[end] == '\t' or line[end] == '#';
+            if (before_ok and after_ok) return true;
+        }
+    }
+    return false;
+}
 
 /// Generate dnsmasq config content (macOS)
 pub fn generateDnsmasqConfig(allocator: std.mem.Allocator, cfg: DnsConfig) ![]u8 {
@@ -28,10 +74,7 @@ pub fn generateDnsmasqConfig(allocator: std.mem.Allocator, cfg: DnsConfig) ![]u8
     const w = buf.writer(allocator);
     try w.print("# rawenv DNS for {s}\n", .{cfg.project});
     const domains = try cfg.listDomains(allocator);
-    defer {
-        for (domains) |d| allocator.free(d.domain);
-        allocator.free(domains);
-    }
+    defer DnsConfig.freeDomains(allocator, domains);
     for (domains) |entry| {
         try w.print("address=/{s}/{s}\n", .{ entry.domain, entry.ip });
     }
@@ -44,10 +87,7 @@ pub fn generateResolvedConfig(allocator: std.mem.Allocator, cfg: DnsConfig) ![]u
     const w = buf.writer(allocator);
     try w.writeAll("# rawenv DNS override\n[Resolve]\n");
     const domains = try cfg.listDomains(allocator);
-    defer {
-        for (domains) |d| allocator.free(d.domain);
-        allocator.free(domains);
-    }
+    defer DnsConfig.freeDomains(allocator, domains);
     try w.writeAll("DNS=127.0.0.1\nDomains=");
     for (domains, 0..) |entry, i| {
         if (i > 0) try w.writeByte(' ');
@@ -63,10 +103,7 @@ pub fn generateAcrylicConfig(allocator: std.mem.Allocator, cfg: DnsConfig) ![]u8
     const w = buf.writer(allocator);
     try w.print("; rawenv DNS for {s}\n", .{cfg.project});
     const domains = try cfg.listDomains(allocator);
-    defer {
-        for (domains) |d| allocator.free(d.domain);
-        allocator.free(domains);
-    }
+    defer DnsConfig.freeDomains(allocator, domains);
     for (domains) |entry| {
         try w.print("{s} {s}\n", .{ entry.ip, entry.domain });
     }
