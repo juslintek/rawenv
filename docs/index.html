@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>rawenv — Raw native dev environments. Zero overhead.</title>
+<meta name="description" content="rawenv auto-detects your project, installs services natively, and isolates them with OS-native sandboxing. No Docker. No containers. Just raw speed.">
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="/" class="logo">⚡ rawenv</a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#compare">Compare</a>
+      <a href="https://github.com/rawenv/rawenv" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header id="hero">
+  <div class="container">
+    <div class="badge">Open Source &middot; MIT License</div>
+    <h1>Raw native dev environments.<br>Zero overhead.</h1>
+    <p class="subtitle">Auto-detect your stack. Install services natively. Isolate with OS sandboxing.<br>No Docker. No containers. Just raw speed.</p>
+    <div class="install-box">
+      <code id="install-cmd">curl -fsSL rawenv.sh/install | sh</code>
+      <button onclick="navigator.clipboard.writeText('curl -fsSL rawenv.sh/install | sh')" aria-label="Copy install command">Copy</button>
+    </div>
+    <div class="hero-actions">
+      <a href="https://github.com/rawenv/rawenv" class="btn-primary" target="_blank" rel="noopener">Get Started</a>
+      <a href="#demo" class="btn-secondary">See it in action ↓</a>
+    </div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="container">
+    <h2>Everything you need. Nothing you don't.</h2>
+    <div class="grid">
+      <div class="card">
+        <div class="card-icon">🔍</div>
+        <h3>Auto-detect</h3>
+        <p>Scans project files — package.json, Gemfile, go.mod, composer.json — and resolves the full dependency graph automatically.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">⚡</div>
+        <h3>Native Install</h3>
+        <p>Installs services directly on your OS via Homebrew, apt, or winget. No container layers. Native performance, always.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🛡️</div>
+        <h3>Isolation Cells</h3>
+        <p>OS-native sandboxing — macOS Sandbox, Linux namespaces, Windows AppContainers. Per-project isolation without VMs.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🤖</div>
+        <h3>AI Assistant</h3>
+        <p>Built-in AI that reads your logs, suggests fixes, and explains errors. Cascading model fallback: local → API → cloud.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🚀</div>
+        <h3>Deploy</h3>
+        <p>Generate Terraform configs and Ansible playbooks from your rawenv.toml. One command to go from dev to production.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🌐</div>
+        <h3>Tunneling</h3>
+        <p>Expose local services with public URLs. Built-in reverse proxy, custom domains, and automatic TLS. Share instantly.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="compare">
+  <div class="container">
+    <h2>How rawenv compares</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th></th><th class="highlight">rawenv</th><th>Docker</th><th>devbox</th><th>Herd</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Memory overhead</td><td class="highlight">~0 MB</td><td>~300 MB</td><td>~50 MB</td><td>~80 MB</td></tr>
+          <tr><td>Startup time</td><td class="highlight">&lt;1s</td><td>5-15s</td><td>2-5s</td><td>3-8s</td></tr>
+          <tr><td>Isolation</td><td class="highlight">OS-native</td><td>Containers</td><td>Nix store</td><td>None</td></tr>
+          <tr><td>Auto-detect</td><td class="highlight">✓</td><td>✗</td><td>Partial</td><td>PHP only</td></tr>
+          <tr><td>AI assistant</td><td class="highlight">✓</td><td>✗</td><td>✗</td><td>✗</td></tr>
+          <tr><td>Deploy to prod</td><td class="highlight">✓</td><td>✓</td><td>✗</td><td>✗</td></tr>
+          <tr><td>Tunneling</td><td class="highlight">Built-in</td><td>✗</td><td>✗</td><td>✗</td></tr>
+          <tr><td>GUI + TUI</td><td class="highlight">Both</td><td>Desktop app</td><td>CLI only</td><td>GUI only</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="demo">
+  <div class="container">
+    <h2>See it in action</h2>
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span>
+        <span class="terminal-title">rawenv — ~/projects/myapp</span>
+      </div>
+      <div class="terminal-body" id="term-body">
+        <div class="term-line"><span class="prompt">$</span> <span class="typed" data-text="rawenv init"></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container footer-inner">
+    <div class="footer-brand">⚡ rawenv <span class="text-muted">v0.1.0</span></div>
+    <div class="footer-links">
+      <a href="https://github.com/rawenv/rawenv" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/rawenv/rawenv/tree/main/docs" target="_blank" rel="noopener">Docs</a>
+      <span class="text-muted">MIT License</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  const lines = [
+    {cmd:"rawenv init", delay:600},
+    {out:"⚡ Detected: Node.js 20, PostgreSQL 16, Redis 7", delay:400},
+    {out:"  → Resolving dependencies...", delay:300},
+    {out:"  → Writing rawenv.toml", delay:200},
+    {out:"✓ Project initialized", delay:500, cls:"success"},
+    {cmd:"rawenv up", delay:600},
+    {out:"▸ Installing Node.js 20.11.0 (native)...", delay:350},
+    {out:"▸ Installing PostgreSQL 16.2 (native)...", delay:350},
+    {out:"▸ Installing Redis 7.2.4 (native)...", delay:300},
+    {out:"▸ Creating isolation cell (macOS Sandbox)...", delay:250},
+    {out:"✓ All services running", delay:0, cls:"success"},
+    {out:"", delay:100},
+    {out:"  Node.js    → http://localhost:3000", delay:80, cls:"info"},
+    {out:"  PostgreSQL → localhost:5432", delay:80, cls:"info"},
+    {out:"  Redis      → localhost:6379", delay:80, cls:"info"},
+    {out:"", delay:200},
+    {out:"Ready in 0.8s ⚡", delay:0, cls:"success"}
+  ];
+  const body = document.getElementById("term-body");
+  let i = 0, started = false;
+
+  function typeLine(){
+    if(i >= lines.length) return;
+    const l = lines[i++];
+    const div = document.createElement("div");
+    div.className = "term-line";
+    if(l.cmd){
+      div.innerHTML = '<span class="prompt">$</span> <span class="typed"></span>';
+      body.appendChild(div);
+      typeText(div.querySelector(".typed"), l.cmd, function(){ setTimeout(typeLine, l.delay); });
+    } else {
+      if(l.cls) div.classList.add(l.cls);
+      div.textContent = l.out;
+      body.appendChild(div);
+      setTimeout(typeLine, l.delay);
+    }
+    body.scrollTop = body.scrollHeight;
+  }
+
+  function typeText(el, text, cb){
+    let c = 0;
+    (function t(){
+      if(c <= text.length){ el.textContent = text.slice(0,c++); setTimeout(t, 35); }
+      else if(cb) cb();
+    })();
+  }
+
+  // Start on first cmd line only, reset body
+  function start(){
+    if(started) return;
+    started = true;
+    body.innerHTML = "";
+    i = 0;
+    typeLine();
+  }
+
+  const obs = new IntersectionObserver(function(entries){
+    if(entries[0].isIntersecting) { start(); obs.disconnect(); }
+  }, {threshold:0.3});
+  obs.observe(document.getElementById("demo"));
+})();
+</script>
+</body>
+</html>

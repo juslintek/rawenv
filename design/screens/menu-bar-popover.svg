@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="440" viewBox="0 0 320 440">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400&amp;display=swap');
+      .inter { font-family: 'Inter', -apple-system, sans-serif; }
+      .mono { font-family: 'JetBrains Mono', monospace; }
+    </style>
+    <filter id="popover-shadow">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <!-- Popover container -->
+  <rect x="10" y="10" width="300" height="420" fill="#16161e" rx="12" filter="url(#popover-shadow)"/>
+  <rect x="10" y="10" width="300" height="420" fill="none" stroke="#2a2a3a" stroke-width="1" rx="12"/>
+
+  <!-- Arrow notch at top -->
+  <polygon points="155,4 160,10 165,4" fill="#16161e"/>
+  <polygon points="155,4 160,10 165,4" fill="none" stroke="#2a2a3a" stroke-width="1"/>
+
+  <!-- Header -->
+  <text x="26" y="40" fill="#e2e4f0" font-size="15" class="inter" font-weight="700">⚡ rawenv</text>
+  <text x="240" y="40" fill="#34d399" font-size="11" class="inter" font-weight="500">4/5 running</text>
+
+  <!-- Project name -->
+  <rect x="22" y="52" width="276" height="32" fill="#1e1e2a" rx="6"/>
+  <text x="34" y="72" fill="#e2e4f0" font-size="12" class="inter" font-weight="500">my-app</text>
+  <text x="260" y="72" fill="#8b8da6" font-size="10" class="inter">▾</text>
+
+  <!-- Divider -->
+  <rect x="22" y="92" width="276" height="1" fill="#2a2a3a"/>
+
+  <!-- Service list -->
+  <!-- PostgreSQL -->
+  <rect x="22" y="100" width="276" height="48" fill="transparent" rx="6"/>
+  <circle cx="38" cy="124" r="5" fill="#34d399"/>
+  <text x="54" y="118" fill="#e2e4f0" font-size="13" class="inter" font-weight="500">PostgreSQL</text>
+  <text x="54" y="134" fill="#8b8da6" font-size="10" class="mono">:5432 · 84MB · 2h 14m</text>
+  <!-- Toggle -->
+  <rect x="254" y="112" width="36" height="20" fill="#34d399" rx="10"/>
+  <circle cx="280" cy="122" r="8" fill="#ffffff"/>
+
+  <!-- Redis -->
+  <rect x="22" y="152" width="276" height="48" fill="transparent" rx="6"/>
+  <circle cx="38" cy="176" r="5" fill="#34d399"/>
+  <text x="54" y="170" fill="#e2e4f0" font-size="13" class="inter" font-weight="500">Redis</text>
+  <text x="54" y="186" fill="#8b8da6" font-size="10" class="mono">:6379 · 12MB · 2h 14m</text>
+  <rect x="254" y="164" width="36" height="20" fill="#34d399" rx="10"/>
+  <circle cx="280" cy="174" r="8" fill="#ffffff"/>
+
+  <!-- Meilisearch -->
+  <rect x="22" y="204" width="276" height="48" fill="transparent" rx="6"/>
+  <circle cx="38" cy="228" r="5" fill="#34d399"/>
+  <text x="54" y="222" fill="#e2e4f0" font-size="13" class="inter" font-weight="500">Meilisearch</text>
+  <text x="54" y="238" fill="#8b8da6" font-size="10" class="mono">:7700 · 156MB · 2h 14m</text>
+  <rect x="254" y="216" width="36" height="20" fill="#34d399" rx="10"/>
+  <circle cx="280" cy="226" r="8" fill="#ffffff"/>
+
+  <!-- Node.js -->
+  <rect x="22" y="256" width="276" height="48" fill="transparent" rx="6"/>
+  <circle cx="38" cy="280" r="5" fill="#34d399"/>
+  <text x="54" y="274" fill="#e2e4f0" font-size="13" class="inter" font-weight="500">Node.js</text>
+  <text x="54" y="290" fill="#8b8da6" font-size="10" class="mono">:3000 · 210MB · 45m</text>
+  <rect x="254" y="268" width="36" height="20" fill="#34d399" rx="10"/>
+  <circle cx="280" cy="278" r="8" fill="#ffffff"/>
+
+  <!-- SQL Server (stopped) -->
+  <rect x="22" y="308" width="276" height="48" fill="transparent" rx="6"/>
+  <circle cx="38" cy="332" r="5" fill="#f87171"/>
+  <text x="54" y="326" fill="#4a4b5e" font-size="13" class="inter" font-weight="500">SQL Server</text>
+  <text x="54" y="342" fill="#4a4b5e" font-size="10" class="mono">:1433 · stopped</text>
+  <!-- Toggle off -->
+  <rect x="254" y="320" width="36" height="20" fill="#2a2a3a" rx="10"/>
+  <circle cx="264" cy="330" r="8" fill="#4a4b5e"/>
+
+  <!-- Divider -->
+  <rect x="22" y="364" width="276" height="1" fill="#2a2a3a"/>
+
+  <!-- Quick actions -->
+  <rect x="22" y="374" width="132" height="36" fill="#6366f1" rx="8"/>
+  <text x="52" y="396" fill="#ffffff" font-size="12" class="inter" font-weight="600">▶ Start All</text>
+
+  <rect x="162" y="374" width="136" height="36" fill="#1e1e2a" rx="8"/>
+  <text x="186" y="396" fill="#8b8da6" font-size="12" class="inter" font-weight="600">Open Dashboard</text>
+
+  <!-- Footer -->
+  <text x="26" y="424" fill="#4a4b5e" font-size="10" class="inter">rawenv v0.1.0 · CPU 12% · MEM 1.2GB</text>
+</svg>

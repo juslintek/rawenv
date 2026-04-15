@@ -1,0 +1,12 @@
+# rawenv.toml — project configuration
+name = "example-app"
+version = "1"
+
+[services.node]
+version = "22"
+
+[services.postgres]
+version = "16"
+
+[services.redis]
+version = "7"

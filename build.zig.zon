@@ -1,0 +1,24 @@
+.{
+    .name = .rawenv,
+    .version = "0.1.0",
+    .fingerprint = 0xa996505a09869511,
+    .minimum_zig_version = "0.14.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "tests",
+    },
+    // GUI dependencies (uncomment when ready to enable full GUI rendering):
+    //
+    // .dependencies = .{
+    //     .zgui = .{
+    //         .url = "https://github.com/zig-gamedev/zgui/archive/refs/heads/main.tar.gz",
+    //         .hash = "...",
+    //     },
+    //     .raylib = .{
+    //         .url = "https://github.com/raysan5/raylib/archive/refs/tags/5.5.tar.gz",
+    //         .hash = "...",
+    //     },
+    // },
+}

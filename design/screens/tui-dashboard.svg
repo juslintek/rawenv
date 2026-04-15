@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="600" viewBox="0 0 960 600">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&amp;display=swap');
+      text { font-family: 'JetBrains Mono', monospace; }
+    </style>
+  </defs>
+
+  <!-- Terminal background -->
+  <rect width="960" height="600" fill="#0f0f14" rx="12"/>
+
+  <!-- Title bar -->
+  <rect y="0" width="960" height="36" fill="#16161e" rx="12"/>
+  <rect y="12" width="960" height="24" fill="#16161e"/>
+  <circle cx="20" cy="18" r="6" fill="#f87171"/>
+  <circle cx="40" cy="18" r="6" fill="#fbbf24"/>
+  <circle cx="60" cy="18" r="6" fill="#34d399"/>
+  <text x="480" y="22" fill="#8b8da6" font-size="12" text-anchor="middle" font-weight="600">rawenv — my-app</text>
+
+  <!-- Header bar -->
+  <rect x="0" y="36" width="960" height="32" fill="#6366f1"/>
+  <text x="16" y="56" fill="#ffffff" font-size="13" font-weight="700">⚡ rawenv</text>
+  <text x="120" y="56" fill="#c7d2fe" font-size="11">my-app</text>
+  <text x="280" y="56" fill="#c7d2fe" font-size="11">Services: 4/5 running</text>
+  <text x="700" y="56" fill="#c7d2fe" font-size="11">CPU: 12%  MEM: 1.2GB</text>
+  <text x="900" y="56" fill="#c7d2fe" font-size="11">q:quit</text>
+
+  <!-- Tab bar -->
+  <rect x="0" y="68" width="960" height="28" fill="#16161e"/>
+  <rect x="0" y="68" width="120" height="28" fill="#1e1e2a"/>
+  <rect x="0" y="94" width="120" height="2" fill="#6366f1"/>
+  <text x="16" y="86" fill="#e2e4f0" font-size="11" font-weight="600">Services</text>
+  <text x="140" y="86" fill="#8b8da6" font-size="11">Logs</text>
+  <text x="220" y="86" fill="#8b8da6" font-size="11">Config</text>
+  <text x="310" y="86" fill="#8b8da6" font-size="11">Resources</text>
+
+  <!-- Services table header -->
+  <rect x="0" y="96" width="960" height="24" fill="#1e1e2a"/>
+  <text x="16" y="112" fill="#8b8da6" font-size="10">STATUS</text>
+  <text x="100" y="112" fill="#8b8da6" font-size="10">SERVICE</text>
+  <text x="300" y="112" fill="#8b8da6" font-size="10">VERSION</text>
+  <text x="430" y="112" fill="#8b8da6" font-size="10">PORT</text>
+  <text x="530" y="112" fill="#8b8da6" font-size="10">PID</text>
+  <text x="630" y="112" fill="#8b8da6" font-size="10">CPU</text>
+  <text x="720" y="112" fill="#8b8da6" font-size="10">MEM</text>
+  <text x="820" y="112" fill="#8b8da6" font-size="10">UPTIME</text>
+
+  <!-- Row 1: PostgreSQL (selected) -->
+  <rect x="0" y="120" width="960" height="32" fill="#1e1e2a"/>
+  <rect x="0" y="120" width="3" height="32" fill="#6366f1"/>
+  <circle cx="28" cy="136" r="5" fill="#34d399"/>
+  <text x="100" y="140" fill="#e2e4f0" font-size="12" font-weight="600">postgresql</text>
+  <text x="300" y="140" fill="#8b8da6" font-size="12">18.2</text>
+  <text x="430" y="140" fill="#60a5fa" font-size="12">5432</text>
+  <text x="530" y="140" fill="#8b8da6" font-size="12">48291</text>
+  <text x="630" y="140" fill="#e2e4f0" font-size="12">2.1%</text>
+  <text x="720" y="140" fill="#e2e4f0" font-size="12">84MB</text>
+  <text x="820" y="140" fill="#8b8da6" font-size="12">2h 14m</text>
+
+  <!-- Row 2: Redis -->
+  <rect x="0" y="152" width="960" height="32" fill="#0f0f14"/>
+  <circle cx="28" cy="168" r="5" fill="#34d399"/>
+  <text x="100" y="172" fill="#e2e4f0" font-size="12">redis</text>
+  <text x="300" y="172" fill="#8b8da6" font-size="12">7.4</text>
+  <text x="430" y="172" fill="#60a5fa" font-size="12">6379</text>
+  <text x="530" y="172" fill="#8b8da6" font-size="12">48305</text>
+  <text x="630" y="172" fill="#e2e4f0" font-size="12">0.3%</text>
+  <text x="720" y="172" fill="#e2e4f0" font-size="12">12MB</text>
+  <text x="820" y="172" fill="#8b8da6" font-size="12">2h 14m</text>
+
+  <!-- Row 3: Meilisearch -->
+  <rect x="0" y="184" width="960" height="32" fill="#16161e"/>
+  <circle cx="28" cy="200" r="5" fill="#34d399"/>
+  <text x="100" y="204" fill="#e2e4f0" font-size="12">meilisearch</text>
+  <text x="300" y="204" fill="#8b8da6" font-size="12">1.14</text>
+  <text x="430" y="204" fill="#60a5fa" font-size="12">7700</text>
+  <text x="530" y="204" fill="#8b8da6" font-size="12">48312</text>
+  <text x="630" y="204" fill="#e2e4f0" font-size="12">1.8%</text>
+  <text x="720" y="204" fill="#e2e4f0" font-size="12">156MB</text>
+  <text x="820" y="204" fill="#8b8da6" font-size="12">2h 14m</text>
+
+  <!-- Row 4: Node.js -->
+  <rect x="0" y="216" width="960" height="32" fill="#0f0f14"/>
+  <circle cx="28" cy="232" r="5" fill="#34d399"/>
+  <text x="100" y="236" fill="#e2e4f0" font-size="12">node</text>
+  <text x="300" y="236" fill="#8b8da6" font-size="12">22.15</text>
+  <text x="430" y="236" fill="#60a5fa" font-size="12">3000</text>
+  <text x="530" y="236" fill="#8b8da6" font-size="12">48320</text>
+  <text x="630" y="236" fill="#e2e4f0" font-size="12">7.4%</text>
+  <text x="720" y="236" fill="#e2e4f0" font-size="12">210MB</text>
+  <text x="820" y="236" fill="#8b8da6" font-size="12">45m</text>
+
+  <!-- Row 5: SQL Server (stopped) -->
+  <rect x="0" y="248" width="960" height="32" fill="#16161e"/>
+  <circle cx="28" cy="264" r="5" fill="#f87171"/>
+  <text x="100" y="268" fill="#4a4b5e" font-size="12">sqlserver</text>
+  <text x="300" y="268" fill="#4a4b5e" font-size="12">2025</text>
+  <text x="430" y="268" fill="#4a4b5e" font-size="12">1433</text>
+  <text x="530" y="268" fill="#4a4b5e" font-size="12">—</text>
+  <text x="630" y="268" fill="#4a4b5e" font-size="12">—</text>
+  <text x="720" y="268" fill="#4a4b5e" font-size="12">—</text>
+  <text x="820" y="268" fill="#4a4b5e" font-size="12">stopped</text>
+
+  <!-- Divider -->
+  <rect x="0" y="290" width="960" height="1" fill="#2a2a3a"/>
+
+  <!-- Log viewer panel -->
+  <rect x="0" y="291" width="960" height="24" fill="#1e1e2a"/>
+  <text x="16" y="307" fill="#8b8da6" font-size="11" font-weight="600">Logs — postgresql</text>
+  <text x="880" y="307" fill="#8b8da6" font-size="10">↑↓ scroll</text>
+
+  <!-- Log lines -->
+  <text x="16" y="332" fill="#4a4b5e" font-size="11">14:23:01</text>
+  <text x="100" y="332" fill="#8b8da6" font-size="11">LOG:  database system is ready to accept connections</text>
+
+  <text x="16" y="352" fill="#4a4b5e" font-size="11">14:23:05</text>
+  <text x="100" y="352" fill="#8b8da6" font-size="11">LOG:  autovacuum launcher started</text>
+
+  <text x="16" y="372" fill="#4a4b5e" font-size="11">14:25:12</text>
+  <text x="100" y="372" fill="#e2e4f0" font-size="11">LOG:  connection received: host=127.0.0.1 port=52341</text>
+
+  <text x="16" y="392" fill="#4a4b5e" font-size="11">14:25:12</text>
+  <text x="100" y="392" fill="#e2e4f0" font-size="11">LOG:  connection authorized: user=myapp database=myapp_dev</text>
+
+  <text x="16" y="412" fill="#4a4b5e" font-size="11">14:30:44</text>
+  <text x="100" y="412" fill="#fbbf24" font-size="11">WARNING:  could not open statistics file "pg_stat_tmp/global.stat"</text>
+
+  <text x="16" y="432" fill="#4a4b5e" font-size="11">14:35:01</text>
+  <text x="100" y="432" fill="#8b8da6" font-size="11">LOG:  checkpoint starting: time</text>
+
+  <text x="16" y="452" fill="#4a4b5e" font-size="11">14:35:02</text>
+  <text x="100" y="452" fill="#8b8da6" font-size="11">LOG:  checkpoint complete: wrote 42 buffers (0.3%)</text>
+
+  <!-- Resource mini-chart area -->
+  <rect x="0" y="470" width="960" height="1" fill="#2a2a3a"/>
+  <rect x="0" y="471" width="960" height="24" fill="#1e1e2a"/>
+  <text x="16" y="487" fill="#8b8da6" font-size="11" font-weight="600">Resources</text>
+
+  <!-- CPU bar chart -->
+  <text x="16" y="510" fill="#8b8da6" font-size="10">CPU</text>
+  <rect x="60" y="500" width="380" height="14" fill="#1e1e2a" rx="2"/>
+  <rect x="60" y="500" width="46" height="14" fill="#818cf8" rx="2"/>
+  <text x="450" y="511" fill="#8b8da6" font-size="10">12%</text>
+
+  <!-- MEM bar chart -->
+  <text x="16" y="534" fill="#8b8da6" font-size="10">MEM</text>
+  <rect x="60" y="524" width="380" height="14" fill="#1e1e2a" rx="2"/>
+  <rect x="60" y="524" width="140" height="14" fill="#818cf8" rx="2"/>
+  <text x="450" y="535" fill="#8b8da6" font-size="10">1.2GB / 3.2GB</text>
+
+  <!-- Disk bar chart -->
+  <text x="16" y="558" fill="#8b8da6" font-size="10">DSK</text>
+  <rect x="60" y="548" width="380" height="14" fill="#1e1e2a" rx="2"/>
+  <rect x="60" y="548" width="22" height="14" fill="#818cf8" rx="2"/>
+  <text x="450" y="559" fill="#8b8da6" font-size="10">245MB</text>
+
+  <!-- Bottom status bar -->
+  <rect x="0" y="574" width="960" height="26" fill="#16161e"/>
+  <text x="16" y="591" fill="#6366f1" font-size="11" font-weight="600">rawenv v0.1.0</text>
+  <text x="200" y="591" fill="#8b8da6" font-size="10">j/k:navigate  Enter:toggle  l:logs  r:restart  s:shell  ?:help</text>
+  <text x="860" y="591" fill="#34d399" font-size="10">● connected</text>
+</svg>

@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="720" viewBox="0 0 1100 720">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400&amp;display=swap');
+      .inter { font-family: 'Inter', -apple-system, sans-serif; }
+      .mono { font-family: 'JetBrains Mono', monospace; }
+    </style>
+    <linearGradient id="accent-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+    <filter id="shadow-md">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Window chrome -->
+  <rect width="1100" height="720" fill="#0f0f14" rx="12"/>
+  <!-- Title bar -->
+  <rect width="1100" height="44" fill="#16161e" rx="12"/>
+  <rect y="12" width="1100" height="32" fill="#16161e"/>
+  <circle cx="24" cy="22" r="6" fill="#f87171"/>
+  <circle cx="46" cy="22" r="6" fill="#fbbf24"/>
+  <circle cx="68" cy="22" r="6" fill="#34d399"/>
+  <text x="550" y="27" fill="#8b8da6" font-size="13" text-anchor="middle" class="inter" font-weight="600">rawenv — my-app</text>
+
+  <!-- Sidebar -->
+  <rect x="0" y="44" width="240" height="676" fill="#16161e"/>
+
+  <!-- Sidebar: Project selector -->
+  <rect x="16" y="60" width="208" height="40" fill="#1e1e2a" rx="8"/>
+  <text x="40" y="84" fill="#e2e4f0" font-size="14" class="inter" font-weight="600">my-app</text>
+  <text x="40" y="100" fill="#8b8da6" font-size="11" class="inter">/Users/me/projects/my-app</text>
+  <!-- Dropdown chevron -->
+  <text x="208" y="84" fill="#8b8da6" font-size="12">▾</text>
+
+  <!-- Sidebar: Section label -->
+  <text x="16" y="132" fill="#8b8da6" font-size="10" class="inter" font-weight="600" letter-spacing="1">SERVICES</text>
+
+  <!-- Sidebar: Service items -->
+  <!-- PostgreSQL (selected) -->
+  <rect x="8" y="140" width="224" height="44" fill="#1e1e2a" rx="8"/>
+  <rect x="8" y="140" width="3" height="44" fill="#6366f1" rx="2"/>
+  <circle cx="32" cy="162" r="5" fill="#34d399"/>
+  <text x="48" y="158" fill="#e2e4f0" font-size="13" class="inter" font-weight="500">PostgreSQL</text>
+  <text x="48" y="174" fill="#8b8da6" font-size="11" class="mono">:5432</text>
+  <text x="180" y="174" fill="#34d399" font-size="10" class="inter">running</text>
+
+  <!-- Redis -->
+  <rect x="8" y="188" width="224" height="44" fill="transparent" rx="8"/>
+  <circle cx="32" cy="210" r="5" fill="#34d399"/>
+  <text x="48" y="206" fill="#e2e4f0" font-size="13" class="inter" font-weight="500">Redis</text>
+  <text x="48" y="222" fill="#8b8da6" font-size="11" class="mono">:6379</text>
+  <text x="180" y="222" fill="#34d399" font-size="10" class="inter">running</text>
+
+  <!-- Meilisearch -->
+  <rect x="8" y="236" width="224" height="44" fill="transparent" rx="8"/>
+  <circle cx="32" cy="258" r="5" fill="#34d399"/>
+  <text x="48" y="254" fill="#e2e4f0" font-size="13" class="inter" font-weight="500">Meilisearch</text>
+  <text x="48" y="270" fill="#8b8da6" font-size="11" class="mono">:7700</text>
+  <text x="180" y="270" fill="#34d399" font-size="10" class="inter">running</text>
+
+  <!-- Node.js -->
+  <rect x="8" y="284" width="224" height="44" fill="transparent" rx="8"/>
+  <circle cx="32" cy="306" r="5" fill="#34d399"/>
+  <text x="48" y="302" fill="#e2e4f0" font-size="13" class="inter" font-weight="500">Node.js</text>
+  <text x="48" y="318" fill="#8b8da6" font-size="11" class="mono">:3000</text>
+  <text x="180" y="318" fill="#34d399" font-size="10" class="inter">running</text>
+
+  <!-- SQL Server (stopped) -->
+  <rect x="8" y="332" width="224" height="44" fill="transparent" rx="8"/>
+  <circle cx="32" cy="354" r="5" fill="#f87171"/>
+  <text x="48" y="350" fill="#4a4b5e" font-size="13" class="inter" font-weight="500">SQL Server</text>
+  <text x="48" y="366" fill="#4a4b5e" font-size="11" class="mono">:1433</text>
+  <text x="180" y="366" fill="#f87171" font-size="10" class="inter">stopped</text>
+
+  <!-- Sidebar: Section label -->
+  <text x="16" y="408" fill="#8b8da6" font-size="10" class="inter" font-weight="600" letter-spacing="1">RUNTIMES</text>
+
+  <!-- Runtime items -->
+  <text x="32" y="432" fill="#e2e4f0" font-size="13" class="inter">Node.js</text>
+  <text x="180" y="432" fill="#8b8da6" font-size="11" class="mono">22.15</text>
+  <text x="32" y="456" fill="#e2e4f0" font-size="13" class="inter">PHP</text>
+  <text x="180" y="456" fill="#8b8da6" font-size="11" class="mono">8.4</text>
+
+  <!-- Sidebar: Bottom actions -->
+  <rect x="0" y="660" width="240" height="60" fill="#16161e"/>
+  <rect x="0" y="660" width="240" height="1" fill="#2a2a3a"/>
+  <rect x="16" y="676" width="100" height="32" fill="#6366f1" rx="6"/>
+  <text x="40" y="696" fill="#ffffff" font-size="12" class="inter" font-weight="600">▶ Start All</text>
+  <rect x="124" y="676" width="100" height="32" fill="#1e1e2a" rx="6"/>
+  <text x="148" y="696" fill="#8b8da6" font-size="12" class="inter" font-weight="600">⏹ Stop All</text>
+
+  <!-- Main content area -->
+  <!-- Service detail header -->
+  <rect x="240" y="44" width="860" height="72" fill="#16161e"/>
+  <rect x="240" y="115" width="860" height="1" fill="#2a2a3a"/>
+  <text x="272" y="76" fill="#e2e4f0" font-size="20" class="inter" font-weight="700">PostgreSQL</text>
+  <text x="272" y="100" fill="#8b8da6" font-size="13" class="inter">Version 18.2 · Port 5432 · PID 48291 · Uptime 2h 14m</text>
+  <!-- Action buttons -->
+  <rect x="900" y="60" width="80" height="32" fill="#1e1e2a" rx="6"/>
+  <text x="920" y="80" fill="#f87171" font-size="12" class="inter" font-weight="500">⏹ Stop</text>
+  <rect x="990" y="60" width="80" height="32" fill="#1e1e2a" rx="6"/>
+  <text x="1004" y="80" fill="#fbbf24" font-size="12" class="inter" font-weight="500">↻ Restart</text>
+
+  <!-- Stats cards row -->
+  <!-- CPU card -->
+  <rect x="264" y="132" width="190" height="88" fill="#16161e" rx="10" filter="url(#shadow-md)"/>
+  <text x="280" y="156" fill="#8b8da6" font-size="11" class="inter" font-weight="500">CPU</text>
+  <text x="280" y="186" fill="#e2e4f0" font-size="28" class="inter" font-weight="700">2.1%</text>
+  <rect x="280" y="200" width="158" height="6" fill="#1e1e2a" rx="3"/>
+  <rect x="280" y="200" width="14" height="6" fill="#34d399" rx="3"/>
+
+  <!-- Memory card -->
+  <rect x="470" y="132" width="190" height="88" fill="#16161e" rx="10" filter="url(#shadow-md)"/>
+  <text x="486" y="156" fill="#8b8da6" font-size="11" class="inter" font-weight="500">Memory</text>
+  <text x="486" y="186" fill="#e2e4f0" font-size="28" class="inter" font-weight="700">84 MB</text>
+  <rect x="486" y="200" width="158" height="6" fill="#1e1e2a" rx="3"/>
+  <rect x="486" y="200" width="42" height="6" fill="#818cf8" rx="3"/>
+
+  <!-- Connections card -->
+  <rect x="676" y="132" width="190" height="88" fill="#16161e" rx="10" filter="url(#shadow-md)"/>
+  <text x="692" y="156" fill="#8b8da6" font-size="11" class="inter" font-weight="500">Connections</text>
+  <text x="692" y="186" fill="#e2e4f0" font-size="28" class="inter" font-weight="700">3</text>
+  <text x="730" y="186" fill="#8b8da6" font-size="14" class="inter">/ 100</text>
+
+  <!-- Disk card -->
+  <rect x="882" y="132" width="190" height="88" fill="#16161e" rx="10" filter="url(#shadow-md)"/>
+  <text x="898" y="156" fill="#8b8da6" font-size="11" class="inter" font-weight="500">Disk</text>
+  <text x="898" y="186" fill="#e2e4f0" font-size="28" class="inter" font-weight="700">245 MB</text>
+  <rect x="898" y="200" width="158" height="6" fill="#1e1e2a" rx="3"/>
+  <rect x="898" y="200" width="8" height="6" fill="#60a5fa" rx="3"/>
+
+  <!-- Tabs: Logs / Config / Connection -->
+  <rect x="264" y="236" width="808" height="36" fill="#16161e" rx="8"/>
+  <rect x="264" y="236" width="80" height="36" fill="#1e1e2a" rx="8"/>
+  <rect x="264" y="268" width="80" height="4" fill="#6366f1" rx="2"/>
+  <text x="288" y="259" fill="#e2e4f0" font-size="12" class="inter" font-weight="600">Logs</text>
+  <text x="372" y="259" fill="#8b8da6" font-size="12" class="inter">Config</text>
+  <text x="452" y="259" fill="#8b8da6" font-size="12" class="inter">Connection</text>
+  <text x="560" y="259" fill="#8b8da6" font-size="12" class="inter">Backups</text>
+
+  <!-- Log viewer -->
+  <rect x="264" y="280" width="808" height="420" fill="#0f0f14" rx="8"/>
+
+  <text x="280" y="304" fill="#4a4b5e" font-size="12" class="mono">14:23:01</text>
+  <text x="380" y="304" fill="#8b8da6" font-size="12" class="mono">LOG:  database system is ready to accept connections</text>
+
+  <text x="280" y="326" fill="#4a4b5e" font-size="12" class="mono">14:23:05</text>
+  <text x="380" y="326" fill="#8b8da6" font-size="12" class="mono">LOG:  autovacuum launcher started</text>
+
+  <text x="280" y="348" fill="#4a4b5e" font-size="12" class="mono">14:25:12</text>
+  <text x="380" y="348" fill="#e2e4f0" font-size="12" class="mono">LOG:  connection received: host=127.0.0.1 port=52341</text>
+
+  <text x="280" y="370" fill="#4a4b5e" font-size="12" class="mono">14:25:12</text>
+  <text x="380" y="370" fill="#e2e4f0" font-size="12" class="mono">LOG:  connection authorized: user=myapp database=myapp_dev</text>
+
+  <text x="280" y="392" fill="#4a4b5e" font-size="12" class="mono">14:30:44</text>
+  <text x="380" y="392" fill="#fbbf24" font-size="12" class="mono">WARNING:  could not open statistics file</text>
+
+  <text x="280" y="414" fill="#4a4b5e" font-size="12" class="mono">14:35:01</text>
+  <text x="380" y="414" fill="#8b8da6" font-size="12" class="mono">LOG:  checkpoint starting: time</text>
+
+  <text x="280" y="436" fill="#4a4b5e" font-size="12" class="mono">14:35:02</text>
+  <text x="380" y="436" fill="#8b8da6" font-size="12" class="mono">LOG:  checkpoint complete: wrote 42 buffers (0.3%)</text>
+
+  <text x="280" y="458" fill="#4a4b5e" font-size="12" class="mono">14:40:15</text>
+  <text x="380" y="458" fill="#e2e4f0" font-size="12" class="mono">LOG:  connection received: host=127.0.0.1 port=52388</text>
+
+  <text x="280" y="480" fill="#4a4b5e" font-size="12" class="mono">14:40:15</text>
+  <text x="380" y="480" fill="#e2e4f0" font-size="12" class="mono">LOG:  connection authorized: user=myapp database=myapp_dev</text>
+
+  <text x="280" y="502" fill="#4a4b5e" font-size="12" class="mono">14:45:01</text>
+  <text x="380" y="502" fill="#8b8da6" font-size="12" class="mono">LOG:  checkpoint starting: time</text>
+
+  <!-- Blinking cursor -->
+  <rect x="280" y="516" width="8" height="16" fill="#6366f1" opacity="0.8"/>
+
+  <!-- Connection string bar at bottom -->
+  <rect x="264" y="688" width="808" height="32" fill="#1e1e2a" rx="6"/>
+  <text x="280" y="708" fill="#8b8da6" font-size="11" class="mono">postgresql://myapp:****@localhost:5432/myapp_dev</text>
+  <rect x="1000" y="692" width="60" height="24" fill="#6366f1" rx="4"/>
+  <text x="1014" y="708" fill="#ffffff" font-size="11" class="inter" font-weight="500">Copy</text>
+</svg>

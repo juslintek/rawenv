@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>rawenv — Interactive Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <nav id="proto-nav">
+    <div class="nav-group">
+      <span class="nav-logo">⚡ rawenv</span>
+      <span class="nav-sep">|</span>
+      <button class="nav-btn" data-screen="installer-welcome" data-testid="nav-installer">1a. Install</button><button class="nav-btn" data-screen="installer-done" data-testid="nav-installer-done">1b. Done</button>
+      <button class="nav-btn" data-screen="project-scan" data-testid="nav-discover">2. Discover</button>
+      <button class="nav-btn" data-screen="project-list" data-testid="nav-projects">3. Projects</button>
+      <button class="nav-btn" data-screen="project-setup" data-testid="nav-setup">4. Setup</button>
+      <span class="nav-sep">|</span>
+      <button class="nav-btn" data-screen="tui-services" data-testid="nav-tui">TUI</button>
+      <button class="nav-btn" data-screen="gui-dashboard" data-testid="nav-dashboard">Dashboard</button>
+      <button class="nav-btn" data-screen="menubar" data-testid="nav-menubar">Menu Bar</button>
+      <button class="nav-btn" data-screen="gui-settings" data-testid="nav-settings">Settings</button>
+      <button class="nav-btn" data-screen="deploy" data-testid="nav-deploy">Deploy</button>
+      <button class="nav-btn" data-screen="tunnel" data-testid="nav-tunnel">Tunnel</button>
+      <button class="nav-btn" data-screen="ai-chat" data-testid="nav-ai">AI</button>
+      <button class="nav-btn" data-screen="connections" data-testid="nav-connections">Connections</button>
+      <button class="nav-btn" data-screen="uninstall" data-testid="nav-uninstall">Uninstall</button>
+    </div>
+    <div class="nav-group">
+      <button class="nav-btn os-btn active" data-os="macos" data-testid="os-macos">macOS</button>
+      <button class="nav-btn os-btn" data-os="linux" data-testid="os-linux">Linux</button>
+      <button class="nav-btn os-btn" data-os="windows" data-testid="os-windows">Windows</button>
+      <span class="nav-sep">|</span>
+      <button class="nav-btn theme-btn" data-theme="dark" data-testid="theme-dark" onclick="setTheme('dark')">🌙</button>
+      <button class="nav-btn theme-btn" data-theme="light" data-testid="theme-light" onclick="setTheme('light')">☀️</button>
+    </div>
+  </nav>
+  <div id="screen-container"></div>
+</div>
+<script src="data.js"></script>
+<script src="components.js"></script>
+<script src="screens-installer.js"></script>
+<script src="screens-projects.js"></script>
+<script src="screens-tui.js"></script>
+<script src="screens-gui.js"></script>
+<script src="screens-deploy.js"></script>
+<script src="screens-ai.js"></script>
+<script src="screens-extra.js"></script>
+<script src="ai-engine.js"></script>
+<script src="settings-pages.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
