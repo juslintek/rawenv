@@ -83,6 +83,28 @@ fn stripQuotes(s: []const u8) ?[]const u8 {
     return null;
 }
 
+pub fn generate(allocator: std.mem.Allocator, project_name: []const u8, runtimes: []const Config.Entry, services: []const Config.Entry) ![]const u8 {
+    var buf: std.ArrayList(u8) = .empty;
+    errdefer buf.deinit(allocator);
+    const w = buf.writer(allocator);
+
+    try w.print("[project]\nname = \"{s}\"\n", .{project_name});
+
+    if (runtimes.len > 0) {
+        try w.writeAll("\n[runtimes]\n");
+        for (runtimes) |rt| try w.print("{s} = \"{s}\"\n", .{ rt.key, rt.value });
+    }
+
+    if (services.len > 0) {
+        try w.writeAll("\n[services]\n");
+        for (services) |svc| try w.print("{s} = \"{s}\"\n", .{ svc.key, svc.value });
+    }
+
+    try w.writeAll("\n[detect]\nauto = true\n");
+
+    return try buf.toOwnedSlice(allocator);
+}
+
 pub fn deinit(allocator: std.mem.Allocator, cfg: *Config) void {
     allocator.free(cfg.runtimes);
     allocator.free(cfg.services);

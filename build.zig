@@ -10,6 +10,45 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const detector_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/detector.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const resolver_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/resolver.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const store_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/store.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "resolver", .module = resolver_mod }},
+    });
+
+    const service_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/service.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "config", .module = config_mod },
+            .{ .name = "resolver", .module = resolver_mod },
+        },
+    });
+
+    const shell_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/shell.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "config", .module = config_mod },
+            .{ .name = "service", .module = service_mod },
+        },
+    });
+
     const tui_mod = b.createModule(.{
         .root_source_file = b.path("src/tui/main.zig"),
         .target = target,
@@ -103,6 +142,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .imports = &.{
             .{ .name = "config", .module = config_mod },
+            .{ .name = "detector", .module = detector_mod },
+            .{ .name = "resolver", .module = resolver_mod },
+            .{ .name = "store", .module = store_mod },
+            .{ .name = "service", .module = service_mod },
+            .{ .name = "shell", .module = shell_mod },
             .{ .name = "tui", .module = tui_mod },
             .{ .name = "gui", .module = gui_mod },
             .{ .name = "deploy", .module = deploy_mod },
@@ -136,6 +180,11 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "config", .module = config_mod },
+                .{ .name = "detector", .module = detector_mod },
+                .{ .name = "resolver", .module = resolver_mod },
+                .{ .name = "store", .module = store_mod },
+                .{ .name = "service", .module = service_mod },
+                .{ .name = "shell", .module = shell_mod },
                 .{ .name = "tui", .module = tui_mod },
                 .{ .name = "gui", .module = gui_mod },
                 .{ .name = "deploy", .module = deploy_mod },
@@ -231,6 +280,49 @@ pub fn build(b: *std.Build) void {
     });
     test_step.dependOn(&b.addRunArtifact(ai_tests).step);
 
+    // Detector tests
+    const detector_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/detector_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "detector", .module = detector_mod },
+                .{ .name = "config", .module = config_mod },
+            },
+        }),
+    });
+    test_step.dependOn(&b.addRunArtifact(detector_tests).step);
+
+    // Store/resolver tests
+    const store_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/store_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "resolver", .module = resolver_mod },
+                .{ .name = "store", .module = store_mod },
+            },
+        }),
+    });
+    test_step.dependOn(&b.addRunArtifact(store_tests).step);
+
+    // Service/shell tests
+    const service_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/service_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "config", .module = config_mod },
+                .{ .name = "service", .module = service_mod },
+                .{ .name = "shell", .module = shell_mod },
+            },
+        }),
+    });
+    test_step.dependOn(&b.addRunArtifact(service_tests).step);
+
     // Cross-compilation targets
     const cross_targets: []const struct { []const u8, std.Target.Cpu.Arch, std.Target.Os.Tag } = &.{
         .{ "aarch64-macos", .aarch64, .macos },
@@ -246,6 +338,40 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/core/config.zig"),
             .target = cross_target,
             .optimize = .ReleaseSafe,
+        });
+        const cross_detector = b.createModule(.{
+            .root_source_file = b.path("src/core/detector.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_resolver = b.createModule(.{
+            .root_source_file = b.path("src/core/resolver.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_store = b.createModule(.{
+            .root_source_file = b.path("src/core/store.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+            .imports = &.{.{ .name = "resolver", .module = cross_resolver }},
+        });
+        const cross_service = b.createModule(.{
+            .root_source_file = b.path("src/core/service.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+            .imports = &.{
+                .{ .name = "config", .module = cross_config },
+                .{ .name = "resolver", .module = cross_resolver },
+            },
+        });
+        const cross_shell = b.createModule(.{
+            .root_source_file = b.path("src/core/shell.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+            .imports = &.{
+                .{ .name = "config", .module = cross_config },
+                .{ .name = "service", .module = cross_service },
+            },
         });
         const cross_tui = b.createModule(.{
             .root_source_file = b.path("src/tui/main.zig"),
@@ -302,6 +428,11 @@ pub fn build(b: *std.Build) void {
             .optimize = .ReleaseSafe,
             .imports = &.{
                 .{ .name = "config", .module = cross_config },
+                .{ .name = "detector", .module = cross_detector },
+                .{ .name = "resolver", .module = cross_resolver },
+                .{ .name = "store", .module = cross_store },
+                .{ .name = "service", .module = cross_service },
+                .{ .name = "shell", .module = cross_shell },
                 .{ .name = "tui", .module = cross_tui },
                 .{ .name = "gui", .module = cross_gui },
                 .{ .name = "deploy", .module = cross_deploy },

@@ -1,5 +1,6 @@
 const std = @import("std");
 pub const config = @import("config");
+const commands = @import("commands.zig");
 const tui = @import("tui");
 const gui = @import("gui");
 const deploy = @import("deploy");
@@ -13,6 +14,11 @@ const help =
     \\Usage: rawenv [options] [command]
     \\
     \\Commands:
+    \\  init             Detect project and generate rawenv.toml
+    \\  add <pkg>@<ver>  Install a package (e.g. rawenv add node@22)
+    \\  up               Activate all configured runtimes
+    \\  services ls      List configured runtimes/services with status
+    \\  shell            Enter rawenv shell with modified PATH
     \\  tui              Launch TUI dashboard
     \\  gui              Launch GUI window
     \\  ai "question"    Ask AI assistant (one-shot)
@@ -40,6 +46,45 @@ pub fn main() !void {
         }
         if (std.mem.eql(u8, arg, "--help")) {
             try stdout.writeAll(help);
+            return;
+        }
+        if (std.mem.eql(u8, arg, "init")) {
+            commands.runInit(allocator, stdout) catch {
+                try stdout.writeAll("Error: init failed\n");
+            };
+            return;
+        }
+        if (std.mem.eql(u8, arg, "add")) {
+            if (i + 1 < args.len) {
+                commands.runAdd(allocator, stdout, args[i + 1]) catch {
+                    try stdout.writeAll("Error: add failed\n");
+                };
+            } else {
+                try stdout.writeAll("Usage: rawenv add <package>@<version>\n");
+            }
+            return;
+        }
+        if (std.mem.eql(u8, arg, "up")) {
+            commands.runUp(allocator, stdout) catch {
+                try stdout.writeAll("Error: up failed\n");
+            };
+            return;
+        }
+        if (std.mem.eql(u8, arg, "services")) {
+            const sub = if (i + 1 < args.len) args[i + 1] else "";
+            if (std.mem.eql(u8, sub, "ls")) {
+                commands.runServicesList(allocator, stdout) catch {
+                    try stdout.writeAll("Error: services ls failed\n");
+                };
+            } else {
+                try stdout.writeAll("Usage: rawenv services ls\n");
+            }
+            return;
+        }
+        if (std.mem.eql(u8, arg, "shell")) {
+            commands.runShell(allocator, stdout) catch {
+                try stdout.writeAll("Error: shell failed\n");
+            };
             return;
         }
         if (std.mem.eql(u8, arg, "tui")) {
