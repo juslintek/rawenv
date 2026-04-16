@@ -25,6 +25,7 @@ const help =
     \\  connections      Show service dependency map
     \\  cell info        Show available isolation backends
     \\  discover         Scan for projects on this machine
+    \\  uninstall        Remove rawenv from this machine
     \\  tui              Launch TUI dashboard
     \\  gui              Launch GUI window
     \\  menubar          Launch macOS menu bar status item
@@ -136,6 +137,12 @@ pub fn main() !void {
         if (std.mem.eql(u8, arg, "discover")) {
             commands.runDiscover(allocator, stdout) catch {
                 try stdout.writeAll("Error: discover failed\n");
+            };
+            return;
+        }
+        if (std.mem.eql(u8, arg, "uninstall")) {
+            commands.runUninstall(allocator, stdout) catch {
+                try stdout.writeAll("Error: uninstall failed\n");
             };
             return;
         }

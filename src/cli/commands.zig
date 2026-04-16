@@ -247,3 +247,85 @@ pub fn runDiscover(allocator: std.mem.Allocator, stdout: std.fs.File) !void {
         try stdout.writeAll("]\n");
     }
 }
+
+pub fn runUninstall(_: std.mem.Allocator, stdout: std.fs.File) !void {
+    const home = std.posix.getenv("HOME") orelse {
+        try stdout.writeAll("Error: HOME not set\n");
+        return;
+    };
+
+    try stdout.writeAll("rawenv uninstall will remove:\n");
+    try stdout.writeAll("  ");
+    try stdout.writeAll(home);
+    try stdout.writeAll("/.rawenv/bin/\n");
+    try stdout.writeAll("  ");
+    try stdout.writeAll(home);
+    try stdout.writeAll("/.rawenv/store/\n");
+    try stdout.writeAll("  PATH entries from .zshrc, .bashrc, .profile\n");
+    try stdout.writeAll("\nProceed? [y/N] ");
+
+    const stdin = std.fs.File.stdin();
+    var buf: [16]u8 = undefined;
+    const n = stdin.read(&buf) catch 0;
+    if (n == 0) return;
+    const answer = std.mem.trimRight(u8, buf[0..n], "\r\n");
+    if (!std.mem.eql(u8, answer, "y") and !std.mem.eql(u8, answer, "Y")) {
+        try stdout.writeAll("Aborted.\n");
+        return;
+    }
+
+    // Remove ~/.rawenv/
+    var rawenv_path_buf: [1024]u8 = undefined;
+    const rawenv_path = std.fmt.bufPrint(&rawenv_path_buf, "{s}/.rawenv", .{home}) catch return;
+    std.fs.cwd().deleteTree(rawenv_path) catch |err| {
+        if (err != error.FileNotFound) {
+            try stdout.writeAll("Warning: could not fully remove ");
+            try stdout.writeAll(rawenv_path);
+            try stdout.writeAll("\n");
+        }
+    };
+
+    // Clean shell rc files
+    const rc_files = [_][]const u8{ ".zshrc", ".bashrc", ".profile" };
+    for (rc_files) |rc| {
+        cleanRcFile(home, rc) catch {};
+    }
+
+    try stdout.writeAll("rawenv uninstalled\n");
+}
+
+fn cleanRcFile(home: []const u8, filename: []const u8) !void {
+    var path_buf: [1024]u8 = undefined;
+    const path = std.fmt.bufPrint(&path_buf, "{s}/{s}", .{ home, filename }) catch return;
+
+    const file = std.fs.cwd().openFile(path, .{}) catch return;
+    defer file.close();
+
+    const stat = file.stat() catch return;
+    if (stat.size == 0 or stat.size > 64 * 1024) return;
+
+    var content_buf: [64 * 1024]u8 = undefined;
+    const n = file.readAll(&content_buf) catch return;
+    const content = content_buf[0..n];
+
+    var out_buf: [64 * 1024]u8 = undefined;
+    var out_len: usize = 0;
+    var start: usize = 0;
+    while (start < content.len) {
+        const end = std.mem.indexOfScalar(u8, content[start..], '\n');
+        const line_end = if (end) |e| start + e else content.len;
+        const line = content[start..line_end];
+        if (std.mem.indexOf(u8, line, "rawenv") == null) {
+            if (out_len + line.len + 1 > out_buf.len) return;
+            @memcpy(out_buf[out_len .. out_len + line.len], line);
+            out_len += line.len;
+            out_buf[out_len] = '\n';
+            out_len += 1;
+        }
+        start = line_end + 1;
+    }
+
+    const out_file = std.fs.cwd().createFile(path, .{}) catch return;
+    defer out_file.close();
+    out_file.writeAll(out_buf[0..out_len]) catch {};
+}

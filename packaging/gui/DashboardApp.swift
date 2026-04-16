@@ -22,6 +22,7 @@ extension Color {
 // MARK: - Model
 enum ServiceStatus { case running, stopped }
 enum DashboardTab: String, CaseIterable { case logs = "Logs", config = "Config", connection = "Connection", cell = "Cell", backups = "Backups" }
+enum SettingsTab: String, CaseIterable { case general = "General", services = "Services", network = "Network", theme = "Theme", about = "About" }
 
 struct Service: Identifiable {
     let id = UUID()
@@ -39,6 +40,8 @@ class AppModel: ObservableObject {
     @Published var activeTab: DashboardTab = .logs
     @Published var services: [Service] = []
     @Published var logs: [LogEntry] = []
+    @Published var showSettings: Bool = false
+    @Published var settingsTab: SettingsTab = .general
 
     init() { loadData() }
 
@@ -150,6 +153,14 @@ struct SidebarView: View {
 
             // Bottom actions
             Divider().background(Color.border2)
+            HStack(spacing: 8) {
+                Image(systemName: "gearshape.fill").font(.system(size: 14))
+                    .foregroundColor(model.showSettings ? .accent2 : .textMuted2)
+                    .frame(width: 32, height: 32)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(model.showSettings ? Color.bgTertiary : Color.clear))
+                    .onTapGesture { model.showSettings.toggle() }
+                Spacer()
+            }.padding(.horizontal, 12).padding(.top, 8)
             HStack(spacing: 8) {
                 ActionButton(label: "▶ Start All", color: .accent2)
                 ActionButton(label: "⏹ Stop All", color: .bgTertiary)
@@ -340,13 +351,140 @@ struct ConnectionBar: View {
     }
 }
 
+// MARK: - Settings
+struct SettingsView: View {
+    @ObservedObject var model: AppModel
+    var body: some View {
+        HStack(spacing: 0) {
+            // Left nav
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("←").foregroundColor(.accent2)
+                    Text("Back").font(.system(size: 12, weight: .medium)).foregroundColor(.accent2)
+                }.padding(12).onTapGesture { model.showSettings = false }
+                Divider().background(Color.border2)
+                ForEach(SettingsTab.allCases, id: \.self) { tab in
+                    HStack(spacing: 8) {
+                        Text(settingsIcon(tab)).font(.system(size: 13))
+                        Text(tab.rawValue).font(.system(size: 13, weight: .medium))
+                            .foregroundColor(tab == model.settingsTab ? .textPrimary : .textMuted2)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(tab == model.settingsTab ? Color.bgTertiary : Color.clear)
+                    .cornerRadius(6).padding(.horizontal, 8)
+                    .onTapGesture { model.settingsTab = tab }
+                }
+                Spacer()
+            }.frame(width: 160).background(Color.bgSecondary)
+            // Right content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    settingsContent(model.settingsTab)
+                }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
+            }.background(Color.bgPrimary)
+        }
+    }
+
+    func settingsIcon(_ tab: SettingsTab) -> String {
+        switch tab {
+        case .general: return "⚙"
+        case .services: return "☰"
+        case .network: return "🌐"
+        case .theme: return "🎨"
+        case .about: return "ℹ"
+        }
+    }
+
+    @ViewBuilder func settingsContent(_ tab: SettingsTab) -> some View {
+        switch tab {
+        case .general: settingsGeneral()
+        case .services: settingsServices()
+        case .network: settingsNetwork()
+        case .theme: settingsTheme()
+        case .about: settingsAbout()
+        }
+    }
+
+    func settingsGeneral() -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("General").font(.system(size: 20, weight: .bold)).foregroundColor(.textPrimary)
+            SettingsRow(label: "Project", value: URL(fileURLWithPath: FileManager.default.currentDirectoryPath).lastPathComponent)
+            SettingsRow(label: "rawenv version", value: "0.2.0")
+            SettingsRow(label: "Data directory", value: "\(FileManager.default.homeDirectoryForCurrentUser.path)/.rawenv")
+            SettingsRow(label: "Config file", value: "\(FileManager.default.currentDirectoryPath)/rawenv.toml")
+        }
+    }
+
+    func settingsServices() -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Services").font(.system(size: 20, weight: .bold)).foregroundColor(.textPrimary)
+            ForEach(model.services) { svc in
+                HStack {
+                    Circle().fill(svc.status == .running ? Color.success2 : Color.error2).frame(width: 8, height: 8)
+                    Text(svc.name).font(.system(size: 13, weight: .medium)).foregroundColor(.textPrimary)
+                    Text(svc.version).font(.system(size: 12)).foregroundColor(.textMuted2)
+                    Spacer()
+                    Text(svc.status == .running ? "ON" : "OFF")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(svc.status == .running ? .success2 : .textDisabled)
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(RoundedRectangle(cornerRadius: 4).fill(Color.bgTertiary))
+                }
+                .padding(12).background(RoundedRectangle(cornerRadius: 8).fill(Color.bgSecondary))
+            }
+        }
+    }
+
+    func settingsNetwork() -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Network").font(.system(size: 20, weight: .bold)).foregroundColor(.textPrimary)
+            SettingsRow(label: "DNS masking", value: "Disabled")
+            SettingsRow(label: "Proxy", value: "None")
+            SettingsRow(label: "Listen address", value: "127.0.0.1")
+        }
+    }
+
+    func settingsTheme() -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Theme").font(.system(size: 20, weight: .bold)).foregroundColor(.textPrimary)
+            SettingsRow(label: "Color mode", value: "Dark")
+            SettingsRow(label: "Accent color", value: "#6366F1")
+        }
+    }
+
+    func settingsAbout() -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("About").font(.system(size: 20, weight: .bold)).foregroundColor(.textPrimary)
+            SettingsRow(label: "Version", value: "0.2.0")
+            SettingsRow(label: "License", value: "MIT")
+            Text("github.com/nicholasgasior/rawenv").font(.system(size: 12)).foregroundColor(.accent2)
+        }
+    }
+}
+
+struct SettingsRow: View {
+    let label: String; let value: String
+    var body: some View {
+        HStack {
+            Text(label).font(.system(size: 13)).foregroundColor(.textMuted2)
+            Spacer()
+            Text(value).font(.system(size: 13, design: .monospaced)).foregroundColor(.textPrimary)
+        }
+        .padding(12).background(RoundedRectangle(cornerRadius: 8).fill(Color.bgSecondary))
+    }
+}
+
 // MARK: - Root
 struct DashboardView: View {
     @StateObject var model = AppModel()
     var body: some View {
         HStack(spacing: 0) {
             SidebarView(model: model)
-            ContentArea(model: model)
+            if model.showSettings {
+                SettingsView(model: model)
+            } else {
+                ContentArea(model: model)
+            }
         }
         .frame(width: 1100, height: 720)
         .background(Color.bgPrimary)
