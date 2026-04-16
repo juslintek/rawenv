@@ -11,7 +11,7 @@ echo "Building rawenv ${VERSION} DMG for ${ARCH}..."
 
 # 1. Build release binary
 cd "$(dirname "$0")/.."
-zig build -Doptimize=ReleaseSafe
+zig build -Doptimize=ReleaseSafe -Dgui=true
 BINARY="zig-out/bin/rawenv"
 
 if [ ! -f "$BINARY" ]; then

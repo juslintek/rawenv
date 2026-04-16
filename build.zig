@@ -91,19 +91,62 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    // Link system-installed raylib (opt-in: -Dgui=true)
-    const enable_gui = b.option(bool, "gui", "Link system raylib for GUI (requires: brew install raylib)") orelse false;
+    // Compile raylib from source (opt-in: -Dgui=true)
+    const enable_gui = b.option(bool, "gui", "Compile raylib from source for GUI window") orelse false;
     const has_raylib = enable_gui;
     if (has_raylib) {
-        gui_mod.addSystemIncludePath(.{ .cwd_relative = "/opt/homebrew/include" });
-        gui_mod.addLibraryPath(.{ .cwd_relative = "/opt/homebrew/lib" });
-        gui_mod.linkSystemLibrary("raylib", .{});
+        const raylib_src = b.path("lib/raylib");
+
+        gui_mod.addIncludePath(raylib_src);
+        gui_mod.addIncludePath(b.path("lib/raylib/external/glfw/include"));
+        gui_mod.link_libc = true;
+
+        const c_flags: []const []const u8 = &.{
+            "-std=gnu99",
+            "-D_GNU_SOURCE",
+            "-DGL_SILENCE_DEPRECATION=199309L",
+            "-DPLATFORM_DESKTOP",
+            "-DPLATFORM_DESKTOP_GLFW",
+            "-fno-sanitize=undefined",
+        };
+
+        // Core raylib sources (pure C)
+        gui_mod.addCSourceFiles(.{
+            .root = raylib_src,
+            .files = &.{ "rcore.c", "rshapes.c", "rtextures.c", "rtext.c", "rmodels.c", "utils.c", "raudio.c" },
+            .flags = c_flags,
+        });
+
+        // rglfw.c includes ObjC (.m) files on macOS — needs ObjC compilation
         if (target.result.os.tag == .macos) {
+            gui_mod.addCSourceFiles(.{
+                .root = raylib_src,
+                .files = &.{"rglfw.c"},
+                .flags = &.{
+                    "-D_GNU_SOURCE", "-DGL_SILENCE_DEPRECATION=199309L",
+                    "-DPLATFORM_DESKTOP", "-DPLATFORM_DESKTOP_GLFW",
+                    "-fno-sanitize=undefined", "-ObjC",
+                },
+            });
             gui_mod.linkFramework("OpenGL", .{});
             gui_mod.linkFramework("Cocoa", .{});
             gui_mod.linkFramework("IOKit", .{});
             gui_mod.linkFramework("CoreAudio", .{});
             gui_mod.linkFramework("CoreVideo", .{});
+        } else if (target.result.os.tag == .linux) {
+            gui_mod.addCSourceFiles(.{
+                .root = raylib_src,
+                .files = &.{"rglfw.c"},
+                .flags = c_flags,
+            });
+            gui_mod.linkSystemLibrary("GL", .{});
+            gui_mod.linkSystemLibrary("X11", .{});
+        } else {
+            gui_mod.addCSourceFiles(.{
+                .root = raylib_src,
+                .files = &.{"rglfw.c"},
+                .flags = c_flags,
+            });
         }
     }
 
