@@ -418,6 +418,8 @@ pub fn build(b: *std.Build) void {
     });
     test_step.dependOn(&b.addRunArtifact(service_tests).step);
 
+    // macOS installer: built separately via `bash packaging/installer/build.sh` (SwiftUI app)
+
     // Cross-compilation targets
     const cross_targets: []const struct { []const u8, std.Target.Cpu.Arch, std.Target.Os.Tag } = &.{
         .{ "aarch64-macos", .aarch64, .macos },
