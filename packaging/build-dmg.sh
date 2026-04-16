@@ -13,8 +13,9 @@ echo "Building rawenv ${VERSION} DMG for ${ARCH}..."
 zig build -Doptimize=ReleaseSafe -Dgui=true
 echo "  Binary: $(ls -lh zig-out/bin/rawenv | awk '{print $5}')"
 
-# 2. Build installer .app
+# 2. Build installer .app and GUI .app
 bash packaging/installer/build.sh
+bash packaging/gui/build.sh
 
 # 3. Prepare DMG contents
 rm -rf "$BUILD_DIR"
@@ -25,6 +26,9 @@ cp -R "zig-out/bin/rawenv Installer.app" "$BUILD_DIR/"
 
 # Embed rawenv binary in the installer's Resources
 cp zig-out/bin/rawenv "$BUILD_DIR/rawenv Installer.app/Contents/Resources/rawenv"
+
+# Copy GUI app
+cp -R "zig-out/bin/rawenv.app" "$BUILD_DIR/"
 
 # Also include standalone binary for manual install
 mkdir -p "$BUILD_DIR/rawenv"
