@@ -38,11 +38,22 @@ jobs:
         if: matrix.ext == 'zip'
         shell: pwsh
         run: Compress-Archive -Path zig-out/bin/rawenv.exe -DestinationPath rawenv-${{ matrix.target }}.zip
-      - name: Upload
+      - name: Build DMG (macOS arm64)
+        if: matrix.target == 'aarch64-macos'
+        run: |
+          bash packaging/build-dmg.sh "${GITHUB_REF_NAME#v}"
+          mv packaging/rawenv-*-arm64.dmg rawenv-macos.dmg
+      - name: Upload archive
         uses: actions/upload-artifact@v4
         with:
           name: rawenv-${{ matrix.target }}
           path: rawenv-${{ matrix.target }}.${{ matrix.ext }}
+      - name: Upload DMG
+        if: matrix.target == 'aarch64-macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rawenv-macos-dmg
+          path: rawenv-macos.dmg
 
   release:
     needs: build
@@ -51,8 +62,16 @@ jobs:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
+      - name: Generate SHA256SUMS
+        run: |
+          find . -name 'rawenv-*' -type f | sort | while read f; do
+            sha256sum "$f" | sed 's|  .*/|  |'
+          done > SHA256SUMS
+          cat SHA256SUMS
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: rawenv-*/rawenv-*
+          files: |
+            rawenv-*/rawenv-*
+            SHA256SUMS
           generate_release_notes: true
