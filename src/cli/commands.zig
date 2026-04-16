@@ -249,10 +249,16 @@ pub fn runDiscover(allocator: std.mem.Allocator, stdout: std.fs.File) !void {
 }
 
 pub fn runUninstall(_: std.mem.Allocator, stdout: std.fs.File) !void {
-    const home = std.posix.getenv("HOME") orelse {
+    const home = if (comptime builtin.os.tag == .windows) blk: {
+        break :blk std.process.getEnvVarOwned(std.heap.page_allocator, "USERPROFILE") catch {
+            try stdout.writeAll("Error: USERPROFILE not set\n");
+            return;
+        };
+    } else std.posix.getenv("HOME") orelse {
         try stdout.writeAll("Error: HOME not set\n");
         return;
     };
+    defer if (comptime builtin.os.tag == .windows) std.heap.page_allocator.free(home);
 
     try stdout.writeAll("rawenv uninstall will remove:\n");
     try stdout.writeAll("  ");
