@@ -6,7 +6,7 @@ const gui = @import("gui");
 const deploy = @import("deploy");
 const ai = @import("ai");
 
-const version = "0.1.0";
+const version = "0.2.0";
 
 const help =
     \\rawenv - native dev environment manager

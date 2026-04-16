@@ -13,3 +13,4 @@ playwright-report/
 .kiro/
 AGENTS.md
 test_io*
+packaging/rawenv-*.dmg
