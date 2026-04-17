@@ -53,14 +53,35 @@ fn isInstalled(allocator: std.mem.Allocator, name: []const u8, version: []const 
 
 /// Compute SHA256 hex digest of a file
 pub fn sha256File(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
-    const file = try std.posix.openat(std.posix.AT.FDCWD, path, .{}, 0);
-    defer _ = std.c.close(file);
+    const file = blk: {
+        if (comptime builtin.os.tag == .windows) {
+            var path_z: [512]u8 = undefined;
+            const z = std.fmt.bufPrintZ(&path_z, "{s}", .{path}) catch return error.PathTooLong;
+            const f = std.c.fopen(z, "rb") orelse return error.FileNotFound;
+            break :blk f;
+        } else {
+            break :blk try std.posix.openat(std.posix.AT.FDCWD, path, .{}, 0);
+        }
+    };
+    defer {
+        if (comptime builtin.os.tag == .windows) {
+            _ = std.c.fclose(file);
+        } else {
+            _ = std.c.close(file);
+        }
+    }
     var hasher = std.crypto.hash.sha2.Sha256.init(.{});
     var buf: [8192]u8 = undefined;
     while (true) {
-        const n = try std.posix.read(file, &buf);
-        if (n == 0) break;
-        hasher.update(buf[0..n]);
+        if (comptime builtin.os.tag == .windows) {
+            const n = std.c.fread(&buf, 1, buf.len, file);
+            if (n == 0) break;
+            hasher.update(buf[0..n]);
+        } else {
+            const n = try std.posix.read(file, &buf);
+            if (n == 0) break;
+            hasher.update(buf[0..n]);
+        }
     }
     var hash: [32]u8 = undefined;
     hasher.final(&hash);

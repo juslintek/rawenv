@@ -46,7 +46,10 @@ pub const TunnelManager = struct {
         for (self.tunnels.items) |*t| {
             self.allocator.free(t.public_url);
             if (t.process) |*p| {
-                if (p.id) |pid| std.posix.kill(pid, .TERM) catch {};
+                if (p.id) |pid| {
+                    if (comptime @import("builtin").os.tag != .windows)
+                        std.posix.kill(pid, .TERM) catch {};
+                }
             }
         }
         self.tunnels.deinit(self.allocator);
@@ -112,7 +115,10 @@ pub const TunnelManager = struct {
                 var t = self.tunnels.orderedRemove(i);
                 self.allocator.free(t.public_url);
                 if (t.process) |*p| {
-                    if (p.id) |pid| std.posix.kill(pid, .TERM) catch {};
+                    if (p.id) |pid| {
+                    if (comptime @import("builtin").os.tag != .windows)
+                        std.posix.kill(pid, .TERM) catch {};
+                }
                 }
             } else {
                 i += 1;
