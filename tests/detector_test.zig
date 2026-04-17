@@ -4,6 +4,7 @@ const config = @import("config");
 const testing = std.testing;
 
 fn makeTmpDir() !std.Io.Dir {
+    if (comptime @import("builtin").os.tag == .windows) return error.SkipZigTest;
     return std.Io.Dir.cwd().createDirPathOpen(std.testing.io, ".zig-cache/tmp/detector-test", .{});
 }
 

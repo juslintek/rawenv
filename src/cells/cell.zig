@@ -48,7 +48,10 @@ pub const Cell = struct {
 
     pub fn stop(self: *Cell) void {
         if (self.child) |*ch| {
-            if (ch.id) |pid| std.posix.kill(pid, .TERM) catch {};
+            if (ch.id) |pid| {
+                if (comptime @import("builtin").os.tag != .windows)
+                    std.posix.kill(pid, .TERM) catch {};
+            }
             self.child = null;
         }
         self.status = .stopped;
