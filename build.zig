@@ -270,6 +270,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{.{ .name = "config", .module = config_mod }},
         }),
     });
+    config_tests.root_module.link_libc = true;
 
     const main_tests = b.addTest(.{
         .root_module = b.createModule(.{
@@ -305,6 +306,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    tui_tests.root_module.link_libc = true;
 
     const snapshot_tests = b.addTest(.{
         .root_module = b.createModule(.{
@@ -314,6 +316,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{.{ .name = "tui", .module = tui_mod }},
         }),
     });
+    snapshot_tests.root_module.link_libc = true;
 
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&b.addRunArtifact(config_tests).step);
@@ -329,6 +332,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{.{ .name = "cell", .module = cell_mod }},
         }),
     });
+    cells_tests.root_module.link_libc = true;
     test_step.dependOn(&b.addRunArtifact(cells_tests).step);
 
     const network_tests = b.addTest(.{
@@ -372,6 +376,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{.{ .name = "gui", .module = gui_mod }},
         }),
     });
+    gui_tests.root_module.link_libc = true;
     test_step.dependOn(&b.addRunArtifact(gui_tests).step);
 
     // AI tests
@@ -383,6 +388,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{.{ .name = "ai", .module = ai_mod }},
         }),
     });
+    ai_tests.root_module.link_libc = true;
     test_step.dependOn(&b.addRunArtifact(ai_tests).step);
 
     // Detector tests
@@ -397,6 +403,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    detector_tests.root_module.link_libc = true;
     test_step.dependOn(&b.addRunArtifact(detector_tests).step);
 
     // Store/resolver tests
@@ -411,6 +418,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    store_tests.root_module.link_libc = true;
     test_step.dependOn(&b.addRunArtifact(store_tests).step);
 
     // Service/shell tests
