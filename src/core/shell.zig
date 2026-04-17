@@ -9,11 +9,7 @@ pub fn buildPath(allocator: std.mem.Allocator, home: []const u8) ![]const u8 {
     defer allocator.free(bin_path);
 
     const sep: []const u8 = if (comptime builtin.os.tag == .windows) ";" else ":";
-    const current_path = if (comptime builtin.os.tag == .windows)
-        (std.process.getEnvVarOwned(allocator, "PATH") catch "")
-    else
-        std.mem.sliceTo(std.c.getenv("PATH") orelse "", 0);
-    defer if (comptime builtin.os.tag == .windows) allocator.free(current_path);
+    const current_path = std.mem.sliceTo(std.c.getenv("PATH") orelse "", 0);
     return std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ bin_path, sep, current_path });
 }
 
