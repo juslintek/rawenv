@@ -10,12 +10,14 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    config_mod.link_libc = true;
 
     const detector_mod = b.createModule(.{
         .root_source_file = b.path("src/core/detector.zig"),
         .target = target,
         .optimize = optimize,
     });
+    detector_mod.link_libc = true;
 
     const resolver_mod = b.createModule(.{
         .root_source_file = b.path("src/core/resolver.zig"),
@@ -29,6 +31,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .imports = &.{.{ .name = "resolver", .module = resolver_mod }},
     });
+    store_mod.link_libc = true;
 
     const service_mod = b.createModule(.{
         .root_source_file = b.path("src/core/service.zig"),
@@ -39,6 +42,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "resolver", .module = resolver_mod },
         },
     });
+    service_mod.link_libc = true;
 
     const shell_mod = b.createModule(.{
         .root_source_file = b.path("src/core/shell.zig"),
@@ -49,12 +53,14 @@ pub fn build(b: *std.Build) void {
             .{ .name = "service", .module = service_mod },
         },
     });
+    shell_mod.link_libc = true;
 
     const tui_mod = b.createModule(.{
         .root_source_file = b.path("src/tui/main.zig"),
         .target = target,
         .optimize = optimize,
     });
+    tui_mod.link_libc = true;
 
     const cell_mod = b.createModule(.{
         .root_source_file = b.path("src/cells/cell.zig"),
@@ -198,6 +204,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    ai_mod.link_libc = true;
 
     // Discover module
     const discover_mod = b.createModule(.{
@@ -205,6 +212,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    discover_mod.link_libc = true;
 
     // Platform: macOS module (links objc runtime on macOS targets)
     const macos_mod = b.createModule(.{
@@ -212,6 +220,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    macos_mod.link_libc = true;
     if (target.result.os.tag == .macos) {
         macos_mod.linkSystemLibrary("objc", .{});
     }
@@ -241,6 +250,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "macos", .module = macos_mod },
         },
     });
+    exe_mod.link_libc = true;
     const exe = b.addExecutable(.{ .name = "rawenv", .root_module = exe_mod });
     b.installArtifact(exe);
 
@@ -584,6 +594,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "macos", .module = cross_macos },
             },
         });
+        cross_mod.link_libc = true;
         const cross_exe = b.addExecutable(.{ .name = "rawenv", .root_module = cross_mod });
         const install = b.addInstallArtifact(cross_exe, .{
             .dest_dir = .{ .override = .{ .custom = ct[0] } },
