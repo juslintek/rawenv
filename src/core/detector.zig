@@ -52,6 +52,21 @@ pub fn detect(allocator: std.mem.Allocator, dir: std.Io.Dir) !DetectionResult {
 }
 
 fn readFile(allocator: std.mem.Allocator, dir: std.Io.Dir, name: []const u8) ?[]const u8 {
+    if (comptime @import("builtin").os.tag == .windows) {
+        // Windows: use C fopen
+        var path_buf: [512]u8 = undefined;
+        const z = std.fmt.bufPrintZ(&path_buf, "{s}", .{name}) catch return null;
+        const f = std.c.fopen(z, "rb") orelse return null;
+        defer _ = std.c.fclose(f);
+        var buf_list: std.ArrayList(u8) = .empty;
+        var read_buf: [4096]u8 = undefined;
+        while (true) {
+            const n = std.c.fread(&read_buf, 1, read_buf.len, f);
+            if (n == 0) break;
+            buf_list.appendSlice(allocator, read_buf[0..n]) catch return null;
+        }
+        return buf_list.toOwnedSlice(allocator) catch null;
+    }
     const fd = std.posix.openat(dir.handle, name, .{}, 0) catch return null;
     defer _ = std.c.close(fd);
     var buf_list: std.ArrayList(u8) = .empty;
