@@ -48,8 +48,7 @@ pub const Cell = struct {
 
     pub fn stop(self: *Cell) void {
         if (self.child) |*ch| {
-            _ = ch.kill() catch {};
-            _ = ch.wait() catch {};
+            if (ch.id) |pid| std.posix.kill(pid, .TERM) catch {};
             self.child = null;
         }
         self.status = .stopped;

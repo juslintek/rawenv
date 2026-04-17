@@ -65,22 +65,21 @@ pub const ContrastWarnings = struct {
 
 /// Generate theme TOML preview for .rawenv/theme.toml
 pub fn themeTomlPreview(palette: theme.Palette, mode: theme.Mode, buf: []u8) []const u8 {
-    var fbs = std.io.fixedBufferStream(buf);
-    const w = fbs.writer();
+    var w: std.Io.Writer = .fixed(buf);
     w.print("[theme]\nmode = \"{s}\"\n\n[colors]\n", .{@tagName(mode)}) catch return "";
-    writeColor(w, "bg_primary", palette.bg_primary);
-    writeColor(w, "bg_secondary", palette.bg_secondary);
-    writeColor(w, "accent", palette.accent);
-    writeColor(w, "success", palette.success);
-    writeColor(w, "warning", palette.warning);
-    writeColor(w, "error", palette.err);
-    writeColor(w, "text", palette.text);
-    writeColor(w, "text_muted", palette.text_muted);
-    writeColor(w, "border", palette.border);
-    return fbs.getWritten();
+    writeColor(&w, "bg_primary", palette.bg_primary);
+    writeColor(&w, "bg_secondary", palette.bg_secondary);
+    writeColor(&w, "accent", palette.accent);
+    writeColor(&w, "success", palette.success);
+    writeColor(&w, "warning", palette.warning);
+    writeColor(&w, "error", palette.err);
+    writeColor(&w, "text", palette.text);
+    writeColor(&w, "text_muted", palette.text_muted);
+    writeColor(&w, "border", palette.border);
+    return buf[0..w.end];
 }
 
-fn writeColor(w: anytype, name: []const u8, c: theme.Color) void {
+fn writeColor(w: *std.Io.Writer, name: []const u8, c: theme.Color) void {
     const hex = theme.rgbaToHex(c);
     w.print("{s} = \"#{x:0>8}\"\n", .{ name, hex }) catch {};
 }

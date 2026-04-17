@@ -38,10 +38,9 @@ pub const Proxy = struct {
     /// Generate a Caddyfile-style reverse proxy config.
     pub fn generateCaddyConfig(self: *const Proxy, allocator: std.mem.Allocator) ![]u8 {
         var buf: std.ArrayList(u8) = .empty;
-        const w = buf.writer(allocator);
         var it = self.config.routes.iterator();
         while (it.next()) |entry| {
-            try w.print("{s} {{\n    reverse_proxy localhost:{d}\n}}\n\n", .{ entry.key_ptr.*, entry.value_ptr.* });
+            try buf.print(allocator, "{s} {{\n    reverse_proxy localhost:{d}\n}}\n\n", .{ entry.key_ptr.*, entry.value_ptr.* });
         }
         return buf.toOwnedSlice(allocator);
     }
@@ -49,10 +48,9 @@ pub const Proxy = struct {
     /// Generate an nginx-style reverse proxy config.
     pub fn generateNginxConfig(self: *const Proxy, allocator: std.mem.Allocator) ![]u8 {
         var buf: std.ArrayList(u8) = .empty;
-        const w = buf.writer(allocator);
         var it = self.config.routes.iterator();
         while (it.next()) |entry| {
-            try w.print(
+            try buf.print(allocator,
                 \\server {{
                 \\    listen {d};
                 \\    server_name {s};

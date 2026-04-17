@@ -3,9 +3,11 @@ const tui = @import("tui");
 const app = tui.app;
 
 fn renderToString(model: *const app.Model) ![]u8 {
-    var buf: std.ArrayList(u8) = .{};
+    var buf: std.ArrayList(u8) = .empty;
     defer buf.deinit(std.testing.allocator);
-    try app.view(buf.writer(std.testing.allocator), model);
+    var aw: std.Io.Writer.Allocating = .fromArrayList(std.testing.allocator, &buf);
+    try app.view(&aw.writer, model);
+    buf = aw.toArrayList();
     return try buf.toOwnedSlice(std.testing.allocator);
 }
 

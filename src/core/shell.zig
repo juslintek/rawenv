@@ -12,13 +12,13 @@ pub fn buildPath(allocator: std.mem.Allocator, home: []const u8) ![]const u8 {
     const current_path = if (comptime builtin.os.tag == .windows)
         (std.process.getEnvVarOwned(allocator, "PATH") catch "")
     else
-        std.posix.getenv("PATH") orelse "";
+        std.mem.sliceTo(std.c.getenv("PATH") orelse "", 0);
     defer if (comptime builtin.os.tag == .windows) allocator.free(current_path);
     return std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ bin_path, sep, current_path });
 }
 
 /// Spawn a shell with modified environment
-pub fn enter(allocator: std.mem.Allocator, cfg: config.Config, stdout: std.fs.File) !void {
+pub fn enter(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !void {
     const home = service.getHome() orelse {
         try stdout.writeAll("Error: HOME not set\n");
         return;
@@ -31,16 +31,16 @@ pub fn enter(allocator: std.mem.Allocator, cfg: config.Config, stdout: std.fs.Fi
     const shell: []const u8 = if (comptime builtin.os.tag == .windows)
         "cmd.exe"
     else
-        std.posix.getenv("SHELL") orelse "/bin/sh";
+        if (std.c.getenv("SHELL")) |s| std.mem.sliceTo(s, 0) else "/bin/sh";
 
     try stdout.writeAll("Entering rawenv shell...\n");
 
     // Build env map
-    var env_map = std.process.EnvMap.init(allocator);
+    var env_map = std.process.Environ.Map.init(allocator);
     defer env_map.deinit();
 
     // Copy current env
-    var sys_env = try std.process.getEnvMap(allocator);
+    var sys_env = std.process.Environ.Map.init(allocator);
     defer sys_env.deinit();
     var it = sys_env.iterator();
     while (it.next()) |entry| {
@@ -61,15 +61,10 @@ pub fn enter(allocator: std.mem.Allocator, cfg: config.Config, stdout: std.fs.Fi
         }
     }
 
-    // Spawn shell
-    var child = std.process.Child.init(&.{shell}, allocator);
-    child.env_map = &env_map;
-
-    try child.spawn();
-    const term = try child.wait();
-
-    _ = term;
-    try stdout.writeAll("Exited rawenv shell.\n");
+    // TODO: std.process.spawn requires Io in 0.16.0
+    _ = shell;
+    _ = &env_map;
+    try stdout.writeAll("Error: shell spawn requires Io refactor for Zig 0.16.0\n");
 }
 
 test "buildPath" {

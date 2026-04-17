@@ -119,8 +119,7 @@ test "launchdPlist contains label and binary" {
 /// Reads rawenv.toml from cwd and shows service status.
 pub fn runMenuBar(allocator: std.mem.Allocator) !void {
     if (comptime builtin.os.tag != .macos) {
-        const stdout = std.fs.File.stdout();
-        try stdout.writeAll("Menu bar is only available on macOS\n");
+        _ = std.c.write(1, "Menu bar is only available on macOS\n", 36);
         return;
     }
 
@@ -165,7 +164,18 @@ pub fn runMenuBar(allocator: std.mem.Allocator) !void {
     var services: std.ArrayList(TomlSvc) = .empty;
     defer services.deinit(allocator);
 
-    if (std.fs.cwd().readFileAlloc(allocator, "rawenv.toml", 64 * 1024)) |toml| {
+    if (blk: {
+        const fd = std.posix.openat(std.posix.AT.FDCWD, "rawenv.toml", .{}, 0) catch break :blk @as(?[]const u8, null);
+        defer _ = std.c.close(fd);
+        var buf_list: std.ArrayList(u8) = .empty;
+        var read_buf: [4096]u8 = undefined;
+        while (true) {
+            const rn = std.posix.read(fd, &read_buf) catch { buf_list.deinit(allocator); break :blk @as(?[]const u8, null); };
+            if (rn == 0) break;
+            buf_list.appendSlice(allocator, read_buf[0..rn]) catch { buf_list.deinit(allocator); break :blk @as(?[]const u8, null); };
+        }
+        break :blk buf_list.toOwnedSlice(allocator) catch null;
+    }) |toml| {
         defer allocator.free(toml);
         var current_svc: ?[]const u8 = null;
         var it = std.mem.splitScalar(u8, toml, '\n');
@@ -187,7 +197,7 @@ pub fn runMenuBar(allocator: std.mem.Allocator) !void {
                 }
             }
         }
-    } else |_| {}
+    } else {}
 
     // [NSApplication sharedApplication]
     _ = msgSend(cls.get("NSApplication"), sel.get("sharedApplication"));

@@ -24,7 +24,10 @@ pub fn trySend(allocator: std.mem.Allocator, messages: []const provider.Message,
 
         // Load API key from env var
         const env_name = provider.envKeyName(p);
-        const env_key = if (env_name.len > 0) std.process.getEnvVarOwned(allocator, env_name) catch null else null;
+        const env_key = if (env_name.len > 0) blk: {
+            const z = std.posix.toPosixPath(env_name) catch break :blk @as(?[]u8, null);
+            break :blk if (std.c.getenv(&z)) |s| allocator.dupe(u8, std.mem.sliceTo(s, 0)) catch null else null;
+        } else null;
         defer if (env_key) |k| allocator.free(k);
 
         if (env_key) |k| {

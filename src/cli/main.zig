@@ -6,6 +6,23 @@ const gui = @import("gui");
 const deploy = @import("deploy");
 const ai = @import("ai");
 
+/// Simple stdout writer using C write(2) — no Io dependency.
+pub const StdoutWriter = struct {
+    pub fn writeAll(_: StdoutWriter, bytes: []const u8) !void {
+        var written: usize = 0;
+        while (written < bytes.len) {
+            const n = std.c.write(1, bytes.ptr + written, bytes.len - written);
+            if (n < 0) return error.WriteFailed;
+            written += @intCast(n);
+        }
+    }
+    pub fn print(self: StdoutWriter, comptime fmt: []const u8, args: anytype) !void {
+        var buf: [4096]u8 = undefined;
+        const s = std.fmt.bufPrint(&buf, fmt, args) catch return error.WriteFailed;
+        try self.writeAll(s);
+    }
+};
+
 const version = "0.2.0";
 
 const help =
@@ -39,11 +56,18 @@ const help =
     \\
 ;
 
-pub fn main() !void {
-    const stdout = std.fs.File.stdout();
-    const allocator = std.heap.page_allocator;
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+pub fn main(init: std.process.Init) !void {
+    const stdout = StdoutWriter{};
+    const allocator = init.gpa;
+
+    // Collect args
+    var args_list: std.ArrayList([:0]const u8) = .empty;
+    defer args_list.deinit(allocator);
+    var args_iter = std.process.Args.Iterator.init(init.minimal.args);
+    while (args_iter.next()) |arg| {
+        try args_list.append(allocator, arg);
+    }
+    const args = args_list.items;
 
     var i: usize = 1;
     while (i < args.len) : (i += 1) {
@@ -184,7 +208,7 @@ pub fn main() !void {
     try stdout.writeAll(help);
 }
 
-fn runAiOneShot(allocator: std.mem.Allocator, stdout: std.fs.File, question: []const u8) !void {
+fn runAiOneShot(allocator: std.mem.Allocator, stdout: anytype, question: []const u8) !void {
     const system_prompt = ai.context.buildContext(allocator, .{
         .project_name = "current-project",
         .os = @tagName(comptime @import("builtin").os.tag),
@@ -212,10 +236,25 @@ fn runAiOneShot(allocator: std.mem.Allocator, stdout: std.fs.File, question: []c
     try stdout.writeAll("\n");
 }
 
-fn handleDeployGenerate(allocator: std.mem.Allocator, stdout: std.fs.File) !void {
-    const toml = std.fs.cwd().readFileAlloc(allocator, "rawenv.toml", 1024 * 64) catch {
-        try stdout.writeAll("Error: rawenv.toml not found in current directory\n");
-        return;
+fn handleDeployGenerate(allocator: std.mem.Allocator, stdout: anytype) !void {
+    const toml = blk: {
+        const fd = std.posix.openat(std.posix.AT.FDCWD, "rawenv.toml", .{}, 0) catch {
+            try stdout.writeAll("Error: rawenv.toml not found in current directory\n");
+            return;
+        };
+        defer _ = std.c.close(fd);
+        var buf_list: std.ArrayList(u8) = .empty;
+        errdefer buf_list.deinit(allocator);
+        var read_buf: [4096]u8 = undefined;
+        while (true) {
+            const n = std.posix.read(fd, &read_buf) catch {
+                try stdout.writeAll("Error: failed to read rawenv.toml\n");
+                return;
+            };
+            if (n == 0) break;
+            try buf_list.appendSlice(allocator, read_buf[0..n]);
+        }
+        break :blk try buf_list.toOwnedSlice(allocator);
     };
     defer allocator.free(toml);
 
@@ -242,7 +281,7 @@ fn handleDeployGenerate(allocator: std.mem.Allocator, stdout: std.fs.File) !void
     try stdout.writeAll("  main.tf\n  variables.tf\n  outputs.tf\n  playbook.yml\n  Containerfile\n");
 }
 
-fn handleDeployApply(stdout: std.fs.File) !void {
+fn handleDeployApply(stdout: anytype) !void {
     try stdout.writeAll("Deploy apply: dry-run mode (no actual deployment without --confirm)\n");
 }
 

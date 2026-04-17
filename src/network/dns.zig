@@ -30,14 +30,13 @@ pub const DnsConfig = struct {
 /// Generate /etc/hosts-style entries for the project.
 pub fn generateHostsEntries(allocator: std.mem.Allocator, cfg: DnsConfig) ![]u8 {
     var buf: std.ArrayList(u8) = .empty;
-    const w = buf.writer(allocator);
     const domains = try cfg.listDomains(allocator);
     defer DnsConfig.freeDomains(allocator, domains);
-    try w.print("# rawenv:{s}\n", .{cfg.project});
+    try buf.print(allocator, "# rawenv:{s}\n", .{cfg.project});
     for (domains) |entry| {
-        try w.print("{s} {s}\n", .{ entry.ip, entry.domain });
+        try buf.print(allocator, "{s} {s}\n", .{ entry.ip, entry.domain });
     }
-    try w.print("# end-rawenv:{s}\n", .{cfg.project});
+    try buf.print(allocator, "# end-rawenv:{s}\n", .{cfg.project});
     return buf.toOwnedSlice(allocator);
 }
 
@@ -71,12 +70,11 @@ fn hostsContainsDomain(content: []const u8, domain: []const u8) bool {
 /// Generate dnsmasq config content (macOS)
 pub fn generateDnsmasqConfig(allocator: std.mem.Allocator, cfg: DnsConfig) ![]u8 {
     var buf: std.ArrayList(u8) = .empty;
-    const w = buf.writer(allocator);
-    try w.print("# rawenv DNS for {s}\n", .{cfg.project});
+    try buf.print(allocator, "# rawenv DNS for {s}\n", .{cfg.project});
     const domains = try cfg.listDomains(allocator);
     defer DnsConfig.freeDomains(allocator, domains);
     for (domains) |entry| {
-        try w.print("address=/{s}/{s}\n", .{ entry.domain, entry.ip });
+        try buf.print(allocator, "address=/{s}/{s}\n", .{ entry.domain, entry.ip });
     }
     return buf.toOwnedSlice(allocator);
 }
@@ -84,28 +82,26 @@ pub fn generateDnsmasqConfig(allocator: std.mem.Allocator, cfg: DnsConfig) ![]u8
 /// Generate systemd-resolved config content (Linux)
 pub fn generateResolvedConfig(allocator: std.mem.Allocator, cfg: DnsConfig) ![]u8 {
     var buf: std.ArrayList(u8) = .empty;
-    const w = buf.writer(allocator);
-    try w.writeAll("# rawenv DNS override\n[Resolve]\n");
+    try buf.appendSlice(allocator, "# rawenv DNS override\n[Resolve]\n");
     const domains = try cfg.listDomains(allocator);
     defer DnsConfig.freeDomains(allocator, domains);
-    try w.writeAll("DNS=127.0.0.1\nDomains=");
+    try buf.appendSlice(allocator, "DNS=127.0.0.1\nDomains=");
     for (domains, 0..) |entry, i| {
-        if (i > 0) try w.writeByte(' ');
-        try w.writeAll(entry.domain);
+        if (i > 0) try buf.append(allocator, ' ');
+        try buf.appendSlice(allocator, entry.domain);
     }
-    try w.writeByte('\n');
+    try buf.append(allocator, '\n');
     return buf.toOwnedSlice(allocator);
 }
 
 /// Generate Acrylic DNS config content (Windows)
 pub fn generateAcrylicConfig(allocator: std.mem.Allocator, cfg: DnsConfig) ![]u8 {
     var buf: std.ArrayList(u8) = .empty;
-    const w = buf.writer(allocator);
-    try w.print("; rawenv DNS for {s}\n", .{cfg.project});
+    try buf.print(allocator, "; rawenv DNS for {s}\n", .{cfg.project});
     const domains = try cfg.listDomains(allocator);
     defer DnsConfig.freeDomains(allocator, domains);
     for (domains) |entry| {
-        try w.print("{s} {s}\n", .{ entry.ip, entry.domain });
+        try buf.print(allocator, "{s} {s}\n", .{ entry.ip, entry.domain });
     }
     return buf.toOwnedSlice(allocator);
 }

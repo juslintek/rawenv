@@ -3,20 +3,20 @@ const detector = @import("detector");
 const config = @import("config");
 const testing = std.testing;
 
-fn makeTmpDir() !std.fs.Dir {
-    return std.fs.cwd().makeOpenPath(".zig-cache/tmp/detector-test", .{});
+fn makeTmpDir() !std.Io.Dir {
+    return std.Io.Dir.cwd().createDirPathOpen(std.testing.io, ".zig-cache/tmp/detector-test", .{});
 }
 
-fn cleanFile(dir: std.fs.Dir, name: []const u8) void {
-    dir.deleteFile(name) catch {};
+fn cleanFile(dir: std.Io.Dir, name: []const u8) void {
+    dir.deleteFile(std.testing.io, name) catch {};
 }
 
 test "detect package.json with engines.node" {
     var dir = try makeTmpDir();
-    defer dir.close();
+    defer dir.close(std.testing.io);
     defer cleanFile(dir, "package.json");
 
-    try dir.writeFile(.{
+    try dir.writeFile(std.testing.io, .{
         .sub_path = "package.json",
         .data = "{\"name\":\"test\",\"engines\":{\"node\":\">=20.0.0\"}}",
     });
@@ -31,10 +31,10 @@ test "detect package.json with engines.node" {
 
 test "detect package.json without engines defaults to 22" {
     var dir = try makeTmpDir();
-    defer dir.close();
+    defer dir.close(std.testing.io);
     defer cleanFile(dir, "package.json");
 
-    try dir.writeFile(.{
+    try dir.writeFile(std.testing.io, .{
         .sub_path = "package.json",
         .data = "{\"name\":\"test\"}",
     });
@@ -48,10 +48,10 @@ test "detect package.json without engines defaults to 22" {
 
 test "detect .env with DATABASE_URL postgres" {
     var dir = try makeTmpDir();
-    defer dir.close();
+    defer dir.close(std.testing.io);
     defer cleanFile(dir, ".env");
 
-    try dir.writeFile(.{
+    try dir.writeFile(std.testing.io, .{
         .sub_path = ".env",
         .data = "DATABASE_URL=postgres://user:pass@localhost:5432/db\nREDIS_URL=redis://localhost:6379\n",
     });
@@ -67,10 +67,10 @@ test "detect .env with DATABASE_URL postgres" {
 
 test "detect docker-compose.yml images" {
     var dir = try makeTmpDir();
-    defer dir.close();
+    defer dir.close(std.testing.io);
     defer cleanFile(dir, "docker-compose.yml");
 
-    try dir.writeFile(.{
+    try dir.writeFile(std.testing.io, .{
         .sub_path = "docker-compose.yml",
         .data =
         \\services:
@@ -93,7 +93,7 @@ test "detect docker-compose.yml images" {
 
 test "detect empty directory" {
     var dir = try makeTmpDir();
-    defer dir.close();
+    defer dir.close(std.testing.io);
     // Clean up any leftover files from other tests
     cleanFile(dir, "package.json");
     cleanFile(dir, "composer.json");
@@ -150,10 +150,10 @@ test "config generate with no runtimes or services" {
 
 test "detect composer.json with php version" {
     var dir = try makeTmpDir();
-    defer dir.close();
+    defer dir.close(std.testing.io);
     defer cleanFile(dir, "composer.json");
 
-    try dir.writeFile(.{
+    try dir.writeFile(std.testing.io, .{
         .sub_path = "composer.json",
         .data = "{\"require\":{\"php\":\">=8.2\"}}",
     });
@@ -168,13 +168,13 @@ test "detect composer.json with php version" {
 
 test "docker-compose with postgres + redis + mysql" {
     var dir = try makeTmpDir();
-    defer dir.close();
+    defer dir.close(std.testing.io);
     defer cleanFile(dir, "docker-compose.yml");
     cleanFile(dir, "package.json");
     cleanFile(dir, "composer.json");
     cleanFile(dir, ".env");
 
-    try dir.writeFile(.{
+    try dir.writeFile(std.testing.io, .{
         .sub_path = "docker-compose.yml",
         .data =
         \\services:
@@ -201,13 +201,13 @@ test "docker-compose with postgres + redis + mysql" {
 
 test ".env with multiple URLs" {
     var dir = try makeTmpDir();
-    defer dir.close();
+    defer dir.close(std.testing.io);
     defer cleanFile(dir, ".env");
     cleanFile(dir, "package.json");
     cleanFile(dir, "composer.json");
     cleanFile(dir, "docker-compose.yml");
 
-    try dir.writeFile(.{
+    try dir.writeFile(std.testing.io, .{
         .sub_path = ".env",
         .data = "DATABASE_URL=postgres://localhost/db\nREDIS_URL=redis://localhost:6379\nDATABASE_URL=mysql://localhost/other\n",
     });
@@ -223,13 +223,13 @@ test ".env with multiple URLs" {
 
 test "empty JSON file graceful handling" {
     var dir = try makeTmpDir();
-    defer dir.close();
+    defer dir.close(std.testing.io);
     defer cleanFile(dir, "package.json");
     cleanFile(dir, "composer.json");
     cleanFile(dir, ".env");
     cleanFile(dir, "docker-compose.yml");
 
-    try dir.writeFile(.{
+    try dir.writeFile(std.testing.io, .{
         .sub_path = "package.json",
         .data = "",
     });
@@ -245,13 +245,13 @@ test "empty JSON file graceful handling" {
 
 test "malformed JSON file graceful handling" {
     var dir = try makeTmpDir();
-    defer dir.close();
+    defer dir.close(std.testing.io);
     defer cleanFile(dir, "package.json");
     cleanFile(dir, "composer.json");
     cleanFile(dir, ".env");
     cleanFile(dir, "docker-compose.yml");
 
-    try dir.writeFile(.{
+    try dir.writeFile(std.testing.io, .{
         .sub_path = "package.json",
         .data = "{invalid json!!!",
     });
@@ -267,13 +267,13 @@ test "malformed JSON file graceful handling" {
 
 test "composer.json without php require defaults to 8.4" {
     var dir = try makeTmpDir();
-    defer dir.close();
+    defer dir.close(std.testing.io);
     defer cleanFile(dir, "composer.json");
     cleanFile(dir, "package.json");
     cleanFile(dir, ".env");
     cleanFile(dir, "docker-compose.yml");
 
-    try dir.writeFile(.{
+    try dir.writeFile(std.testing.io, .{
         .sub_path = "composer.json",
         .data = "{\"require\":{\"laravel/framework\":\"^11.0\"}}",
     });
@@ -288,13 +288,13 @@ test "composer.json without php require defaults to 8.4" {
 
 test "malformed composer.json graceful handling" {
     var dir = try makeTmpDir();
-    defer dir.close();
+    defer dir.close(std.testing.io);
     defer cleanFile(dir, "composer.json");
     cleanFile(dir, "package.json");
     cleanFile(dir, ".env");
     cleanFile(dir, "docker-compose.yml");
 
-    try dir.writeFile(.{
+    try dir.writeFile(std.testing.io, .{
         .sub_path = "composer.json",
         .data = "not json at all",
     });

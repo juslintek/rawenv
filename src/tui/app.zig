@@ -203,39 +203,44 @@ pub fn view(writer: anytype, model: *const Model) !void {
 
 pub fn run() !void {
     if (comptime builtin.os.tag == .windows) return;
-    const stdin = std.fs.File.stdin();
-    const stdout = std.fs.File.stdout();
-    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
     defer _ = gpa.deinit();
     var model = Model.initReal(gpa.allocator());
 
     // Enable raw mode
-    const original_termios = try std.posix.tcgetattr(stdin.handle);
+    const original_termios = try std.posix.tcgetattr(0);
     var raw = original_termios;
     raw.lflag.ECHO = false;
     raw.lflag.ICANON = false;
     raw.cc[@intFromEnum(std.posix.V.MIN)] = 1;
     raw.cc[@intFromEnum(std.posix.V.TIME)] = 0;
-    try std.posix.tcsetattr(stdin.handle, .FLUSH, raw);
-    defer std.posix.tcsetattr(stdin.handle, .FLUSH, original_termios) catch {};
+    try std.posix.tcsetattr(0, .FLUSH, raw);
+    defer std.posix.tcsetattr(0, .FLUSH, original_termios) catch {};
 
     // Alt screen + hide cursor
-    try stdout.writeAll("\x1b[?1049h\x1b[?25l");
-    defer stdout.writeAll("\x1b[?25h\x1b[?1049l") catch {};
+    _ = std.c.write(1, "\x1b[?1049h\x1b[?25l", 15);
+    defer _ = std.c.write(1, "\x1b[?25h\x1b[?1049l", 15);
 
     while (model.running) {
         // Clear and render
-        try stdout.writeAll("\x1b[H\x1b[2J");
-        var write_buf: [8192]u8 = undefined;
-        var w = stdout.writer(&write_buf);
-        try view(&w.interface, &model);
-        try w.interface.flush();
+        _ = std.c.write(1, "\x1b[H\x1b[2J", 7);
+        var buf: std.ArrayList(u8) = .empty;
+        defer buf.deinit(gpa.allocator());
+        var aw: std.Io.Writer.Allocating = .fromArrayList(gpa.allocator(), &buf);
+        try view(&aw.writer, &model);
+        buf = aw.toArrayList();
+        var written: usize = 0;
+        while (written < buf.items.len) {
+            const n = std.c.write(1, buf.items.ptr + written, buf.items.len - written);
+            if (n < 0) break;
+            written += @intCast(n);
+        }
 
         // Read input
-        var buf: [1]u8 = undefined;
-        const n = try stdin.read(&buf);
+        var input_buf: [1]u8 = undefined;
+        const n = std.posix.read(0, &input_buf) catch break;
         if (n == 0) break;
-        update(&model, .{ .key = buf[0] });
+        update(&model, .{ .key = input_buf[0] });
     }
 }
 

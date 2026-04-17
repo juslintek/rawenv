@@ -40,20 +40,19 @@ pub fn detectError(output: []const u8) ?DeployError {
 pub fn formatAIContext(allocator: std.mem.Allocator, err: DeployError) ![]const u8 {
     var buf: std.ArrayList(u8) = .empty;
     defer buf.deinit(allocator);
-    const w = buf.writer(allocator);
 
-    try w.writeAll("Deployment failed. Help diagnose and fix:\n\n");
-    try w.print("Error type: {s}\n", .{@tagName(err.kind)});
-    try w.print("Pattern matched: {s}\n", .{err.message});
+    try buf.appendSlice(allocator, "Deployment failed. Help diagnose and fix:\n\n");
+    try buf.print(allocator, "Error type: {s}\n", .{@tagName(err.kind)});
+    try buf.print(allocator, "Pattern matched: {s}\n", .{err.message});
 
     const truncated = if (err.raw_output.len > 500) err.raw_output[err.raw_output.len - 500 ..] else err.raw_output;
-    try w.print("\nLast output:\n{s}\n", .{truncated});
+    try buf.print(allocator, "\nLast output:\n{s}\n", .{truncated});
 
     switch (err.kind) {
-        .port_conflict => try w.writeAll("\nSuggestion: Check if another service is using the same port. Try `lsof -i :<port>` or change the port in config.\n"),
-        .auth_failure => try w.writeAll("\nSuggestion: Verify API token/SSH key. Check provider credentials and permissions.\n"),
-        .timeout => try w.writeAll("\nSuggestion: Check network connectivity. Increase timeout or verify the server is reachable.\n"),
-        .unknown => try w.writeAll("\nSuggestion: Review the full output above for clues.\n"),
+        .port_conflict => try buf.appendSlice(allocator, "\nSuggestion: Check if another service is using the same port. Try `lsof -i :<port>` or change the port in config.\n"),
+        .auth_failure => try buf.appendSlice(allocator, "\nSuggestion: Verify API token/SSH key. Check provider credentials and permissions.\n"),
+        .timeout => try buf.appendSlice(allocator, "\nSuggestion: Check network connectivity. Increase timeout or verify the server is reachable.\n"),
+        .unknown => try buf.appendSlice(allocator, "\nSuggestion: Review the full output above for clues.\n"),
     }
 
     return try buf.toOwnedSlice(allocator);

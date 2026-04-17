@@ -30,31 +30,30 @@ pub fn buildContext(allocator: std.mem.Allocator, ctx: ProjectContext, token_lim
     const limit: u32 = if (token_limit == 0) 4096 else token_limit;
     var buf: std.ArrayList(u8) = .empty;
     errdefer buf.deinit(allocator);
-    const w = buf.writer(allocator);
 
-    try w.writeAll("You are rawenv AI assistant — a built-in helper for the rawenv development environment manager. rawenv manages native (no Docker) dev environments with OS-level isolation.\n\n");
+    try buf.appendSlice(allocator, "You are rawenv AI assistant — a built-in helper for the rawenv development environment manager. rawenv manages native (no Docker) dev environments with OS-level isolation.\n\n");
 
     if (ctx.project_name.len > 0) {
-        try w.print("Project: \"{s}\"", .{ctx.project_name});
-        if (ctx.project_path.len > 0) try w.print(" at {s}", .{ctx.project_path});
-        try w.writeByte('\n');
+        try buf.print(allocator, "Project: \"{s}\"", .{ctx.project_name});
+        if (ctx.project_path.len > 0) try buf.print(allocator, " at {s}", .{ctx.project_path});
+        try buf.append(allocator, '\n');
     }
-    if (ctx.stack.len > 0) try w.print("Stack: {s}\n", .{ctx.stack});
-    if (ctx.os.len > 0) try w.print("OS: {s}\n", .{ctx.os});
-    if (ctx.isolation.len > 0) try w.print("Isolation: {s}\n", .{ctx.isolation});
+    if (ctx.stack.len > 0) try buf.print(allocator, "Stack: {s}\n", .{ctx.stack});
+    if (ctx.os.len > 0) try buf.print(allocator, "OS: {s}\n", .{ctx.os});
+    if (ctx.isolation.len > 0) try buf.print(allocator, "Isolation: {s}\n", .{ctx.isolation});
 
     if (ctx.services.len > 0) {
-        try w.writeAll("Services:\n");
+        try buf.appendSlice(allocator, "Services:\n");
         for (ctx.services) |svc| {
-            try w.print("  - {s}", .{svc.name});
-            if (svc.port > 0) try w.print(" :{d}", .{svc.port});
-            try w.print(" ({s}", .{svc.statusStr()});
-            if (svc.memory_mb > 0) try w.print(", {d}MB", .{svc.memory_mb});
-            try w.writeAll(")\n");
+            try buf.print(allocator, "  - {s}", .{svc.name});
+            if (svc.port > 0) try buf.print(allocator, " :{d}", .{svc.port});
+            try buf.print(allocator, " ({s}", .{svc.statusStr()});
+            if (svc.memory_mb > 0) try buf.print(allocator, ", {d}MB", .{svc.memory_mb});
+            try buf.appendSlice(allocator, ")\n");
         }
     }
 
-    try w.writeAll("\nBe concise. Use monospace for commands/paths. Suggest optimizations proactively.");
+    try buf.appendSlice(allocator, "\nBe concise. Use monospace for commands/paths. Suggest optimizations proactively.");
 
     // Rough token estimate: ~4 chars per token. Truncate if over limit.
     const char_limit = limit * 4;

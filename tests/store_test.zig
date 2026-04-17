@@ -51,15 +51,16 @@ test "resolve unknown version returns error" {
 }
 
 test "sha256 verification with known data" {
+    const io = std.testing.io;
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    const test_file = try tmp_dir.dir.createFile("test.bin", .{});
-    try test_file.writeAll("hello world");
-    test_file.close();
+    const test_file = try tmp_dir.dir.createFile(io, "test.bin", .{});
+    test_file.writePositionalAll(io, "hello world", 0) catch unreachable;
+    test_file.close(io);
 
-    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const abs_path = try tmp_dir.dir.realpath("test.bin", &path_buf);
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const abs_path = try std.fmt.bufPrint(&path_buf, ".zig-cache/tmp/{s}/test.bin", .{tmp_dir.sub_path});
 
     const hash = try store.sha256File(std.testing.allocator, abs_path);
     defer std.testing.allocator.free(hash);
@@ -71,21 +72,22 @@ test "sha256 verification with known data" {
 }
 
 test "sha256 different data produces different hash" {
+    const io = std.testing.io;
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    const file1 = try tmp_dir.dir.createFile("a.bin", .{});
-    try file1.writeAll("hello");
-    file1.close();
+    const file1 = try tmp_dir.dir.createFile(io, "a.bin", .{});
+    file1.writePositionalAll(io, "hello", 0) catch unreachable;
+    file1.close(io);
 
-    const file2 = try tmp_dir.dir.createFile("b.bin", .{});
-    try file2.writeAll("world");
-    file2.close();
+    const file2 = try tmp_dir.dir.createFile(io, "b.bin", .{});
+    file2.writePositionalAll(io, "world", 0) catch unreachable;
+    file2.close(io);
 
-    var buf1: [std.fs.max_path_bytes]u8 = undefined;
-    var buf2: [std.fs.max_path_bytes]u8 = undefined;
-    const path1 = try tmp_dir.dir.realpath("a.bin", &buf1);
-    const path2 = try tmp_dir.dir.realpath("b.bin", &buf2);
+    var buf1: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    var buf2: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const path1 = try std.fmt.bufPrint(&buf1, ".zig-cache/tmp/{s}/a.bin", .{tmp_dir.sub_path});
+    const path2 = try std.fmt.bufPrint(&buf2, ".zig-cache/tmp/{s}/b.bin", .{tmp_dir.sub_path});
 
     const hash1 = try store.sha256File(std.testing.allocator, path1);
     defer std.testing.allocator.free(hash1);
@@ -130,14 +132,15 @@ test "parsePackageSpec with multiple @ signs" {
 }
 
 test "sha256 empty file" {
+    const io = std.testing.io;
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    const f = try tmp_dir.dir.createFile("empty.bin", .{});
-    f.close();
+    const f = try tmp_dir.dir.createFile(io, "empty.bin", .{});
+    f.close(io);
 
-    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const abs_path = try tmp_dir.dir.realpath("empty.bin", &path_buf);
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const abs_path = try std.fmt.bufPrint(&path_buf, ".zig-cache/tmp/{s}/empty.bin", .{tmp_dir.sub_path});
 
     const hash = try store.sha256File(std.testing.allocator, abs_path);
     defer std.testing.allocator.free(hash);

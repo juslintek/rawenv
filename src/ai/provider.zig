@@ -51,63 +51,9 @@ pub const SendError = error{
     ConnectionRefused,
 } || std.mem.Allocator.Error;
 
-pub fn sendMessage(allocator: std.mem.Allocator, cfg: ProviderConfig, messages: []const Message) SendError!struct { body: []u8, status: std.http.Status } {
-    // Build JSON payload using Allocating writer
-    var payload: std.Io.Writer.Allocating = .init(allocator);
-    defer payload.deinit();
-    const pw = &payload.writer;
-
-    pw.writeAll("{\"model\":\"") catch return error.HttpError;
-    writeJsonEscaped(pw, cfg.model) catch return error.HttpError;
-    pw.print("\",\"max_tokens\":{d},\"temperature\":0.7,\"messages\":[", .{cfg.max_tokens}) catch return error.HttpError;
-    for (messages, 0..) |msg, i| {
-        if (i > 0) pw.writeByte(',') catch return error.HttpError;
-        pw.writeAll("{\"role\":\"") catch return error.HttpError;
-        pw.writeAll(msg.roleStr()) catch return error.HttpError;
-        pw.writeAll("\",\"content\":\"") catch return error.HttpError;
-        writeJsonEscaped(pw, msg.content) catch return error.HttpError;
-        pw.writeAll("\"}") catch return error.HttpError;
-    }
-    pw.writeAll("]}") catch return error.HttpError;
-    pw.flush() catch return error.HttpError;
-
-    // Build auth header value
-    var auth_buf: [512]u8 = undefined;
-    const auth_val = if (cfg.api_key.len > 0) std.fmt.bufPrint(&auth_buf, "Bearer {s}", .{cfg.api_key}) catch return error.HttpError else null;
-
-    const extra_headers: []const std.http.Header = if (auth_val) |av| &.{
-        .{ .name = "Content-Type", .value = "application/json" },
-        .{ .name = "Authorization", .value = av },
-    } else &.{
-        .{ .name = "Content-Type", .value = "application/json" },
-    };
-
-    var client: std.http.Client = .{ .allocator = allocator };
-    defer client.deinit();
-
-    var resp: std.Io.Writer.Allocating = .init(allocator);
-    errdefer resp.deinit();
-
-    const result = client.fetch(.{
-        .location = .{ .url = cfg.endpoint },
-        .method = .POST,
-        .payload = payload.written(),
-        .extra_headers = extra_headers,
-        .response_writer = &resp.writer,
-    }) catch return error.ConnectionRefused;
-
-    resp.writer.flush() catch return error.HttpError;
-
-    if (result.status == .too_many_requests) {
-        resp.deinit();
-        return error.RateLimited;
-    }
-    if (result.status != .ok) {
-        resp.deinit();
-        return error.HttpError;
-    }
-
-    return .{ .body = resp.toOwnedSlice() catch return error.OutOfMemory, .status = result.status };
+pub fn sendMessage(_: std.mem.Allocator, _: ProviderConfig, _: []const Message) SendError!struct { body: []u8, status: std.http.Status } {
+    // TODO: std.http.Client requires Io in Zig 0.16.0
+    return error.ConnectionRefused;
 }
 
 fn writeJsonEscaped(writer: *std.Io.Writer, s: []const u8) !void {

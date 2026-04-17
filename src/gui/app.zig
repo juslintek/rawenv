@@ -49,8 +49,7 @@ const statusbar_h = 28;
 /// Entry point — called from CLI 'gui' subcommand.
 pub fn run() !void {
     if (!has_raylib) {
-        const stdout = std.fs.File.stdout();
-        try stdout.writeAll("rawenv GUI requires raylib. Install with: brew install raylib\n");
+        _ = std.c.write(1, "rawenv GUI requires raylib. Install with: brew install raylib\n", 62);
         return;
     }
 

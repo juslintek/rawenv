@@ -3,12 +3,33 @@ const builtin = @import("builtin");
 const config = @import("config");
 const resolver = @import("resolver");
 
+fn mkdirCompat(path: []const u8) error{ PathAlreadyExists, Unexpected }!void {
+    const p = std.posix.toPosixPath(path) catch return error.Unexpected;
+    if (std.c.mkdir(&p, 0o755) != 0) return error.PathAlreadyExists;
+}
+
+fn accessCompat(path: []const u8) bool {
+    const p = std.posix.toPosixPath(path) catch return false;
+    return std.c.access(&p, 0) == 0;
+}
+
+fn unlinkCompat(path: []const u8) void {
+    const p = std.posix.toPosixPath(path) catch return;
+    _ = std.c.unlink(&p);
+}
+
+fn symlinkCompat(target: []const u8, link_path: []const u8) !void {
+    const t = std.posix.toPosixPath(target) catch return error.NameTooLong;
+    const l = std.posix.toPosixPath(link_path) catch return error.NameTooLong;
+    if (std.c.symlinkat(&t, std.posix.AT.FDCWD, &l) != 0) return error.SymLinkFailed;
+}
+
 /// Get HOME directory path
 pub fn getHome() ?[]const u8 {
     if (comptime builtin.os.tag == .windows) {
         return std.process.getEnvVarOwned(std.heap.page_allocator, "USERPROFILE") catch null;
     }
-    return std.posix.getenv("HOME");
+    return if (std.c.getenv("HOME")) |s| std.mem.sliceTo(s, 0) else null;
 }
 
 /// Build the store path for a runtime: ~/.rawenv/store/{name}-{version}
@@ -24,7 +45,7 @@ pub fn buildBinPath(allocator: std.mem.Allocator, home: []const u8) ![]const u8 
 }
 
 /// Activate all configured runtimes by creating symlinks in ~/.rawenv/bin/
-pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: std.fs.File) !void {
+pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !void {
     const home = getHome() orelse {
         try stdout.writeAll("Error: HOME not set\n");
         return;
@@ -34,11 +55,11 @@ pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: std.fs.File)
     defer allocator.free(bin_path);
 
     // Create ~/.rawenv/bin/
-    std.fs.makeDirAbsolute(std.fs.path.dirname(bin_path).?) catch |err| switch (err) {
+    mkdirCompat(std.fs.path.dirname(bin_path).?) catch |err| switch (err) {
         error.PathAlreadyExists => {},
         else => return err,
     };
-    std.fs.makeDirAbsolute(bin_path) catch |err| switch (err) {
+    mkdirCompat(bin_path) catch |err| switch (err) {
         error.PathAlreadyExists => {},
         else => return err,
     };
@@ -54,30 +75,24 @@ pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: std.fs.File)
         const store_bin = try std.fs.path.join(allocator, &.{ store_path, "bin", rt.key });
         defer allocator.free(store_bin);
 
-        std.fs.accessAbsolute(store_bin, .{}) catch {
+        if (!accessCompat(store_bin)) {
             try stdout.writeAll("  ");
             try stdout.writeAll(rt.key);
             try stdout.writeAll("@");
             try stdout.writeAll(rt.value);
             try stdout.writeAll(" — not installed, skipping\n");
             continue;
-        };
+        }
 
         // Create symlink: ~/.rawenv/bin/{name} → store_bin
         const link_path = try std.fs.path.join(allocator, &.{ bin_path, rt.key });
         defer allocator.free(link_path);
 
         // Remove existing symlink if present
-        std.fs.deleteFileAbsolute(link_path) catch |err| switch (err) {
-            error.FileNotFound => {},
-            else => return err,
-        };
+        unlinkCompat(link_path);
 
         // Create symlink
-        const bin_dir = try std.fs.openDirAbsolute(bin_path, .{});
-        // symLink is not available on all platforms the same way; use symLinkAbsolute
-        try std.fs.symLinkAbsolute(store_bin, link_path, .{});
-        _ = bin_dir;
+        try symlinkCompat(store_bin, link_path);
 
         try stdout.writeAll("  ✓ ");
         try stdout.writeAll(rt.key);
@@ -95,7 +110,7 @@ pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: std.fs.File)
 }
 
 /// List configured runtimes/services with status
-pub fn list(allocator: std.mem.Allocator, cfg: config.Config, stdout: std.fs.File) !void {
+pub fn list(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !void {
     const home = getHome() orelse {
         try stdout.writeAll("Error: HOME not set\n");
         return;
@@ -121,14 +136,14 @@ pub fn list(allocator: std.mem.Allocator, cfg: config.Config, stdout: std.fs.Fil
     }
 }
 
-fn printEntry(allocator: std.mem.Allocator, stdout: std.fs.File, home: []const u8, bin_path: []const u8, name: []const u8, version: []const u8) !void {
+fn printEntry(allocator: std.mem.Allocator, stdout: anytype, home: []const u8, bin_path: []const u8, name: []const u8, version: []const u8) !void {
     const full_version = resolver.resolveVersion(name, version);
     const store_path = try buildStorePath(allocator, home, name, full_version);
     defer allocator.free(store_path);
 
     // Check installed
     const installed = blk: {
-        std.fs.accessAbsolute(store_path, .{}) catch break :blk false;
+        if (!accessCompat(store_path)) break :blk false;
         break :blk true;
     };
 
@@ -136,7 +151,7 @@ fn printEntry(allocator: std.mem.Allocator, stdout: std.fs.File, home: []const u
     const active = blk: {
         const link_path = try std.fs.path.join(allocator, &.{ bin_path, name });
         defer allocator.free(link_path);
-        std.fs.accessAbsolute(link_path, .{}) catch break :blk false;
+        if (!accessCompat(link_path)) break :blk false;
         break :blk true;
     };
 

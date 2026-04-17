@@ -143,12 +143,13 @@ test "integration: sandboxed process cannot write outside data_dir" {
     const data_dir = "/tmp/rawenv-sandbox-test";
     const outside_file = "/tmp/rawenv-sandbox-outside.txt";
 
-    std.fs.deleteFileAbsolute(outside_file) catch {};
-    std.fs.deleteTreeAbsolute(data_dir) catch {};
-    std.fs.makeDirAbsolute(data_dir) catch return;
+    const io = std.testing.io;
+    _ = std.c.unlink("/tmp/rawenv-sandbox-outside.txt");
+    std.Io.Dir.cwd().deleteTree(io, "/tmp/rawenv-sandbox-test") catch {};
+    std.Io.Dir.cwd().createDir(io, "/tmp/rawenv-sandbox-test", .default_dir) catch return;
     defer {
-        std.fs.deleteTreeAbsolute(data_dir) catch {};
-        std.fs.deleteFileAbsolute(outside_file) catch {};
+        std.Io.Dir.cwd().deleteTree(io, "/tmp/rawenv-sandbox-test") catch {};
+        _ = std.c.unlink("/tmp/rawenv-sandbox-outside.txt");
     }
 
     const cfg = CellConfig{ .name = "sandbox-test", .data_dir = data_dir, .allowed_port = 0, .mem_limit_mb = 128, .cpu_cores = 1 };
@@ -157,8 +158,7 @@ test "integration: sandboxed process cannot write outside data_dir" {
     defer testing.allocator.free(profile);
 
     // Run sandbox-exec with -p (inline profile) to write outside data_dir
-    const result = std.process.Child.run(.{
-        .allocator = testing.allocator,
+    const result = std.process.run(testing.allocator, io, .{
         .argv = &.{ "sandbox-exec", "-p", profile, "--", "/bin/sh", "-c", "echo hacked > " ++ outside_file },
     }) catch return; // sandbox-exec may not be available
     defer {
@@ -167,9 +167,6 @@ test "integration: sandboxed process cannot write outside data_dir" {
     }
 
     // The file outside data_dir should NOT exist
-    const file_exists = blk: {
-        std.fs.accessAbsolute(outside_file, .{}) catch break :blk false;
-        break :blk true;
-    };
+    const file_exists = std.c.access("/tmp/rawenv-sandbox-outside.txt", 0) == 0;
     try testing.expect(!file_exists);
 }

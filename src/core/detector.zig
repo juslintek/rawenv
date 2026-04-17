@@ -13,7 +13,7 @@ pub const DetectionResult = struct {
     }
 };
 
-pub fn detect(allocator: std.mem.Allocator, dir: std.fs.Dir) !DetectionResult {
+pub fn detect(allocator: std.mem.Allocator, dir: std.Io.Dir) !DetectionResult {
     var runtimes: std.ArrayList(DetectionResult.Entry) = .empty;
     errdefer runtimes.deinit(allocator);
     var services: std.ArrayList(DetectionResult.Entry) = .empty;
@@ -51,8 +51,18 @@ pub fn detect(allocator: std.mem.Allocator, dir: std.fs.Dir) !DetectionResult {
     };
 }
 
-fn readFile(allocator: std.mem.Allocator, dir: std.fs.Dir, name: []const u8) ?[]const u8 {
-    return dir.readFileAlloc(allocator, name, 1024 * 256) catch null;
+fn readFile(allocator: std.mem.Allocator, dir: std.Io.Dir, name: []const u8) ?[]const u8 {
+    const fd = std.posix.openat(dir.handle, name, .{}, 0) catch return null;
+    defer _ = std.c.close(fd);
+    var buf_list: std.ArrayList(u8) = .empty;
+    errdefer buf_list.deinit(allocator);
+    var read_buf: [4096]u8 = undefined;
+    while (true) {
+        const n = std.posix.read(fd, &read_buf) catch return null;
+        if (n == 0) break;
+        buf_list.appendSlice(allocator, read_buf[0..n]) catch return null;
+    }
+    return buf_list.toOwnedSlice(allocator) catch null;
 }
 
 fn parseNodeVersion(allocator: std.mem.Allocator, data: []const u8) ?[]const u8 {
