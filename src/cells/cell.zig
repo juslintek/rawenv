@@ -22,7 +22,7 @@ pub const Cell = struct {
     config: CellConfig,
     status: CellStatus,
     allocator: std.mem.Allocator,
-    child: ?std.process.Child = null,
+    pid: ?std.posix.pid_t = null,
 
     pub fn create(allocator: std.mem.Allocator, config: CellConfig) Cell {
         return .{ .config = config, .status = .created, .allocator = allocator };
@@ -31,28 +31,33 @@ pub const Cell = struct {
     /// Build platform-wrapped argv and spawn the process.
     pub fn start(self: *Cell, command: []const []const u8) !void {
         if (self.status == .running) return;
+        const exec = @import("exec");
         const argv = switch (builtin.os.tag) {
             .macos => try @import("macos.zig").sandboxCommand(self.allocator, self.config, command),
             else => try self.allocator.dupe([]const u8, command),
         };
         defer self.allocator.free(argv);
 
-        var child = std.process.Child.init(argv, self.allocator);
-        child.stdin_behavior = .ignore;
-        child.stdout_behavior = .ignore;
-        child.stderr_behavior = .ignore;
-        try child.spawn();
-        self.child = child;
+        // Convert to null-terminated sentinel pointers for exec.spawn
+        var argv_z = try self.allocator.alloc([*:0]const u8, argv.len);
+        defer self.allocator.free(argv_z);
+        for (argv, 0..) |a, i| {
+            argv_z[i] = try self.allocator.dupeZ(u8, a);
+        }
+        defer {
+            for (argv_z) |a| self.allocator.free(std.mem.sliceTo(a, 0));
+        }
+
+        const pid = try exec.spawn(argv_z);
+        self.pid = pid;
         self.status = .running;
     }
 
     pub fn stop(self: *Cell) void {
-        if (self.child) |*ch| {
-            if (ch.id) |pid| {
-                if (comptime @import("builtin").os.tag != .windows)
-                    std.posix.kill(pid, .TERM) catch {};
-            }
-            self.child = null;
+        if (self.pid) |pid| {
+            if (comptime @import("builtin").os.tag != .windows)
+                std.posix.kill(pid, std.posix.SIG.TERM) catch {};
+            self.pid = null;
         }
         self.status = .stopped;
     }

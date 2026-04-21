@@ -141,7 +141,6 @@ test "integration: sandboxed process cannot write outside data_dir" {
     if (builtin.os.tag != .macos) return error.SkipZigTest;
 
     const data_dir = "/tmp/rawenv-sandbox-test";
-    const outside_file = "/tmp/rawenv-sandbox-outside.txt";
 
     const io = std.testing.io;
     _ = std.c.unlink("/tmp/rawenv-sandbox-outside.txt");
@@ -157,14 +156,14 @@ test "integration: sandboxed process cannot write outside data_dir" {
     const profile = try platform_impl.generateProfile(testing.allocator, cfg);
     defer testing.allocator.free(profile);
 
+    const exec = @import("exec");
+
     // Run sandbox-exec with -p (inline profile) to write outside data_dir
-    const result = std.process.run(testing.allocator, io, .{
-        .argv = &.{ "sandbox-exec", "-p", profile, "--", "/bin/sh", "-c", "echo hacked > " ++ outside_file },
-    }) catch return; // sandbox-exec may not be available
-    defer {
-        testing.allocator.free(result.stdout);
-        testing.allocator.free(result.stderr);
-    }
+    const argv = [_][*:0]const u8{ "sandbox-exec", "-p", try testing.allocator.dupeZ(u8, profile), "--", "/bin/sh", "-c", "echo hacked > /tmp/rawenv-sandbox-outside.txt" };
+    defer testing.allocator.free(std.mem.sliceTo(argv[2], 0));
+
+    const exit_code = exec.run(&argv) catch return;
+    _ = exit_code;
 
     // The file outside data_dir should NOT exist
     const file_exists = std.c.access("/tmp/rawenv-sandbox-outside.txt", 0) == 0;

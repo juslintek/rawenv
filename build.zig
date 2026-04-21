@@ -80,6 +80,9 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/cells/cell.zig"),
         .target = target,
         .optimize = optimize,
+        .imports = &.{
+            .{ .name = "exec", .module = exec_mod },
+        },
     });
 
     // Network modules
@@ -344,7 +347,10 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("tests/cells_test.zig"),
             .target = target,
             .optimize = optimize,
-            .imports = &.{.{ .name = "cell", .module = cell_mod }},
+            .imports = &.{
+                .{ .name = "cell", .module = cell_mod },
+                .{ .name = "exec", .module = exec_mod },
+            },
         }),
     });
     cells_tests.root_module.link_libc = true;

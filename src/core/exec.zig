@@ -34,6 +34,27 @@ pub fn run(argv: []const [*:0]const u8) error{ ForkFailed, ExecFailed, WaitFaile
     return 1;
 }
 
+/// Spawn an external command without waiting for it. Returns PID.
+pub fn spawn(argv: []const [*:0]const u8) error{ ForkFailed, ExecFailed }!c.pid_t {
+    if (comptime builtin.os.tag == .windows) return error.ExecFailed;
+
+    var argv_buf: [32]?[*:0]const u8 = undefined;
+    if (argv.len >= argv_buf.len) return error.ExecFailed;
+    for (argv, 0..) |a, i| argv_buf[i] = a;
+    argv_buf[argv.len] = null;
+    const argv_z: [*:null]const ?[*:0]const u8 = @ptrCast(&argv_buf);
+
+    const pid = c.fork();
+    if (pid < 0) return error.ForkFailed;
+
+    if (pid == 0) {
+        _ = execvp(argv[0], argv_z);
+        c._exit(127);
+    }
+
+    return pid;
+}
+
 /// Run a command and capture stdout into a buffer.
 pub fn runCapture(argv: []const [*:0]const u8, out_buf: []u8) error{ ForkFailed, PipeFailed }![]const u8 {
     if (comptime builtin.os.tag == .windows) return error.ForkFailed;
