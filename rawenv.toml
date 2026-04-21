@@ -1,12 +1,12 @@
-# rawenv.toml — project configuration
-name = "example-app"
-version = "1"
+[project]
+name = "rawenv"
 
-[services.node]
-version = "22"
+[runtimes]
+node = "22"
 
-[services.postgres]
-version = "16"
+[services]
+postgresql = "16"
+redis = "7"
 
-[services.redis]
-version = "7"
+[detect]
+auto = true

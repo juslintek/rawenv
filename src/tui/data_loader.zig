@@ -69,20 +69,41 @@ fn isActive(home: []const u8, name: []const u8) bool {
 
 /// Try to get PID of a running process by name via `pgrep`
 fn getPid(allocator: std.mem.Allocator, name: []const u8) ?[]const u8 {
-    _ = allocator;
-    _ = name;
-    // std.process.Child.run requires Io in 0.16.0; skip process lookup
-    return null;
+    const exec = @import("exec");
+    const name_z = std.fmt.allocPrintSentinel(allocator, "{s}", .{name}, 0) catch return null;
+    defer allocator.free(name_z);
+    const argv = [_][*:0]const u8{ "pgrep", "-x", name_z };
+    var buf: [256]u8 = undefined;
+    const output = exec.runCapture(&argv, &buf) catch return null;
+    if (output.len == 0) return null;
+    const end = std.mem.indexOfScalar(u8, output, '\n') orelse output.len;
+    return allocator.dupe(u8, output[0..end]) catch null;
 }
 
 /// Get CPU/MEM for a PID via `ps -p PID -o %cpu,%mem`
 const PsStats = struct { cpu: []const u8, mem: []const u8 };
 
 fn getPsStats(allocator: std.mem.Allocator, pid: []const u8) ?PsStats {
-    _ = allocator;
-    _ = pid;
-    // std.process.Child.run requires Io in 0.16.0; skip stats lookup
-    return null;
+    const exec = @import("exec");
+    const pid_z = std.fmt.allocPrintSentinel(allocator, "{s}", .{pid}, 0) catch return null;
+    defer allocator.free(pid_z);
+    const argv = [_][*:0]const u8{ "ps", "-p", pid_z, "-o", "%cpu,%mem" };
+    var buf: [512]u8 = undefined;
+    const output = exec.runCapture(&argv, &buf) catch return null;
+    // Skip header line
+    var lines = std.mem.splitScalar(u8, output, '\n');
+    _ = lines.next();
+    const data_line = lines.next() orelse return null;
+    const trimmed = std.mem.trim(u8, data_line, &std.ascii.whitespace);
+    if (trimmed.len == 0) return null;
+    // Parse space-separated cpu mem
+    var parts = std.mem.tokenizeAny(u8, trimmed, " \t,");
+    const cpu_str = parts.next() orelse return null;
+    const mem_str = parts.next() orelse return null;
+    return .{
+        .cpu = allocator.dupe(u8, cpu_str) catch return null,
+        .mem = allocator.dupe(u8, mem_str) catch return null,
+    };
 }
 
 /// Read last N lines from a log file

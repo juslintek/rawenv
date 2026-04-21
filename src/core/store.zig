@@ -89,16 +89,32 @@ pub fn sha256File(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
     return allocator.dupe(u8, &hex);
 }
 
-/// Download a URL to a local file path
-/// TODO: Requires Io refactor for Zig 0.16.0 http.Client and File APIs
-fn download(_: std.mem.Allocator, _: []const u8, _: []const u8) !void {
-    return StoreError.DownloadFailed;
+/// Download a URL to a local file path using curl.
+fn download(allocator: std.mem.Allocator, url: []const u8, dest_path: []const u8) !void {
+    const exec = @import("exec");
+    const url_z = try std.fmt.allocPrintSentinel(allocator, "{s}", .{url}, 0);
+    defer allocator.free(url_z);
+    const dest_z = try std.fmt.allocPrintSentinel(allocator, "{s}", .{dest_path}, 0);
+    defer allocator.free(dest_z);
+    const argv = [_][*:0]const u8{ "curl", "-fSL", "-o", dest_z, url_z };
+    const exit_code = exec.run(&argv) catch return StoreError.DownloadFailed;
+    if (exit_code != 0) return StoreError.DownloadFailed;
 }
 
-/// Extract a .tar.gz archive to a directory
-/// TODO: Requires Io refactor for Zig 0.16.0 tar and File APIs
-fn extractTarGz(_: std.mem.Allocator, _: []const u8, _: []const u8) !void {
-    return StoreError.ExtractionFailed;
+/// Extract a .tar.gz archive to a directory using tar.
+fn extractTarGz(allocator: std.mem.Allocator, archive_path: []const u8, dest_path: []const u8) !void {
+    const exec = @import("exec");
+    mkdirCompat(dest_path) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => return StoreError.ExtractionFailed,
+    };
+    const archive_z = try std.fmt.allocPrintSentinel(allocator, "{s}", .{archive_path}, 0);
+    defer allocator.free(archive_z);
+    const dest_z = try std.fmt.allocPrintSentinel(allocator, "{s}", .{dest_path}, 0);
+    defer allocator.free(dest_z);
+    const argv = [_][*:0]const u8{ "tar", "xzf", archive_z, "-C", dest_z, "--strip-components=1" };
+    const exit_code = exec.run(&argv) catch return StoreError.ExtractionFailed;
+    if (exit_code != 0) return StoreError.ExtractionFailed;
 }
 
 /// Add a resolved package to the store.

@@ -25,11 +25,21 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const exec_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/exec.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exec_mod.link_libc = true;
+
     const store_mod = b.createModule(.{
         .root_source_file = b.path("src/core/store.zig"),
         .target = target,
         .optimize = optimize,
-        .imports = &.{.{ .name = "resolver", .module = resolver_mod }},
+        .imports = &.{
+            .{ .name = "resolver", .module = resolver_mod },
+            .{ .name = "exec", .module = exec_mod },
+        },
     });
     store_mod.link_libc = true;
 
@@ -51,6 +61,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "config", .module = config_mod },
             .{ .name = "service", .module = service_mod },
+            .{ .name = "exec", .module = exec_mod },
         },
     });
     shell_mod.link_libc = true;
@@ -59,6 +70,9 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/tui/main.zig"),
         .target = target,
         .optimize = optimize,
+        .imports = &.{
+            .{ .name = "exec", .module = exec_mod },
+        },
     });
     tui_mod.link_libc = true;
 
@@ -304,6 +318,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/tui/app.zig"),
             .target = target,
             .optimize = optimize,
+            .imports = &.{.{ .name = "exec", .module = exec_mod }},
         }),
     });
     tui_tests.root_module.link_libc = true;
