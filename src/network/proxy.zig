@@ -115,6 +115,7 @@ pub fn parseHostHeader(data: []const u8) ?[]const u8 {
 
 /// Generate a self-signed TLS certificate for a .test domain.
 pub fn generateSelfSignedCert(allocator: std.mem.Allocator, domain: []const u8, out_dir: []const u8) !struct { cert: []const u8, key: []const u8 } {
+    const exec = @import("exec");
     const cert_path = try std.fmt.allocPrint(allocator, "{s}/{s}.crt", .{ out_dir, domain });
     errdefer allocator.free(cert_path);
     const key_path = try std.fmt.allocPrint(allocator, "{s}/{s}.key", .{ out_dir, domain });
@@ -122,21 +123,47 @@ pub fn generateSelfSignedCert(allocator: std.mem.Allocator, domain: []const u8, 
     const subj = try std.fmt.allocPrint(allocator, "/CN={s}", .{domain});
     defer allocator.free(subj);
 
-    var child = std.process.Child.init(&.{
+    const key_path_z = try allocator.dupeZ(u8, key_path);
+    defer allocator.free(key_path_z);
+    const cert_path_z = try allocator.dupeZ(u8, cert_path);
+    defer allocator.free(cert_path_z);
+    const subj_z = try allocator.dupeZ(u8, subj);
+    defer allocator.free(subj_z);
+
+    const argv = [_][*:0]const u8{
         "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
-        "-keyout", key_path, "-out", cert_path,
-        "-days",  "365",  "-subj", subj,
-    }, allocator);
-    child.stdout_behavior = .ignore;
-    child.stderr_behavior = .ignore;
-    try child.spawn();
-    const term = try child.wait();
-    if (term.Exited != 0) return error.OpenSSLFailed;
+        "-keyout", key_path_z, "-out", cert_path_z,
+        "-days",  "365",  "-subj", subj_z,
+    };
+    
+    const exit_code = try exec.run(&argv);
+    if (exit_code != 0) return error.OpenSSLFailed;
 
     return .{ .cert = cert_path, .key = key_path };
 }
 
-pub fn stopProxy() void {}
+pub fn setupProxy(allocator: std.mem.Allocator, caddy_config: []const u8) !void {
+    const exec = @import("exec");
+    const caddyfile_path = "/usr/local/etc/Caddyfile"; // Common path for Homebrew Caddy
+    
+    // Save to temp file
+    const tmp_path = "/tmp/rawenv-Caddyfile.tmp";
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, tmp_path, .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644);
+    defer _ = std.c.close(fd);
+    _ = std.c.write(fd, caddy_config.ptr, caddy_config.len);
+
+    // Move to system path with sudo
+    const caddyfile_path_z = try allocator.dupeZ(u8, caddyfile_path);
+    defer allocator.free(caddyfile_path_z);
+    const mv_argv = [_][*:0]const u8{ "sudo", "mv", tmp_path, caddyfile_path_z };
+    var exit_code = try exec.run(&mv_argv);
+    if (exit_code != 0) return error.WriteFailed;
+
+    // Reload Caddy
+    const reload_argv = [_][*:0]const u8{ "sudo", "caddy", "reload", "--config", caddyfile_path_z };
+    exit_code = try exec.run(&reload_argv);
+    if (exit_code != 0) return error.CaddyReloadFailed;
+}
 
 test "parseHostHeader" {
     const data = "GET / HTTP/1.1\r\nHost: myapp.test:3000\r\nAccept: */*\r\n\r\n";

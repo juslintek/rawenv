@@ -211,6 +211,34 @@ pub fn runProxy(allocator: std.mem.Allocator, stdout: anytype) !void {
     try stdout.writeAll(caddy);
 }
 
+pub fn runProxySetup(allocator: std.mem.Allocator, stdout: anytype) !void {
+    var result = (try loadConfig(allocator, stdout)) orelse return;
+    defer allocator.free(result.toml);
+    defer config.deinit(allocator, &result.cfg);
+
+    var p = proxy.Proxy.init(allocator);
+    defer p.deinit();
+
+    var port: u16 = 3000;
+    // Map project.test to first runtime if available
+    if (result.cfg.runtimes.len > 0) {
+        try p.addRoute(try std.fmt.allocPrint(allocator, "{s}.test", .{result.cfg.project_name}), port);
+        port += 1;
+    }
+
+    for (result.cfg.services) |svc| {
+        try p.addRoute(try std.fmt.allocPrint(allocator, "{s}.{s}.test", .{ svc.key, result.cfg.project_name }), port);
+        port += 1;
+    }
+
+    const caddy = try p.generateCaddyConfig(allocator);
+    defer allocator.free(caddy);
+
+    try stdout.writeAll("Setting up Caddy reverse proxy (requires sudo)...\n");
+    try proxy.setupProxy(allocator, caddy);
+    try stdout.writeAll("Done. Caddy has been reloaded with the new configuration.\n");
+}
+
 pub fn runTunnel(allocator: std.mem.Allocator, stdout: anytype, port_str: []const u8) !void {
     const port = std.fmt.parseInt(u16, port_str, 10) catch {
         try stdout.writeAll("Error: invalid port number\n");

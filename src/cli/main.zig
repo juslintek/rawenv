@@ -58,14 +58,14 @@ const help =
 
 pub fn main(init: std.process.Init) !void {
     const stdout = StdoutWriter{};
-    const allocator = init.gpa;
+    const gpa = init.gpa;
 
     // Collect args
     var args_list: std.ArrayList([:0]const u8) = .empty;
-    defer args_list.deinit(allocator);
+    defer args_list.deinit(gpa);
     var args_iter = std.process.Args.Iterator.init(init.minimal.args);
     while (args_iter.next()) |arg| {
-        try args_list.append(allocator, arg);
+        try args_list.append(gpa, arg);
     }
     const args = args_list.items;
 
@@ -80,6 +80,11 @@ pub fn main(init: std.process.Init) !void {
             try stdout.writeAll(help);
             return;
         }
+
+        var arena = std.heap.ArenaAllocator.init(gpa);
+        defer arena.deinit();
+        const allocator = arena.allocator();
+
         if (std.mem.eql(u8, arg, "init")) {
             commands.runInit(allocator, stdout) catch {
                 try stdout.writeAll("Error: init failed\n");
@@ -133,9 +138,16 @@ pub fn main(init: std.process.Init) !void {
             return;
         }
         if (std.mem.eql(u8, arg, "proxy")) {
-            commands.runProxy(allocator, stdout) catch {
-                try stdout.writeAll("Error: proxy failed\n");
-            };
+            const sub = if (i + 1 < args.len) args[i + 1] else "";
+            if (std.mem.eql(u8, sub, "setup")) {
+                commands.runProxySetup(allocator, stdout) catch {
+                    try stdout.writeAll("Error: proxy setup failed\n");
+                };
+            } else {
+                commands.runProxy(allocator, stdout) catch {
+                    try stdout.writeAll("Error: proxy failed\n");
+                };
+            }
             return;
         }
         if (std.mem.eql(u8, arg, "tunnel")) {
@@ -177,14 +189,6 @@ pub fn main(init: std.process.Init) !void {
             };
             return;
         }
-        if (std.mem.eql(u8, arg, "tui")) {
-            try tui.run();
-            return;
-        }
-        if (std.mem.eql(u8, arg, "gui")) {
-            try gui.run();
-            return;
-        }
         if (std.mem.eql(u8, arg, "menubar")) {
             commands.runMenubar(allocator, stdout) catch {
                 try stdout.writeAll("Error: menubar failed\n");
@@ -193,7 +197,9 @@ pub fn main(init: std.process.Init) !void {
         }
         if (std.mem.eql(u8, arg, "ai")) {
             if (i + 1 < args.len) {
-                try runAiOneShot(allocator, stdout, args[i + 1]);
+                runAiOneShot(allocator, stdout, args[i + 1]) catch {
+                    try stdout.writeAll("Error: ai failed\n");
+                };
             } else {
                 try stdout.writeAll("Usage: rawenv ai \"your question\"\n");
             }
@@ -202,12 +208,25 @@ pub fn main(init: std.process.Init) !void {
         if (std.mem.eql(u8, arg, "deploy")) {
             const sub = if (i + 1 < args.len) args[i + 1] else "";
             if (std.mem.eql(u8, sub, "generate")) {
-                try handleDeployGenerate(allocator, stdout);
+                handleDeployGenerate(allocator, stdout) catch {
+                    try stdout.writeAll("Error: deploy generate failed\n");
+                };
             } else if (std.mem.eql(u8, sub, "apply")) {
-                try handleDeployApply(stdout);
+                handleDeployApply(stdout) catch {
+                    try stdout.writeAll("Error: deploy apply failed\n");
+                };
             } else {
                 try stdout.writeAll("Usage: rawenv deploy [generate|apply]\n");
             }
+            return;
+        }
+
+        if (std.mem.eql(u8, arg, "tui")) {
+            try tui.run();
+            return;
+        }
+        if (std.mem.eql(u8, arg, "gui")) {
+            try gui.run();
             return;
         }
     }

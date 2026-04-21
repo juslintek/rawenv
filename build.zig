@@ -98,6 +98,9 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/network/proxy.zig"),
         .target = target,
         .optimize = optimize,
+        .imports = &.{
+            .{ .name = "exec", .module = exec_mod },
+        },
     });
     const tunnel_mod = b.createModule(.{
         .root_source_file = b.path("src/network/tunnel.zig"),
