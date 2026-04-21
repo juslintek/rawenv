@@ -12,18 +12,19 @@ fn resolveVersion(name: []const u8, version: []const u8) []const u8 {
     return version;
 }
 
-/// Parsed entry from rawenv.toml [services.X] sections
-const TomlService = struct {
+/// Parsed entry from rawenv.toml
+const TomlEntry = struct {
     name: []const u8,
     version: []const u8,
+    is_runtime: bool,
 };
 
-/// Parse rawenv.toml from cwd. Returns list of service entries.
-fn parseToml(allocator: std.mem.Allocator, content: []const u8) ![]TomlService {
-    var result: std.ArrayList(TomlService) = .empty;
+/// Parse rawenv.toml from cwd. Returns list of entries.
+fn parseToml(allocator: std.mem.Allocator, content: []const u8) ![]TomlEntry {
+    var result: std.ArrayList(TomlEntry) = .empty;
     errdefer result.deinit(allocator);
 
-    var current_service: ?[]const u8 = null;
+    var current_section: enum { none, runtimes, services } = .none;
     var it = std.mem.splitScalar(u8, content, '\n');
     while (it.next()) |raw| {
         const line = std.mem.trim(u8, raw, &std.ascii.whitespace);
@@ -31,23 +32,28 @@ fn parseToml(allocator: std.mem.Allocator, content: []const u8) ![]TomlService {
 
         if (line[0] == '[' and line[line.len - 1] == ']') {
             const section = line[1 .. line.len - 1];
-            if (std.mem.startsWith(u8, section, "services.")) {
-                current_service = section["services.".len..];
+            if (std.mem.eql(u8, section, "runtimes")) {
+                current_section = .runtimes;
+            } else if (std.mem.eql(u8, section, "services")) {
+                current_section = .services;
             } else {
-                current_service = null;
+                current_section = .none;
             }
             continue;
         }
 
-        if (current_service) |svc_name| {
+        if (current_section != .none) {
             const eq = std.mem.indexOfScalar(u8, line, '=') orelse continue;
             const key = std.mem.trim(u8, line[0..eq], &std.ascii.whitespace);
-            if (std.mem.eql(u8, key, "version")) {
-                var val = std.mem.trim(u8, line[eq + 1 ..], &std.ascii.whitespace);
-                if (val.len >= 2 and val[0] == '"' and val[val.len - 1] == '"')
-                    val = val[1 .. val.len - 1];
-                try result.append(allocator, .{ .name = svc_name, .version = val });
-            }
+            var val = std.mem.trim(u8, line[eq + 1 ..], &std.ascii.whitespace);
+            if (val.len >= 2 and val[0] == '"' and val[val.len - 1] == '"')
+                val = val[1 .. val.len - 1];
+            
+            try result.append(allocator, .{
+                .name = allocator.dupe(u8, key) catch continue,
+                .version = allocator.dupe(u8, val) catch continue,
+                .is_runtime = (current_section == .runtimes),
+            });
         }
     }
     return result.toOwnedSlice(allocator);
@@ -163,33 +169,44 @@ pub fn loadServices(allocator: std.mem.Allocator) ?[]app.Service {
     };
     defer allocator.free(toml_content);
 
-    const toml_services = parseToml(allocator, toml_content) catch return null;
-    defer allocator.free(toml_services);
-    if (toml_services.len == 0) return null;
+    const toml_entries = parseToml(allocator, toml_content) catch return null;
+    defer {
+        for (toml_entries) |e| {
+            allocator.free(e.name);
+            allocator.free(e.version);
+        }
+        allocator.free(toml_entries);
+    }
+    if (toml_entries.len == 0) return null;
 
     var services: std.ArrayList(app.Service) = .empty;
-    for (toml_services) |ts| {
-        const full_ver = resolveVersion(ts.name, ts.version);
-        const installed = isInstalled(home, ts.name, full_ver);
-        const active = isActive(home, ts.name);
+    for (toml_entries) |te| {
+        const full_ver = resolveVersion(te.name, te.version);
+        const installed = isInstalled(home, te.name, full_ver);
+        const active = isActive(home, te.name);
 
         var pid: []const u8 = "—";
         var cpu: []const u8 = "—";
         var mem: []const u8 = "—";
-        const status: []const u8 = if (active) blk: {
-            // Try to get process stats
-            if (getPid(allocator, ts.name)) |p| {
+        
+        var status: []const u8 = "not installed";
+        if (active) {
+            status = "active";
+            // For services, check if running
+            if (getPid(allocator, te.name)) |p| {
                 pid = p;
+                status = "running";
                 if (getPsStats(allocator, p)) |stats| {
                     cpu = std.fmt.allocPrint(allocator, "{s}%", .{stats.cpu}) catch "—";
                     mem = stats.mem;
                 }
             }
-            break :blk "running";
-        } else if (installed) "stopped" else "not installed";
+        } else if (installed) {
+            status = "stopped";
+        }
 
         services.append(allocator, .{
-            .name = allocator.dupe(u8, ts.name) catch continue,
+            .name = allocator.dupe(u8, te.name) catch continue,
             .version = allocator.dupe(u8, full_ver) catch continue,
             .port = "—",
             .pid = pid,
@@ -237,18 +254,26 @@ pub fn loadServicesWithPorts(allocator: std.mem.Allocator) ?[]app.Service {
 test "parseToml basic" {
     const input =
         \\name = "test"
-        \\[services.node]
-        \\version = "22"
-        \\[services.redis]
-        \\version = "7"
+        \\[runtimes]
+        \\node = "22"
+        \\[services]
+        \\redis = "7"
     ;
     const result = try parseToml(std.testing.allocator, input);
-    defer std.testing.allocator.free(result);
+    defer {
+        for (result) |e| {
+            std.testing.allocator.free(e.name);
+            std.testing.allocator.free(e.version);
+        }
+        std.testing.allocator.free(result);
+    }
     try std.testing.expectEqual(@as(usize, 2), result.len);
     try std.testing.expectEqualStrings("node", result[0].name);
     try std.testing.expectEqualStrings("22", result[0].version);
+    try std.testing.expect(result[0].is_runtime);
     try std.testing.expectEqualStrings("redis", result[1].name);
     try std.testing.expectEqualStrings("7", result[1].version);
+    try std.testing.expect(!result[1].is_runtime);
 }
 
 test "parseToml empty" {

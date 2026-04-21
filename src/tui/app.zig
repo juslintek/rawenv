@@ -162,6 +162,11 @@ pub fn view(writer: anytype, model: *const Model) !void {
     try theme.writeFg(writer, .{ .r = 255, .g = 255, .b = 255 });
     try writer.writeAll(" ⚡ rawenv my-app");
     try theme.writeFg(writer, theme.accent_secondary);
+    if (model.using_real_data) {
+        try writer.writeAll(" [LIVE]");
+    } else {
+        try writer.writeAll(" [MOCK]");
+    }
     {
         var running: usize = 0;
         for (model.services) |svc| {
