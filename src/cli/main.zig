@@ -120,9 +120,16 @@ pub fn main(init: std.process.Init) !void {
             return;
         }
         if (std.mem.eql(u8, arg, "dns")) {
-            commands.runDns(allocator, stdout) catch {
-                try stdout.writeAll("Error: dns failed\n");
-            };
+            const sub = if (i + 1 < args.len) args[i + 1] else "";
+            if (std.mem.eql(u8, sub, "setup")) {
+                commands.runDnsSetup(allocator, stdout) catch {
+                    try stdout.writeAll("Error: dns setup failed\n");
+                };
+            } else {
+                commands.runDns(allocator, stdout) catch {
+                    try stdout.writeAll("Error: dns failed\n");
+                };
+            }
             return;
         }
         if (std.mem.eql(u8, arg, "proxy")) {

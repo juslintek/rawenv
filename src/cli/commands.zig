@@ -173,6 +173,25 @@ pub fn runDns(allocator: std.mem.Allocator, stdout: anytype) !void {
     try stdout.writeAll(entries);
 }
 
+pub fn runDnsSetup(allocator: std.mem.Allocator, stdout: anytype) !void {
+    var result = (try loadConfig(allocator, stdout)) orelse return;
+    defer allocator.free(result.toml);
+    defer config.deinit(allocator, &result.cfg);
+
+    var svc_names: std.ArrayList([]const u8) = .empty;
+    defer svc_names.deinit(allocator);
+    for (result.cfg.services) |svc| try svc_names.append(allocator, svc.key);
+
+    const cfg = dns.DnsConfig{
+        .project = result.cfg.project_name,
+        .services = svc_names.items,
+    };
+
+    try stdout.writeAll("Setting up DNS entries in /etc/hosts (requires sudo)...\n");
+    try dns.setupDNS(allocator, cfg);
+    try stdout.writeAll("Done. Project is now accessible via .test domains.\n");
+}
+
 pub fn runProxy(allocator: std.mem.Allocator, stdout: anytype) !void {
     var result = (try loadConfig(allocator, stdout)) orelse return;
     defer allocator.free(result.toml);

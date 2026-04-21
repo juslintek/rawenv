@@ -108,57 +108,97 @@ pub fn generateAcrylicConfig(allocator: std.mem.Allocator, cfg: DnsConfig) ![]u8
 
 const dnsmasq_path = "/usr/local/etc/dnsmasq.d/rawenv.conf";
 const resolved_path = "/etc/systemd/resolved.conf.d/rawenv.conf";
+const hosts_path = if (builtin.os.tag == .windows) "C:\\Windows\\System32\\drivers\\etc\\hosts" else "/etc/hosts";
 
 pub fn setupDNS(allocator: std.mem.Allocator, cfg: DnsConfig) !void {
-    switch (builtin.os.tag) {
-        .macos => {
-            const content = try generateDnsmasqConfig(allocator, cfg);
-            defer allocator.free(content);
-            try writeFilePrivileged(allocator, dnsmasq_path, content);
-            try runCommand(allocator, &.{ "sudo", "brew", "services", "restart", "dnsmasq" });
-        },
-        .linux => {
-            const content = try generateResolvedConfig(allocator, cfg);
-            defer allocator.free(content);
-            try writeFilePrivileged(allocator, resolved_path, content);
-            try runCommand(allocator, &.{ "sudo", "systemctl", "restart", "systemd-resolved" });
-        },
-        .windows => {
-            const content = try generateAcrylicConfig(allocator, cfg);
-            defer allocator.free(content);
-            const appdata = std.process.getEnvVarOwned(allocator, "PROGRAMFILES") catch return error.AcrylicNotFound;
-            defer allocator.free(appdata);
-            const path = try std.fmt.allocPrint(allocator, "{s}\\Acrylic DNS Proxy\\AcrylicHosts.txt", .{appdata});
-            defer allocator.free(path);
-            try writeFilePrivileged(allocator, path, content);
-        },
-        else => return error.UnsupportedOS,
+    // For now, let's focus on /etc/hosts as it's the most universal and simple for MVP
+    const entries = try generateHostsEntries(allocator, cfg);
+    defer allocator.free(entries);
+
+    try applyHostsEntries(allocator, cfg.project, entries);
+
+    if (comptime builtin.os.tag == .macos) {
+        try runCommand(allocator, &.{ "dscacheutil", "-flushcache" });
+        try runCommand(allocator, &.{ "killall", "-HUP", "mDNSResponder" });
     }
+}
+
+/// Safely apply hosts entries by wrapping them in markers.
+fn applyHostsEntries(allocator: std.mem.Allocator, project: []const u8, new_entries: []const u8) !void {
+    const exec = @import("exec");
+    
+    // Read current hosts
+    var buf: [64 * 1024]u8 = undefined;
+    const argv_cat = [_][*:0]const u8{ "cat", hosts_path };
+    const current_hosts = try exec.runCapture(&argv_cat, &buf);
+
+    var new_content: std.ArrayList(u8) = .empty;
+    defer new_content.deinit(allocator);
+
+    const begin_marker = try std.fmt.allocPrint(allocator, "# rawenv:{s}", .{project});
+    defer allocator.free(begin_marker);
+    const end_marker = try std.fmt.allocPrint(allocator, "# end-rawenv:{s}", .{project});
+    defer allocator.free(end_marker);
+
+    var it = std.mem.splitScalar(u8, current_hosts, '\n');
+    var in_block = false;
+    var found_block = false;
+
+    while (it.next()) |line| {
+        if (std.mem.indexOf(u8, line, begin_marker) != null) {
+            in_block = true;
+            found_block = true;
+            try new_content.appendSlice(allocator, new_entries);
+            continue;
+        }
+        if (std.mem.indexOf(u8, line, end_marker) != null) {
+            in_block = false;
+            continue;
+        }
+        if (!in_block) {
+            try new_content.appendSlice(allocator, line);
+            try new_content.append(allocator, '\n');
+        }
+    }
+
+    if (!found_block) {
+        try new_content.appendSlice(allocator, new_entries);
+    }
+
+    try writeFilePrivileged(allocator, hosts_path, new_content.items);
 }
 
 pub fn teardownDNS(allocator: std.mem.Allocator) !void {
-    switch (builtin.os.tag) {
-        .macos => try runCommand(allocator, &.{ "sudo", "rm", "-f", dnsmasq_path }),
-        .linux => try runCommand(allocator, &.{ "sudo", "rm", "-f", resolved_path }),
-        else => {},
-    }
+    // TODO: remove project block from /etc/hosts
+    _ = allocator;
 }
 
 fn writeFilePrivileged(allocator: std.mem.Allocator, path: []const u8, content: []const u8) !void {
-    var child = std.process.Child.init(&.{ "sudo", "tee", path }, allocator);
-    child.stdin_behavior = .pipe;
-    child.stdout_behavior = .ignore;
-    try child.spawn();
-    try child.stdin.?.writeAll(content);
-    child.stdin.?.close();
-    child.stdin = null;
-    _ = try child.wait();
+    const exec = @import("exec");
+    const path_z = try allocator.dupeZ(u8, path);
+    defer allocator.free(path_z);
+    
+    // Use sudo tee to write to privileged file
+    // Since run doesn't support stdin piping yet, we'll use run_shell_command from outside
+    // or implement a simple pipe in exec.zig. 
+    // For now, let's use a temporary file and sudo mv.
+    const tmp_path = "/tmp/rawenv-hosts.tmp";
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, tmp_path, .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644);
+    defer _ = std.c.close(fd);
+    _ = std.c.write(fd, content.ptr, content.len);
+
+    const mv_argv = [_][*:0]const u8{ "sudo", "mv", tmp_path, path_z };
+    const exit_code = try exec.run(&mv_argv);
+    if (exit_code != 0) return error.WriteFailed;
 }
 
 fn runCommand(allocator: std.mem.Allocator, argv: []const []const u8) !void {
-    var child = std.process.Child.init(argv, allocator);
-    child.stdout_behavior = .ignore;
-    child.stderr_behavior = .ignore;
-    try child.spawn();
-    _ = try child.wait();
+    const exec = @import("exec");
+    var argv_z = try allocator.alloc([*:0]const u8, argv.len);
+    defer allocator.free(argv_z);
+    for (argv, 0..) |a, i| argv_z[i] = try allocator.dupeZ(u8, a);
+    defer {
+        for (argv_z) |a| allocator.free(std.mem.sliceTo(a, 0));
+    }
+    _ = try exec.run(argv_z);
 }
