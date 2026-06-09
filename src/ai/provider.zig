@@ -26,9 +26,9 @@ pub const Message = struct {
 
 pub fn defaultConfig(p: Provider) ProviderConfig {
     return switch (p) {
-        .groq => .{ .endpoint = "https://api.groq.com/openai/v1/chat/completions", .model = "llama-3.3-70b-versatile" },
-        .cerebras => .{ .endpoint = "https://api.cerebras.ai/v1/chat/completions", .model = "llama-3.3-70b" },
-        .cloudflare => .{ .endpoint = "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1/chat/completions", .model = "@cf/meta/llama-3.3-70b-instruct-fp8-fast" },
+        .groq => .{ .endpoint = "https://api.groq.com/openai/v1/chat/completions", .model = "llama-3.3-70b" },
+        .cerebras => .{ .endpoint = "https://api.cerebras.ai/v1/chat/completions", .model = "qwen3-235b" },
+        .cloudflare => .{ .endpoint = "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1/chat/completions", .model = "@cf/meta/llama-3-8b" },
         .ollama => .{ .endpoint = "http://localhost:11434/v1/chat/completions", .model = "llama3" },
         .custom => .{ .endpoint = "", .model = "" },
     };

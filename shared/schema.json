@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Use --spec=draft2020 with ajv-cli or validate with: npx ajv-cli@5 validate --spec=draft2020 -s schema.json -d mock-data.json",
+  "$id": "https://rawenv.sh/shared/schema.json",
+  "title": "rawenv Mock Data",
+  "description": "Single source of truth for rawenv GUI mock data across macOS, Linux, and Windows platforms.",
+  "type": "object",
+  "required": ["services", "logs", "aiMessages", "connections", "projects", "settings", "installer", "deploy"],
+  "properties": {
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "port", "version", "status", "icon"],
+        "properties": {
+          "name": {"type": "string"},
+          "port": {"type": "integer"},
+          "version": {"type": "string"},
+          "pid": {"type": ["integer", "null"]},
+          "cpu": {"type": ["string", "null"]},
+          "mem": {"type": ["string", "null"]},
+          "uptime": {"type": ["string", "null"]},
+          "status": {"type": "string", "enum": ["running", "stopped", "error"]},
+          "icon": {"type": "string"}
+        }
+      }
+    },
+    "logs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["time", "msg", "level"],
+        "properties": {
+          "time": {"type": "string", "pattern": "^\\d{2}:\\d{2}:\\d{2}$"},
+          "msg": {"type": "string"},
+          "level": {"type": "string", "enum": ["normal", "active", "warn", "error"]}
+        }
+      }
+    },
+    "aiMessages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["role", "text"],
+        "properties": {
+          "role": {"type": "string", "enum": ["assistant", "user"]},
+          "text": {"type": "string"}
+        }
+      }
+    },
+    "connections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["envVar", "original", "mode", "badge"],
+        "properties": {
+          "envVar": {"type": "string"},
+          "original": {"type": "string"},
+          "local": {"type": "string"},
+          "proxy": {"type": "string"},
+          "alternative": {"type": "string"},
+          "mode": {"type": "string", "enum": ["local", "proxy", "remote"]},
+          "badge": {"type": "string"}
+        }
+      }
+    },
+    "projects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "stack", "deps"],
+        "properties": {
+          "name": {"type": "string"},
+          "path": {"type": "string"},
+          "stack": {"type": "array", "items": {"type": "string"}},
+          "deps": {"type": "string"}
+        }
+      }
+    },
+    "settings": {
+      "type": "object",
+      "required": ["general", "network", "cells", "deploy", "ai", "theme"],
+      "properties": {
+        "general": {
+          "type": "object",
+          "properties": {
+            "storeLocation": {"type": "string"},
+            "autoStartServices": {"type": "boolean"},
+            "autoDetectProjects": {"type": "boolean"},
+            "launchAtLogin": {"type": "boolean"},
+            "fileWatcher": {"type": "boolean"},
+            "scanPaths": {"type": "array", "items": {"type": "string"}}
+          }
+        },
+        "network": {
+          "type": "object",
+          "properties": {
+            "localDomain": {"type": "string"},
+            "autoTls": {"type": "boolean"},
+            "proxyPort": {"type": "integer"},
+            "tunnelProvider": {"type": "string"},
+            "relayServer": {"type": "string"}
+          }
+        },
+        "cells": {
+          "type": "object",
+          "properties": {
+            "enableByDefault": {"type": "boolean"},
+            "defaultMemoryLimit": {"type": "string"},
+            "defaultCpuLimit": {"type": "string"},
+            "networkIsolation": {"type": "boolean"}
+          }
+        },
+        "deploy": {
+          "type": "object",
+          "properties": {
+            "provider": {"type": "string"},
+            "sshKey": {"type": "string"},
+            "terraformPath": {"type": "string"},
+            "ansiblePath": {"type": "string"},
+            "autoGenerate": {"type": "boolean"},
+            "containerRuntime": {"type": "string"},
+            "registry": {"type": "string"}
+          }
+        },
+        "ai": {
+          "type": "object",
+          "properties": {
+            "provider": {"type": "string"},
+            "providers": {"type": "array", "items": {"type": "string"}},
+            "apiKey": {"type": "string"},
+            "ollamaEndpoint": {"type": "string"},
+            "proactiveSuggestions": {"type": "boolean"},
+            "autoApplySafeFixes": {"type": "boolean"},
+            "includeLogsInContext": {"type": "boolean"},
+            "maxContextSize": {"type": "integer"},
+            "autonomyLevels": {"type": "array", "items": {"type": "string"}},
+            "defaultAutonomy": {"type": "string"}
+          }
+        },
+        "theme": {
+          "type": "object",
+          "properties": {
+            "mode": {"type": "string", "enum": ["dark", "light"]},
+            "accentColor": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
+            "successColor": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
+            "errorColor": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
+            "warningColor": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
+            "borderRadius": {"type": "integer"},
+            "fontSize": {"type": "integer"},
+            "sidebarWidth": {"type": "integer"}
+          }
+        }
+      }
+    },
+    "installer": {
+      "type": "object",
+      "required": ["steps", "platforms"],
+      "properties": {
+        "steps": {"type": "array", "items": {"type": "string"}},
+        "platforms": {
+          "type": "object",
+          "patternProperties": {
+            "^(macos|linux|windows)$": {
+              "type": "object",
+              "required": ["icon", "name", "detail", "serviceManager", "isolation", "dns"],
+              "properties": {
+                "icon": {"type": "string"},
+                "name": {"type": "string"},
+                "detail": {"type": "string"},
+                "serviceManager": {"type": "string"},
+                "isolation": {"type": "string"},
+                "dns": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "deploy": {
+      "type": "object",
+      "required": ["terraform", "ansible", "containerfile"],
+      "properties": {
+        "terraform": {"type": "string"},
+        "ansible": {"type": "string"},
+        "containerfile": {"type": "string"}
+      }
+    }
+  }
+}

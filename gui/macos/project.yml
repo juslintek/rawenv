@@ -1,0 +1,52 @@
+name: Rawenv
+options:
+  bundleIdPrefix: io.rawenv
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+settings:
+  SWIFT_VERSION: "6.0"
+targets:
+  RawenvLib:
+    type: framework
+    platform: macOS
+    sources:
+      - path: Sources/Rawenv
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: io.rawenv.lib
+      GENERATE_INFOPLIST_FILE: YES
+      PRODUCT_NAME: RawenvLib
+      PRODUCT_MODULE_NAME: RawenvLib
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
+      DEFINES_MODULE: YES
+  Rawenv:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/RawenvApp
+    dependencies:
+      - target: RawenvLib
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: io.rawenv.app
+      GENERATE_INFOPLIST_FILE: YES
+      PRODUCT_NAME: Rawenv
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+      INFOPLIST_KEY_LSUIElement: NO
+      INFOPLIST_KEY_NSPrincipalClass: NSApplication
+      CODE_SIGN_ENTITLEMENTS: Rawenv.entitlements
+      INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+      INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 rawenv. All rights reserved."
+      MARKETING_VERSION: "0.2.0"
+      CURRENT_PROJECT_VERSION: "1"
+  RawenvUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: Rawenv
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: io.rawenv.uitests
+      GENERATE_INFOPLIST_FILE: YES
+      TEST_TARGET_NAME: Rawenv

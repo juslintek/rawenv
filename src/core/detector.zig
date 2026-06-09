@@ -40,6 +40,21 @@ pub fn detect(allocator: std.mem.Allocator, dir: std.Io.Dir) !DetectionResult {
         parseEnvServices(allocator, data, &services) catch {};
     }
 
+    if (readFile(allocator, dir, "Cargo.toml")) |data| {
+        defer allocator.free(data);
+        try runtimes.append(allocator, .{ .key = "rust", .value = "stable" });
+    }
+
+    if (readFile(allocator, dir, "go.mod")) |data| {
+        defer allocator.free(data);
+        try runtimes.append(allocator, .{ .key = "go", .value = "1.22" });
+    }
+
+    if (readFile(allocator, dir, "requirements.txt")) |data| {
+        defer allocator.free(data);
+        try runtimes.append(allocator, .{ .key = "python", .value = "3.12" });
+    }
+
     if (readFile(allocator, dir, "docker-compose.yml")) |data| {
         defer allocator.free(data);
         parseDockerComposeServices(allocator, data, &services) catch {};

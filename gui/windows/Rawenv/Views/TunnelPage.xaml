@@ -1,0 +1,17 @@
+<Page
+    x:Class="Rawenv.Views.TunnelPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <TextBlock Text="Tunnel" Style="{StaticResource TitleTextBlockStyle}" AutomationProperties.AutomationId="TunnelTitle"/>
+        <TextBox Grid.Row="1" Header="Local port" Text="3000" AutomationProperties.AutomationId="TunnelPort"/>
+        <Button Grid.Row="2" Content="Generate SSH Tunnel Command" AutomationProperties.AutomationId="TunnelGenerateButton"/>
+        <TextBlock Grid.Row="3" Text="ssh -R 80:localhost:3000 bore.pub" FontFamily="Consolas" AutomationProperties.AutomationId="TunnelCommand" Margin="0,12,0,0"/>
+    </Grid>
+</Page>

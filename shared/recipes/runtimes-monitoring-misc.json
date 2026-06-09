@@ -1,0 +1,223 @@
+{
+  "version": "1.0",
+  "services": {
+    "node": {
+      "name": "Node.js",
+      "category": "runtime",
+      "description": "JavaScript runtime",
+      "icon": "💚",
+      "versions": ["22", "20", "18"],
+      "default_version": "22",
+      "default_port": 3000,
+      "install": {
+        "macos": "curl -fsSL https://nodejs.org/dist/v{version}.0.0/node-v{version}.0.0-darwin-arm64.tar.gz | tar xz -C ~/.rawenv/store/",
+        "linux": "curl -fsSL https://nodejs.org/dist/v{version}.0.0/node-v{version}.0.0-linux-x64.tar.xz | tar xJ -C ~/.rawenv/store/"
+      },
+      "start": "node {entry_point}",
+      "stop": "pkill -f 'node.*{entry_point}'",
+      "init": "npm init -y",
+      "config_file": "package.json",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "python": {
+      "name": "Python",
+      "category": "runtime",
+      "description": "Python interpreter",
+      "icon": "🐍",
+      "versions": ["3.12", "3.11", "3.10"],
+      "default_version": "3.12",
+      "default_port": 8000,
+      "install": {
+        "macos": "curl -fsSL https://www.python.org/ftp/python/{version}.0/python-{version}.0-macos11.pkg -o /tmp/py.pkg && installer -pkg /tmp/py.pkg -target CurrentUserHomeDirectory",
+        "linux": "curl -fsSL https://www.python.org/ftp/python/{version}.0/Python-{version}.0.tgz | tar xz -C /tmp/ && cd /tmp/Python-{version}.0 && ./configure --prefix=$HOME/.rawenv/store/python-{version} && make -j$(nproc) install"
+      },
+      "start": "python -m {framework} run --port {port}",
+      "stop": "pkill -f 'python.*{port}'",
+      "init": "python -m venv .venv",
+      "config_file": "pyproject.toml",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "php": {
+      "name": "PHP",
+      "category": "runtime",
+      "description": "PHP interpreter with built-in server",
+      "icon": "🐘",
+      "versions": ["8.4", "8.3", "8.2"],
+      "default_version": "8.4",
+      "default_port": 8080,
+      "install": {
+        "macos": "curl -fsSL https://www.php.net/distributions/php-{version}.0.tar.gz | tar xz -C /tmp/ && cd /tmp/php-{version}.0 && ./configure --prefix=$HOME/.rawenv/store/php-{version} && make -j$(sysctl -n hw.ncpu) install",
+        "linux": "curl -fsSL https://www.php.net/distributions/php-{version}.0.tar.gz | tar xz -C /tmp/ && cd /tmp/php-{version}.0 && ./configure --prefix=$HOME/.rawenv/store/php-{version} && make -j$(nproc) install"
+      },
+      "start": "php -S 127.0.0.1:{port} -t public/",
+      "stop": "pkill -f 'php.*{port}'",
+      "init": "composer init --no-interaction",
+      "config_file": "php.ini",
+      "config_defaults": {"memory_limit": "256M", "upload_max_filesize": "64M", "post_max_size": "64M"},
+      "plugins": {
+        "redis": {"version": "6.0", "install": "pecl install redis", "description": "Redis client extension"},
+        "xdebug": {"version": "3.3", "install": "pecl install xdebug", "description": "Debugger and profiler"},
+        "imagick": {"version": "3.7", "install": "pecl install imagick", "description": "ImageMagick bindings"},
+        "apcu": {"version": "5.1", "install": "pecl install apcu", "description": "User-land cache"},
+        "swoole": {"version": "5.1", "install": "pecl install swoole", "description": "Async coroutine framework"}
+      }
+    },
+    "ruby": {
+      "name": "Ruby",
+      "category": "runtime",
+      "description": "Ruby interpreter",
+      "icon": "💎",
+      "versions": ["3.3", "3.2", "3.1"],
+      "default_version": "3.3",
+      "default_port": 3000,
+      "install": {
+        "macos": "curl -fsSL https://cache.ruby-lang.org/pub/ruby/{version}/ruby-{version}.0.tar.gz | tar xz -C /tmp/ && cd /tmp/ruby-{version}.0 && ./configure --prefix=$HOME/.rawenv/store/ruby-{version} && make -j$(sysctl -n hw.ncpu) install",
+        "linux": "curl -fsSL https://cache.ruby-lang.org/pub/ruby/{version}/ruby-{version}.0.tar.gz | tar xz -C /tmp/ && cd /tmp/ruby-{version}.0 && ./configure --prefix=$HOME/.rawenv/store/ruby-{version} && make -j$(nproc) install"
+      },
+      "start": "bundle exec rails server -p {port}",
+      "stop": "pkill -f 'ruby.*{port}'",
+      "init": "bundle init",
+      "config_file": "Gemfile",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "go": {
+      "name": "Go",
+      "category": "runtime",
+      "description": "Go programming language",
+      "icon": "🐹",
+      "versions": ["1.22", "1.21"],
+      "default_version": "1.22",
+      "default_port": 8080,
+      "install": {
+        "macos": "curl -fsSL https://go.dev/dl/go{version}.0.darwin-arm64.tar.gz | tar xz -C ~/.rawenv/store/go-{version}/",
+        "linux": "curl -fsSL https://go.dev/dl/go{version}.0.linux-amd64.tar.gz | tar xz -C ~/.rawenv/store/go-{version}/"
+      },
+      "start": "go run .",
+      "stop": "pkill -f 'go.*run'",
+      "init": "go mod init",
+      "config_file": "go.mod",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "prometheus": {
+      "name": "Prometheus",
+      "category": "monitoring",
+      "description": "Metrics collection and alerting",
+      "icon": "📈",
+      "versions": ["2.51"],
+      "default_version": "2.51",
+      "default_port": 9090,
+      "install": {
+        "macos": "curl -fsSL https://github.com/prometheus/prometheus/releases/download/v{version}.0/prometheus-{version}.0.darwin-arm64.tar.gz | tar xz -C ~/.rawenv/store/",
+        "linux": "curl -fsSL https://github.com/prometheus/prometheus/releases/download/v{version}.0/prometheus-{version}.0.linux-amd64.tar.gz | tar xz -C ~/.rawenv/store/"
+      },
+      "start": "prometheus --config.file={config_file} --storage.tsdb.path={data_dir} --web.listen-address=:{port} &",
+      "stop": "pkill -f 'prometheus.*{port}'",
+      "init": "mkdir -p {data_dir}",
+      "config_file": "prometheus.yml",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "grafana": {
+      "name": "Grafana",
+      "category": "monitoring",
+      "description": "Observability dashboards and visualization",
+      "icon": "📊",
+      "versions": ["10.4"],
+      "default_version": "10.4",
+      "default_port": 3001,
+      "install": {
+        "macos": "curl -fsSL https://dl.grafana.com/oss/release/grafana-{version}.0.darwin-arm64.tar.gz | tar xz -C ~/.rawenv/store/",
+        "linux": "curl -fsSL https://dl.grafana.com/oss/release/grafana-{version}.0.linux-amd64.tar.gz | tar xz -C ~/.rawenv/store/"
+      },
+      "start": "grafana-server --homepath={store_dir} --config={config_file} &",
+      "stop": "pkill -f grafana-server",
+      "init": "mkdir -p {data_dir}",
+      "config_file": "grafana.ini",
+      "config_defaults": {"server.http_port": "3001"},
+      "plugins": {
+        "redis-datasource": {"version": "2.2", "install": "grafana-cli plugins install redis-datasource", "description": "Redis data source"},
+        "postgres-datasource": {"version": "1.0", "install": "# Built-in", "description": "PostgreSQL data source"}
+      }
+    },
+    "minio": {
+      "name": "MinIO",
+      "category": "storage",
+      "description": "S3-compatible object storage",
+      "icon": "🪣",
+      "versions": ["latest"],
+      "default_version": "latest",
+      "default_port": 9000,
+      "install": {
+        "macos": "curl -fsSL https://dl.min.io/server/minio/release/darwin-arm64/minio -o ~/.rawenv/store/minio-latest/minio && chmod +x ~/.rawenv/store/minio-latest/minio",
+        "linux": "curl -fsSL https://dl.min.io/server/minio/release/linux-amd64/minio -o ~/.rawenv/store/minio-latest/minio && chmod +x ~/.rawenv/store/minio-latest/minio"
+      },
+      "start": "MINIO_ROOT_USER=rawenv MINIO_ROOT_PASSWORD=rawenv123 minio server {data_dir} --address :{port} &",
+      "stop": "pkill -f 'minio.*{port}'",
+      "init": "mkdir -p {data_dir}",
+      "config_file": null,
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "mailpit": {
+      "name": "Mailpit",
+      "category": "dev-tools",
+      "description": "Email testing tool (catches all outgoing mail)",
+      "icon": "📬",
+      "versions": ["1.17"],
+      "default_version": "1.17",
+      "default_port": 8025,
+      "install": {
+        "macos": "curl -fsSL https://github.com/axllent/mailpit/releases/download/v{version}.0/mailpit-darwin-arm64.tar.gz | tar xz -C ~/.rawenv/store/mailpit-{version}/",
+        "linux": "curl -fsSL https://github.com/axllent/mailpit/releases/download/v{version}.0/mailpit-linux-amd64.tar.gz | tar xz -C ~/.rawenv/store/mailpit-{version}/"
+      },
+      "start": "mailpit --listen 127.0.0.1:{port} --smtp 127.0.0.1:1025 --db-file {data_dir}/mailpit.db &",
+      "stop": "pkill -f mailpit",
+      "init": "mkdir -p {data_dir}",
+      "config_file": null,
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "caddy": {
+      "name": "Caddy",
+      "category": "web-server",
+      "description": "Web server with automatic HTTPS",
+      "icon": "🌐",
+      "versions": ["2.7"],
+      "default_version": "2.7",
+      "default_port": 443,
+      "install": {
+        "macos": "curl -fsSL https://github.com/caddyserver/caddy/releases/download/v{version}.6/caddy_{version}.6_mac_arm64.tar.gz | tar xz -C ~/.rawenv/store/caddy-{version}/",
+        "linux": "curl -fsSL https://github.com/caddyserver/caddy/releases/download/v{version}.6/caddy_{version}.6_linux_amd64.tar.gz | tar xz -C ~/.rawenv/store/caddy-{version}/"
+      },
+      "start": "caddy start --config {config_file}",
+      "stop": "caddy stop",
+      "init": "mkdir -p {data_dir}",
+      "config_file": "Caddyfile",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "nginx": {
+      "name": "Nginx",
+      "category": "web-server",
+      "description": "High-performance web server and reverse proxy",
+      "icon": "🟢",
+      "versions": ["1.25"],
+      "default_version": "1.25",
+      "default_port": 80,
+      "install": {
+        "macos": "brew install nginx || curl -fsSL https://nginx.org/download/nginx-{version}.0.tar.gz | tar xz -C /tmp/ && cd /tmp/nginx-{version}.0 && ./configure --prefix=$HOME/.rawenv/store/nginx-{version} && make install",
+        "linux": "curl -fsSL https://nginx.org/download/nginx-{version}.0.tar.gz | tar xz -C /tmp/ && cd /tmp/nginx-{version}.0 && ./configure --prefix=$HOME/.rawenv/store/nginx-{version} && make -j$(nproc) install"
+      },
+      "start": "nginx -c {config_file}",
+      "stop": "nginx -s stop",
+      "init": "mkdir -p {data_dir}",
+      "config_file": "nginx.conf",
+      "config_defaults": {},
+      "plugins": {}
+    }
+  }
+}

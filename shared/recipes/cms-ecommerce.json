@@ -1,0 +1,290 @@
+{
+  "version": "1.0",
+  "services": {
+    "wordpress": {
+      "name": "WordPress",
+      "category": "cms",
+      "description": "World's most popular CMS powering 40%+ of the web",
+      "icon": "📝",
+      "versions": ["6.5", "6.4"],
+      "default_version": "6.5",
+      "default_port": 8080,
+      "install": {
+        "macos": "curl -fsSL https://wordpress.org/wordpress-{version}.tar.gz | tar xz -C {data_dir}/",
+        "linux": "curl -fsSL https://wordpress.org/wordpress-{version}.tar.gz | tar xz -C {data_dir}/"
+      },
+      "start": "cd {data_dir}/wordpress && php -S 127.0.0.1:{port} > {log_dir}/wordpress.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cp {data_dir}/wordpress/wp-config-sample.php {data_dir}/wordpress/wp-config.php",
+      "config_file": "wp-config.php",
+      "config_defaults": {"DB_NAME": "wordpress", "DB_USER": "root", "DB_HOST": "localhost"},
+      "plugins": {}
+    },
+    "ghost": {
+      "name": "Ghost",
+      "category": "cms",
+      "description": "Modern publishing platform for blogs and newsletters",
+      "icon": "👻",
+      "versions": ["5.82", "5.80"],
+      "default_version": "5.82",
+      "default_port": 2368,
+      "install": {
+        "macos": "npm install ghost-cli@latest -g && ghost install local --dir {data_dir}",
+        "linux": "npm install ghost-cli@latest -g && ghost install local --dir {data_dir}"
+      },
+      "start": "cd {data_dir} && ghost start --port {port} > {log_dir}/ghost.log 2>&1 &",
+      "stop": "cd {data_dir} && ghost stop",
+      "init": "cd {data_dir} && ghost setup",
+      "config_file": "config.development.json",
+      "config_defaults": {"url": "http://localhost:{port}", "database.client": "sqlite3"},
+      "plugins": {}
+    },
+    "strapi": {
+      "name": "Strapi",
+      "category": "cms",
+      "description": "Open-source headless CMS with customizable API",
+      "icon": "🚀",
+      "versions": ["4.24", "4.23"],
+      "default_version": "4.24",
+      "default_port": 1337,
+      "install": {
+        "macos": "npx create-strapi-app@{version} {data_dir} --quickstart --no-run",
+        "linux": "npx create-strapi-app@{version} {data_dir} --quickstart --no-run"
+      },
+      "start": "cd {data_dir} && npm run develop -- --port {port} > {log_dir}/strapi.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && npm install",
+      "config_file": "config/server.js",
+      "config_defaults": {"host": "0.0.0.0", "port": "{port}"},
+      "plugins": {}
+    },
+    "directus": {
+      "name": "Directus",
+      "category": "cms",
+      "description": "Open data platform with REST and GraphQL APIs",
+      "icon": "🐰",
+      "versions": ["10.12", "10.11"],
+      "default_version": "10.12",
+      "default_port": 8055,
+      "install": {
+        "macos": "npm init directus-project@{version} {data_dir}",
+        "linux": "npm init directus-project@{version} {data_dir}"
+      },
+      "start": "cd {data_dir} && npx directus start --port {port} > {log_dir}/directus.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && npx directus bootstrap",
+      "config_file": ".env",
+      "config_defaults": {"DB_CLIENT": "sqlite3", "PORT": "{port}", "SECRET": "rawenv-dev-secret"},
+      "plugins": {}
+    },
+    "payload": {
+      "name": "Payload CMS",
+      "category": "cms",
+      "description": "TypeScript headless CMS with code-first config",
+      "icon": "🎯",
+      "versions": ["2.18", "2.17"],
+      "default_version": "2.18",
+      "default_port": 3000,
+      "install": {
+        "macos": "npx create-payload-app@{version} {data_dir}",
+        "linux": "npx create-payload-app@{version} {data_dir}"
+      },
+      "start": "cd {data_dir} && npm run dev > {log_dir}/payload.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && npm install",
+      "config_file": "payload.config.ts",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "sanity": {
+      "name": "Sanity",
+      "category": "cms",
+      "description": "Structured content platform with real-time collaboration",
+      "icon": "🔴",
+      "versions": ["3.42", "3.40"],
+      "default_version": "3.42",
+      "default_port": 3333,
+      "install": {
+        "macos": "npm create sanity@{version} -- --output-path {data_dir}",
+        "linux": "npm create sanity@{version} -- --output-path {data_dir}"
+      },
+      "start": "cd {data_dir} && npx sanity dev --port {port} > {log_dir}/sanity.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && npm install",
+      "config_file": "sanity.config.ts",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "keystonejs": {
+      "name": "KeystoneJS",
+      "category": "cms",
+      "description": "Programmable GraphQL API backend and CMS",
+      "icon": "🔑",
+      "versions": ["8.3", "8.2"],
+      "default_version": "8.3",
+      "default_port": 3000,
+      "install": {
+        "macos": "npm init @keystone-next@latest {data_dir}",
+        "linux": "npm init @keystone-next@latest {data_dir}"
+      },
+      "start": "cd {data_dir} && npm run dev > {log_dir}/keystone.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && npm install",
+      "config_file": "keystone.ts",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "woocommerce": {
+      "name": "WooCommerce",
+      "category": "ecommerce",
+      "description": "WordPress-based e-commerce plugin for online stores",
+      "icon": "🛒",
+      "versions": ["8.9", "8.8"],
+      "default_version": "8.9",
+      "default_port": 8080,
+      "install": {
+        "macos": "curl -fsSL https://downloads.wordpress.org/plugin/woocommerce.{version}.zip -o /tmp/woo.zip && unzip -q /tmp/woo.zip -d {data_dir}/wp-content/plugins/",
+        "linux": "curl -fsSL https://downloads.wordpress.org/plugin/woocommerce.{version}.zip -o /tmp/woo.zip && unzip -q /tmp/woo.zip -d {data_dir}/wp-content/plugins/"
+      },
+      "start": "cd {data_dir} && php -S 127.0.0.1:{port} > {log_dir}/woocommerce.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "wp plugin activate woocommerce",
+      "config_file": "wp-config.php",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "magento": {
+      "name": "Magento",
+      "category": "ecommerce",
+      "description": "Enterprise-grade PHP e-commerce platform by Adobe",
+      "icon": "🟧",
+      "versions": ["2.4.7", "2.4.6"],
+      "default_version": "2.4.7",
+      "default_port": 8080,
+      "install": {
+        "macos": "composer create-project --repository-url=https://repo.magento.com/ magento/project-community-edition={version} {data_dir}",
+        "linux": "composer create-project --repository-url=https://repo.magento.com/ magento/project-community-edition={version} {data_dir}"
+      },
+      "start": "cd {data_dir} && php -S 127.0.0.1:{port} -t pub/ > {log_dir}/magento.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && bin/magento setup:install",
+      "config_file": "app/etc/env.php",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "shopify-cli": {
+      "name": "Shopify CLI",
+      "category": "ecommerce",
+      "description": "Local development environment for Shopify apps and themes",
+      "icon": "🟢",
+      "versions": ["3.60", "3.58"],
+      "default_version": "3.60",
+      "default_port": 9292,
+      "install": {
+        "macos": "npm install -g @shopify/cli@{version} @shopify/theme",
+        "linux": "npm install -g @shopify/cli@{version} @shopify/theme"
+      },
+      "start": "cd {data_dir} && shopify app dev --port {port} > {log_dir}/shopify.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "shopify app init --path {data_dir}",
+      "config_file": "shopify.app.toml",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "medusa": {
+      "name": "Medusa",
+      "category": "ecommerce",
+      "description": "Open-source headless commerce engine in Node.js",
+      "icon": "🟣",
+      "versions": ["1.20", "1.19"],
+      "default_version": "1.20",
+      "default_port": 9000,
+      "install": {
+        "macos": "npx create-medusa-app@{version} {data_dir}",
+        "linux": "npx create-medusa-app@{version} {data_dir}"
+      },
+      "start": "cd {data_dir} && npx medusa develop --port {port} > {log_dir}/medusa.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && npx medusa migrations run",
+      "config_file": "medusa-config.js",
+      "config_defaults": {"database_url": "postgres://localhost:5432/medusa"},
+      "plugins": {}
+    },
+    "saleor": {
+      "name": "Saleor",
+      "category": "ecommerce",
+      "description": "GraphQL-first headless e-commerce platform in Python",
+      "icon": "🛍️",
+      "versions": ["3.20", "3.19"],
+      "default_version": "3.20",
+      "default_port": 8000,
+      "install": {
+        "macos": "git clone --branch {version} --depth 1 https://github.com/saleor/saleor.git {data_dir}",
+        "linux": "git clone --branch {version} --depth 1 https://github.com/saleor/saleor.git {data_dir}"
+      },
+      "start": "cd {data_dir} && python manage.py runserver 0.0.0.0:{port} > {log_dir}/saleor.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && pip install -r requirements.txt && python manage.py migrate",
+      "config_file": ".env",
+      "config_defaults": {"DATABASE_URL": "postgres://localhost:5432/saleor"},
+      "plugins": {}
+    },
+    "sylius": {
+      "name": "Sylius",
+      "category": "ecommerce",
+      "description": "Symfony-based e-commerce framework for custom stores",
+      "icon": "🐝",
+      "versions": ["1.13", "1.12"],
+      "default_version": "1.13",
+      "default_port": 8000,
+      "install": {
+        "macos": "composer create-project sylius/sylius-standard={version} {data_dir}",
+        "linux": "composer create-project sylius/sylius-standard={version} {data_dir}"
+      },
+      "start": "cd {data_dir} && symfony server:start --port {port} --daemon > {log_dir}/sylius.log 2>&1",
+      "stop": "cd {data_dir} && symfony server:stop",
+      "init": "cd {data_dir} && php bin/console sylius:install",
+      "config_file": ".env.local",
+      "config_defaults": {"DATABASE_URL": "mysql://root@localhost:3306/sylius"},
+      "plugins": {}
+    },
+    "prestashop": {
+      "name": "PrestaShop",
+      "category": "ecommerce",
+      "description": "Open-source PHP e-commerce solution",
+      "icon": "🛒",
+      "versions": ["8.1", "8.0"],
+      "default_version": "8.1",
+      "default_port": 8080,
+      "install": {
+        "macos": "curl -fsSL https://github.com/PrestaShop/PrestaShop/releases/download/{version}.0/prestashop_{version}.0.zip -o /tmp/ps.zip && unzip -q /tmp/ps.zip -d {data_dir}/",
+        "linux": "curl -fsSL https://github.com/PrestaShop/PrestaShop/releases/download/{version}.0/prestashop_{version}.0.zip -o /tmp/ps.zip && unzip -q /tmp/ps.zip -d {data_dir}/"
+      },
+      "start": "cd {data_dir} && php -S 127.0.0.1:{port} > {log_dir}/prestashop.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && php install/index_cli.php",
+      "config_file": "app/config/parameters.php",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "bagisto": {
+      "name": "Bagisto",
+      "category": "ecommerce",
+      "description": "Laravel-based open-source e-commerce framework",
+      "icon": "🧳",
+      "versions": ["2.1", "2.0"],
+      "default_version": "2.1",
+      "default_port": 8000,
+      "install": {
+        "macos": "composer create-project bagisto/bagisto={version} {data_dir}",
+        "linux": "composer create-project bagisto/bagisto={version} {data_dir}"
+      },
+      "start": "cd {data_dir} && php artisan serve --port {port} > {log_dir}/bagisto.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && php artisan bagisto:install",
+      "config_file": ".env",
+      "config_defaults": {"DB_CONNECTION": "mysql", "DB_HOST": "127.0.0.1", "DB_PORT": "3306"},
+      "plugins": {}
+    }
+  }
+}

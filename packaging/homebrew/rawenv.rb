@@ -6,23 +6,23 @@ class Rawenv < Formula
 
   on_macos do
     on_arm do
-      url "https://github.com/rawenv/rawenv/releases/download/vVERSION/rawenv-aarch64-macos.tar.gz"
-      sha256 "SHA256_AARCH64_MACOS"
+      url "https://github.com/rawenv/rawenv/releases/download/vVERSION/rawenv-macos-arm64"
+      sha256 "SHA256_MACOS_ARM64"
     end
     on_intel do
-      url "https://github.com/rawenv/rawenv/releases/download/vVERSION/rawenv-x86_64-macos.tar.gz"
-      sha256 "SHA256_X86_64_MACOS"
+      url "https://github.com/rawenv/rawenv/releases/download/vVERSION/rawenv-macos-x64"
+      sha256 "SHA256_MACOS_X64"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/rawenv/rawenv/releases/download/vVERSION/rawenv-aarch64-linux.tar.gz"
-      sha256 "SHA256_AARCH64_LINUX"
+      url "https://github.com/rawenv/rawenv/releases/download/vVERSION/rawenv-linux-arm64"
+      sha256 "SHA256_LINUX_ARM64"
     end
     on_intel do
-      url "https://github.com/rawenv/rawenv/releases/download/vVERSION/rawenv-x86_64-linux.tar.gz"
-      sha256 "SHA256_X86_64_LINUX"
+      url "https://github.com/rawenv/rawenv/releases/download/vVERSION/rawenv-linux-x64"
+      sha256 "SHA256_LINUX_X64"
     end
   end
 

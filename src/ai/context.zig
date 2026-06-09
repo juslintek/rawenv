@@ -24,6 +24,9 @@ pub const ProjectContext = struct {
     services: []const ServiceInfo = &.{},
     os: []const u8 = "",
     isolation: []const u8 = "",
+    env_vars: []const EnvVar = &.{},
+
+    pub const EnvVar = struct { key: []const u8, value: []const u8 };
 };
 
 pub fn buildContext(allocator: std.mem.Allocator, ctx: ProjectContext, token_limit: u32) ![]u8 {
@@ -55,6 +58,19 @@ pub fn buildContext(allocator: std.mem.Allocator, ctx: ProjectContext, token_lim
 
     try buf.appendSlice(allocator, "\nBe concise. Use monospace for commands/paths. Suggest optimizations proactively.");
 
+    if (ctx.env_vars.len > 0) {
+        try buf.appendSlice(allocator, "\nEnv:\n");
+        for (ctx.env_vars) |ev| {
+            try buf.print(allocator, "  {s}=", .{ev.key});
+            if (isSecret(ev.key)) {
+                try buf.appendSlice(allocator, "****");
+            } else {
+                try buf.appendSlice(allocator, ev.value);
+            }
+            try buf.append(allocator, '\n');
+        }
+    }
+
     // Rough token estimate: ~4 chars per token. Truncate if over limit.
     const char_limit = limit * 4;
     if (buf.items.len > char_limit) {
@@ -62,4 +78,12 @@ pub fn buildContext(allocator: std.mem.Allocator, ctx: ProjectContext, token_lim
     }
 
     return buf.toOwnedSlice(allocator);
+}
+
+fn isSecret(key: []const u8) bool {
+    const secret_patterns = [_][]const u8{ "PASSWORD", "SECRET", "TOKEN", "API_KEY", "PRIVATE_KEY" };
+    for (secret_patterns) |pat| {
+        if (std.ascii.indexOfIgnoreCase(key, pat) != null) return true;
+    }
+    return false;
 }

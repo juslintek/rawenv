@@ -194,6 +194,18 @@ test "connections - ConnectionMap parseServiceDeps" {
     try testing.expectEqualStrings("redis", map.links.items[2].to);
 }
 
+test "connections - suggestLocalUrl returns localhost URL" {
+    const url = try connections.suggestLocalUrl(testing.allocator, "postgres://user:pass@rds.aws.com:5432/db");
+    defer testing.allocator.free(url);
+    try testing.expectEqualStrings("postgres://localhost:5432", url);
+}
+
+test "connections - suggestLocalUrl preserves scheme" {
+    const url = try connections.suggestLocalUrl(testing.allocator, "redis://cache.example.com:6379");
+    defer testing.allocator.free(url);
+    try testing.expectEqualStrings("redis://localhost:6379", url);
+}
+
 // ============================================================
 // Proxy route matching tests
 // ============================================================
@@ -252,6 +264,21 @@ test "proxy - generateNginxConfig" {
     try testing.expect(std.mem.indexOf(u8, config, "proxy_pass http://localhost:3000") != null);
 }
 
+test "proxy - generateCaddyfile with TLS" {
+    const routes = [_]proxy.ProxyRoute{
+        .{ .domain = "myapp.test", .target_port = 3000, .tls = true },
+        .{ .domain = "pg.myapp.test", .target_port = 5432, .tls = false },
+    };
+    const config = try proxy.generateCaddyfile(testing.allocator, &routes);
+    defer testing.allocator.free(config);
+
+    try testing.expect(std.mem.indexOf(u8, config, "myapp.test {") != null);
+    try testing.expect(std.mem.indexOf(u8, config, "reverse_proxy localhost:3000") != null);
+    try testing.expect(std.mem.indexOf(u8, config, "tls internal") != null);
+    try testing.expect(std.mem.indexOf(u8, config, "pg.myapp.test {") != null);
+    try testing.expect(std.mem.indexOf(u8, config, "reverse_proxy localhost:5432") != null);
+}
+
 // ============================================================
 // Tunnel manager tests
 // ============================================================
@@ -278,6 +305,33 @@ test "tunnel - TunnelConfig generateSshCommand" {
     defer testing.allocator.free(cmd);
 
     try testing.expectEqualStrings("ssh -R 3000:localhost:3000 deploy@myserver.com -N", cmd);
+}
+
+test "tunnel - generateBoreCommand" {
+    const argv = try tunnel.generateBoreCommand(testing.allocator, 3000, "bore.pub");
+    defer {
+        testing.allocator.free(argv[2]); // port string
+        testing.allocator.free(argv);
+    }
+    try testing.expectEqual(@as(usize, 5), argv.len);
+    try testing.expectEqualStrings("bore", argv[0]);
+    try testing.expectEqualStrings("local", argv[1]);
+    try testing.expectEqualStrings("3000", argv[2]);
+    try testing.expectEqualStrings("--to", argv[3]);
+    try testing.expectEqualStrings("bore.pub", argv[4]);
+}
+
+test "tunnel - generateCloudflaredCommand" {
+    const argv = try tunnel.generateCloudflaredCommand(testing.allocator, 8080);
+    defer {
+        testing.allocator.free(argv[3]); // origin url
+        testing.allocator.free(argv);
+    }
+    try testing.expectEqual(@as(usize, 4), argv.len);
+    try testing.expectEqualStrings("cloudflared", argv[0]);
+    try testing.expectEqualStrings("tunnel", argv[1]);
+    try testing.expectEqualStrings("--url", argv[2]);
+    try testing.expectEqualStrings("http://localhost:8080", argv[3]);
 }
 
 test "tunnel - TunnelConfig generateSshCommand with key and remote port" {

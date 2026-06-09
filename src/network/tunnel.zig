@@ -131,6 +131,45 @@ pub const TunnelManager = struct {
     }
 };
 
+pub const Provider = enum { bore, cloudflared, ngrok };
+
+/// Generate bore command argv for a given port and relay server.
+pub fn generateBoreCommand(allocator: std.mem.Allocator, local_port: u16, relay_server: []const u8) ![]const []const u8 {
+    const port_str = try std.fmt.allocPrint(allocator, "{d}", .{local_port});
+    errdefer allocator.free(port_str);
+    const result = try allocator.alloc([]const u8, 5);
+    result[0] = "bore";
+    result[1] = "local";
+    result[2] = port_str;
+    result[3] = "--to";
+    result[4] = relay_server;
+    return result;
+}
+
+/// Generate cloudflared command argv for a given port.
+pub fn generateCloudflaredCommand(allocator: std.mem.Allocator, local_port: u16) ![]const []const u8 {
+    const origin = try std.fmt.allocPrint(allocator, "http://localhost:{d}", .{local_port});
+    errdefer allocator.free(origin);
+    const result = try allocator.alloc([]const u8, 4);
+    result[0] = "cloudflared";
+    result[1] = "tunnel";
+    result[2] = "--url";
+    result[3] = origin;
+    return result;
+}
+
+/// Generate ngrok command argv for a given port.
+pub fn generateNgrokCommand(allocator: std.mem.Allocator, local_port: u16) ![]const []const u8 {
+    const port_str = try std.fmt.allocPrint(allocator, "{d}", .{local_port});
+    errdefer allocator.free(port_str);
+    const result = try allocator.alloc([]const u8, 4);
+    result[0] = "ngrok";
+    result[1] = "http";
+    result[2] = "--log=stdout";
+    result[3] = port_str;
+    return result;
+}
+
 /// Check if a tunnel backend binary is available on PATH.
 pub fn isBackendAvailable(allocator: std.mem.Allocator, name: []const u8) bool {
     var child = std.process.Child.init(&.{ "which", name }, allocator);

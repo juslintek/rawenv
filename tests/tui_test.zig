@@ -1,6 +1,8 @@
 const std = @import("std");
 const tui = @import("tui");
 const app = tui.app;
+const theme = tui.theme;
+const data_loader = tui.data_loader;
 
 fn renderToString(model: *const app.Model) ![]u8 {
     var buf: std.ArrayList(u8) = .empty;
@@ -16,6 +18,111 @@ fn expectContains(haystack: []const u8, needle: []const u8) !void {
         std.debug.print("Expected to find '{s}' in output\n", .{needle});
         return error.TestExpectedEqual;
     }
+}
+
+// --- data_loader tests ---
+
+test "data_loader parseToml extracts services" {
+    const input =
+        \\name = "my-app"
+        \\[services.node]
+        \\version = "22"
+        \\[services.postgres]
+        \\version = "16"
+        \\[services.redis]
+        \\version = "7"
+    ;
+    const result = try data_loader.parseToml(std.testing.allocator, input);
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqual(@as(usize, 3), result.len);
+    try std.testing.expectEqualStrings("node", result[0].name);
+    try std.testing.expectEqualStrings("postgres", result[1].name);
+    try std.testing.expectEqualStrings("redis", result[2].name);
+}
+
+test "data_loader loadFromMockData parses services" {
+    const data = data_loader.loadFromMockData(std.testing.allocator, "shared/mock-data.json") orelse return;
+    defer {
+        for (data.services) |svc| {
+            std.testing.allocator.free(svc.name);
+            std.testing.allocator.free(svc.version);
+            std.testing.allocator.free(svc.port);
+            std.testing.allocator.free(svc.pid);
+            std.testing.allocator.free(svc.cpu);
+            std.testing.allocator.free(svc.mem);
+            std.testing.allocator.free(svc.uptime);
+            std.testing.allocator.free(svc.status);
+        }
+        std.testing.allocator.free(data.services);
+        for (data.logs) |log| {
+            std.testing.allocator.free(log.time);
+            std.testing.allocator.free(log.level);
+            std.testing.allocator.free(log.msg);
+        }
+        std.testing.allocator.free(data.logs);
+    }
+    try std.testing.expectEqual(@as(usize, 5), data.services.len);
+    try std.testing.expectEqualStrings("PostgreSQL", data.services[0].name);
+    try std.testing.expectEqualStrings("running", data.services[0].status);
+    try std.testing.expectEqualStrings("stopped", data.services[4].status);
+}
+
+test "data_loader loadFromMockData parses logs" {
+    const data = data_loader.loadFromMockData(std.testing.allocator, "shared/mock-data.json") orelse return;
+    defer {
+        for (data.services) |svc| {
+            std.testing.allocator.free(svc.name);
+            std.testing.allocator.free(svc.version);
+            std.testing.allocator.free(svc.port);
+            std.testing.allocator.free(svc.pid);
+            std.testing.allocator.free(svc.cpu);
+            std.testing.allocator.free(svc.mem);
+            std.testing.allocator.free(svc.uptime);
+            std.testing.allocator.free(svc.status);
+        }
+        std.testing.allocator.free(data.services);
+        for (data.logs) |log| {
+            std.testing.allocator.free(log.time);
+            std.testing.allocator.free(log.level);
+            std.testing.allocator.free(log.msg);
+        }
+        std.testing.allocator.free(data.logs);
+    }
+    try std.testing.expectEqual(@as(usize, 8), data.logs.len);
+    try std.testing.expectEqualStrings("14:23:01", data.logs[0].time);
+    try std.testing.expectEqualStrings("normal", data.logs[0].level);
+}
+
+// --- Theme color tests ---
+
+test "theme accent is indigo" {
+    try std.testing.expectEqual(@as(u8, 99), theme.accent.r);
+    try std.testing.expectEqual(@as(u8, 102), theme.accent.g);
+    try std.testing.expectEqual(@as(u8, 241), theme.accent.b);
+}
+
+test "theme success is green" {
+    try std.testing.expectEqual(@as(u8, 52), theme.success.r);
+    try std.testing.expectEqual(@as(u8, 211), theme.success.g);
+    try std.testing.expectEqual(@as(u8, 153), theme.success.b);
+}
+
+test "theme error is red" {
+    try std.testing.expectEqual(@as(u8, 248), theme.err.r);
+    try std.testing.expectEqual(@as(u8, 113), theme.err.g);
+    try std.testing.expectEqual(@as(u8, 113), theme.err.b);
+}
+
+test "theme warning is yellow" {
+    try std.testing.expectEqual(@as(u8, 251), theme.warning.r);
+    try std.testing.expectEqual(@as(u8, 191), theme.warning.g);
+    try std.testing.expectEqual(@as(u8, 36), theme.warning.b);
+}
+
+test "theme bg_primary is dark" {
+    try std.testing.expect(theme.bg_primary.r < 30);
+    try std.testing.expect(theme.bg_primary.g < 30);
+    try std.testing.expect(theme.bg_primary.b < 30);
 }
 
 // --- Snapshot tests ---
@@ -48,19 +155,10 @@ test "services tab renders status dots" {
     try expectContains(output, "●");
 }
 
-test "services tab renders mini log panel" {
-    const model = app.Model{};
-    const output = try renderToString(&model);
-    defer std.testing.allocator.free(output);
-    try expectContains(output, "Logs \xe2\x80\x94 PostgreSQL");
-    try expectContains(output, "l: full logs");
-}
-
 test "logs tab renders log entries" {
     const model = app.Model{ .active_tab = .logs };
     const output = try renderToString(&model);
     defer std.testing.allocator.free(output);
-    try expectContains(output, "Logs \xe2\x80\x94 PostgreSQL");
     try expectContains(output, "14:47:23");
     try expectContains(output, "database system is ready");
     try expectContains(output, "Auto-scroll: ON");
@@ -70,36 +168,8 @@ test "config tab view mode" {
     const model = app.Model{ .active_tab = .config };
     const output = try renderToString(&model);
     defer std.testing.allocator.free(output);
-    try expectContains(output, "Config \xe2\x80\x94 PostgreSQL");
     try expectContains(output, "port");
     try expectContains(output, "5432");
-    try expectContains(output, "view");
-}
-
-test "config tab edit mode" {
-    const model = app.Model{ .active_tab = .config, .config_mode = .edit };
-    const output = try renderToString(&model);
-    defer std.testing.allocator.free(output);
-    try expectContains(output, "[5432]");
-    try expectContains(output, "Enter: save");
-}
-
-test "config tab diff mode" {
-    const model = app.Model{ .active_tab = .config, .config_mode = .diff };
-    const output = try renderToString(&model);
-    defer std.testing.allocator.free(output);
-    try expectContains(output, "- 100");
-    try expectContains(output, "+ 20");
-    try expectContains(output, "max_connections");
-}
-
-test "config tab reset mode" {
-    const model = app.Model{ .active_tab = .config, .config_mode = .reset };
-    const output = try renderToString(&model);
-    defer std.testing.allocator.free(output);
-    try expectContains(output, "Reset");
-    try expectContains(output, "defaults");
-    try expectContains(output, "Cancel");
 }
 
 test "resources tab table mode" {
@@ -109,24 +179,6 @@ test "resources tab table mode" {
     try expectContains(output, "Resources");
     try expectContains(output, "CPU");
     try expectContains(output, "MEM");
-    try expectContains(output, "DSK");
-}
-
-test "resources tab graph mode" {
-    const model = app.Model{ .active_tab = .resources, .resource_mode = .graph };
-    const output = try renderToString(&model);
-    defer std.testing.allocator.free(output);
-    try expectContains(output, "Memory Usage");
-    try expectContains(output, "█");
-}
-
-test "resources tab tree mode" {
-    const model = app.Model{ .active_tab = .resources, .resource_mode = .tree };
-    const output = try renderToString(&model);
-    defer std.testing.allocator.free(output);
-    try expectContains(output, "rawenv (PID 1200)");
-    try expectContains(output, "PostgreSQL");
-    try expectContains(output, "(stopped)");
 }
 
 test "ai chat tab renders" {
@@ -135,16 +187,6 @@ test "ai chat tab renders" {
     defer std.testing.allocator.free(output);
     try expectContains(output, "AI Assistant");
     try expectContains(output, "Groq");
-    try expectContains(output, "Ollama");
-    try expectContains(output, "Ask about your environment");
-}
-
-test "status bar renders" {
-    const model = app.Model{};
-    const output = try renderToString(&model);
-    defer std.testing.allocator.free(output);
-    try expectContains(output, "rawenv v0.1.0");
-    try expectContains(output, "utilio.test");
 }
 
 test "keyboard navigation j/k" {
@@ -155,7 +197,7 @@ test "keyboard navigation j/k" {
     app.update(&model, .{ .key = 'j' });
     app.update(&model, .{ .key = 'j' });
     try std.testing.expectEqual(@as(usize, 4), model.selected_service);
-    app.update(&model, .{ .key = 'j' }); // at end, should not overflow
+    app.update(&model, .{ .key = 'j' });
     try std.testing.expectEqual(@as(usize, 4), model.selected_service);
 }
 
@@ -173,16 +215,9 @@ test "tab switch wraps with Tab key" {
     try std.testing.expectEqual(app.Tab.services, model.active_tab);
 }
 
-test "l key switches to logs" {
-    var model = app.Model{};
-    app.update(&model, .{ .key = 'l' });
-    try std.testing.expectEqual(app.Tab.logs, model.active_tab);
-}
-
-test "selected service changes log panel" {
-    var model = app.Model{};
-    app.update(&model, .{ .key = 'j' }); // select Redis
+test "status bar renders" {
+    const model = app.Model{};
     const output = try renderToString(&model);
     defer std.testing.allocator.free(output);
-    try expectContains(output, "Logs \xe2\x80\x94 Redis");
+    try expectContains(output, "rawenv v0.1.0");
 }

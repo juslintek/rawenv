@@ -6,14 +6,19 @@ const gui = @import("gui");
 const deploy = @import("deploy");
 const ai = @import("ai");
 
-/// Simple stdout writer using C write(2) — no Io dependency.
+/// Simple stdout writer — platform-compatible.
 pub const StdoutWriter = struct {
     pub fn writeAll(_: StdoutWriter, bytes: []const u8) !void {
-        var written: usize = 0;
-        while (written < bytes.len) {
-            const n = std.c.write(1, bytes.ptr + written, bytes.len - written);
-            if (n < 0) return error.WriteFailed;
-            written += @intCast(n);
+        const builtin = @import("builtin");
+        if (comptime builtin.os.tag == .windows) {
+            std.debug.print("{s}", .{bytes});
+        } else {
+            var written: usize = 0;
+            while (written < bytes.len) {
+                const n = std.c.write(1, bytes.ptr + written, bytes.len - written);
+                if (n < 0) return error.WriteFailed;
+                written += @intCast(n);
+            }
         }
     }
     pub fn print(self: StdoutWriter, comptime fmt: []const u8, args: anytype) !void {
@@ -58,33 +63,42 @@ const help =
 
 pub fn main(init: std.process.Init) !void {
     const stdout = StdoutWriter{};
-    const gpa = init.gpa;
+    const allocator = init.gpa;
 
     // Collect args
     var args_list: std.ArrayList([:0]const u8) = .empty;
-    defer args_list.deinit(gpa);
-    var args_iter = std.process.Args.Iterator.init(init.minimal.args);
+    defer args_list.deinit(allocator);
+    var args_iter = if (comptime @import("builtin").os.tag == .windows)
+        try std.process.Args.Iterator.initAllocator(init.minimal.args, allocator)
+    else
+        std.process.Args.Iterator.init(init.minimal.args);
+    defer if (comptime @import("builtin").os.tag == .windows) args_iter.deinit();
     while (args_iter.next()) |arg| {
-        try args_list.append(gpa, arg);
+        try args_list.append(allocator, arg);
     }
     const args = args_list.items;
 
     var i: usize = 1;
+    var json_mode = false;
+    // Pre-scan for --json flag
+    for (args[1..]) |a| {
+        if (std.mem.eql(u8, a, "--json")) { json_mode = true; break; }
+    }
     while (i < args.len) : (i += 1) {
         const arg = args[i];
+        if (std.mem.eql(u8, arg, "--json")) continue;
         if (std.mem.eql(u8, arg, "--version")) {
-            try stdout.writeAll(version ++ "\n");
+            if (json_mode) {
+                try stdout.writeAll("{\"version\":\"" ++ version ++ "\"}\n");
+            } else {
+                try stdout.writeAll(version ++ "\n");
+            }
             return;
         }
         if (std.mem.eql(u8, arg, "--help")) {
             try stdout.writeAll(help);
             return;
         }
-
-        var arena = std.heap.ArenaAllocator.init(gpa);
-        defer arena.deinit();
-        const allocator = arena.allocator();
-
         if (std.mem.eql(u8, arg, "init")) {
             commands.runInit(allocator, stdout) catch {
                 try stdout.writeAll("Error: init failed\n");
@@ -110,7 +124,7 @@ pub fn main(init: std.process.Init) !void {
         if (std.mem.eql(u8, arg, "services")) {
             const sub = if (i + 1 < args.len) args[i + 1] else "";
             if (std.mem.eql(u8, sub, "ls")) {
-                commands.runServicesList(allocator, stdout) catch {
+                commands.runServicesList(allocator, stdout, json_mode) catch {
                     try stdout.writeAll("Error: services ls failed\n");
                 };
             } else {
@@ -125,29 +139,15 @@ pub fn main(init: std.process.Init) !void {
             return;
         }
         if (std.mem.eql(u8, arg, "dns")) {
-            const sub = if (i + 1 < args.len) args[i + 1] else "";
-            if (std.mem.eql(u8, sub, "setup")) {
-                commands.runDnsSetup(allocator, stdout) catch {
-                    try stdout.writeAll("Error: dns setup failed\n");
-                };
-            } else {
-                commands.runDns(allocator, stdout) catch {
-                    try stdout.writeAll("Error: dns failed\n");
-                };
-            }
+            commands.runDns(allocator, stdout) catch {
+                try stdout.writeAll("Error: dns failed\n");
+            };
             return;
         }
         if (std.mem.eql(u8, arg, "proxy")) {
-            const sub = if (i + 1 < args.len) args[i + 1] else "";
-            if (std.mem.eql(u8, sub, "setup")) {
-                commands.runProxySetup(allocator, stdout) catch {
-                    try stdout.writeAll("Error: proxy setup failed\n");
-                };
-            } else {
-                commands.runProxy(allocator, stdout) catch {
-                    try stdout.writeAll("Error: proxy failed\n");
-                };
-            }
+            commands.runProxy(allocator, stdout) catch {
+                try stdout.writeAll("Error: proxy failed\n");
+            };
             return;
         }
         if (std.mem.eql(u8, arg, "tunnel")) {
@@ -161,7 +161,7 @@ pub fn main(init: std.process.Init) !void {
             return;
         }
         if (std.mem.eql(u8, arg, "connections")) {
-            commands.runConnections(allocator, stdout) catch {
+            commands.runConnections(allocator, stdout, json_mode) catch {
                 try stdout.writeAll("Error: connections failed\n");
             };
             return;
@@ -178,7 +178,7 @@ pub fn main(init: std.process.Init) !void {
             return;
         }
         if (std.mem.eql(u8, arg, "discover")) {
-            commands.runDiscover(allocator, stdout) catch {
+            commands.runDiscover(allocator, stdout, json_mode) catch {
                 try stdout.writeAll("Error: discover failed\n");
             };
             return;
@@ -189,6 +189,14 @@ pub fn main(init: std.process.Init) !void {
             };
             return;
         }
+        if (std.mem.eql(u8, arg, "tui")) {
+            try tui.run();
+            return;
+        }
+        if (std.mem.eql(u8, arg, "gui")) {
+            try gui.run();
+            return;
+        }
         if (std.mem.eql(u8, arg, "menubar")) {
             commands.runMenubar(allocator, stdout) catch {
                 try stdout.writeAll("Error: menubar failed\n");
@@ -197,9 +205,7 @@ pub fn main(init: std.process.Init) !void {
         }
         if (std.mem.eql(u8, arg, "ai")) {
             if (i + 1 < args.len) {
-                runAiOneShot(allocator, stdout, args[i + 1]) catch {
-                    try stdout.writeAll("Error: ai failed\n");
-                };
+                try runAiOneShot(allocator, stdout, args[i + 1]);
             } else {
                 try stdout.writeAll("Usage: rawenv ai \"your question\"\n");
             }
@@ -208,25 +214,12 @@ pub fn main(init: std.process.Init) !void {
         if (std.mem.eql(u8, arg, "deploy")) {
             const sub = if (i + 1 < args.len) args[i + 1] else "";
             if (std.mem.eql(u8, sub, "generate")) {
-                handleDeployGenerate(allocator, stdout) catch {
-                    try stdout.writeAll("Error: deploy generate failed\n");
-                };
+                try handleDeployGenerate(allocator, stdout, json_mode);
             } else if (std.mem.eql(u8, sub, "apply")) {
-                handleDeployApply(stdout) catch {
-                    try stdout.writeAll("Error: deploy apply failed\n");
-                };
+                try handleDeployApply(stdout);
             } else {
                 try stdout.writeAll("Usage: rawenv deploy [generate|apply]\n");
             }
-            return;
-        }
-
-        if (std.mem.eql(u8, arg, "tui")) {
-            try tui.run();
-            return;
-        }
-        if (std.mem.eql(u8, arg, "gui")) {
-            try gui.run();
             return;
         }
     }
@@ -262,8 +255,12 @@ fn runAiOneShot(allocator: std.mem.Allocator, stdout: anytype, question: []const
     try stdout.writeAll("\n");
 }
 
-fn handleDeployGenerate(allocator: std.mem.Allocator, stdout: anytype) !void {
+fn handleDeployGenerate(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !void {
     const toml = blk: {
+        if (comptime @import("builtin").os.tag == .windows) {
+            try stdout.writeAll("Error: deploy generate not supported on Windows yet\n");
+            return;
+        }
         const fd = std.posix.openat(std.posix.AT.FDCWD, "rawenv.toml", .{}, 0) catch {
             try stdout.writeAll("Error: rawenv.toml not found in current directory\n");
             return;
@@ -305,6 +302,33 @@ fn handleDeployGenerate(allocator: std.mem.Allocator, stdout: anytype) !void {
 
     try stdout.writeAll("Generated deployment files:\n");
     try stdout.writeAll("  main.tf\n  variables.tf\n  outputs.tf\n  playbook.yml\n  Containerfile\n");
+
+    if (json_mode) {
+        // Overwrite with JSON (output after human text is fine, GUI reads last line)
+        try stdout.writeAll("{\"terraform\":\"");
+        // Escape newlines for JSON
+        for (main_tf) |c| {
+            if (c == '\n') { try stdout.writeAll("\\n"); }
+            else if (c == '"') { try stdout.writeAll("\\\""); }
+            else if (c == '\\') { try stdout.writeAll("\\\\"); }
+            else { try stdout.writeAll(&[_]u8{c}); }
+        }
+        try stdout.writeAll("\",\"ansible\":\"");
+        for (playbook) |c| {
+            if (c == '\n') { try stdout.writeAll("\\n"); }
+            else if (c == '"') { try stdout.writeAll("\\\""); }
+            else if (c == '\\') { try stdout.writeAll("\\\\"); }
+            else { try stdout.writeAll(&[_]u8{c}); }
+        }
+        try stdout.writeAll("\",\"containerfile\":\"");
+        for (containerfile) |c| {
+            if (c == '\n') { try stdout.writeAll("\\n"); }
+            else if (c == '"') { try stdout.writeAll("\\\""); }
+            else if (c == '\\') { try stdout.writeAll("\\\\"); }
+            else { try stdout.writeAll(&[_]u8{c}); }
+        }
+        try stdout.writeAll("\"}\n");
+    }
 }
 
 fn handleDeployApply(stdout: anytype) !void {

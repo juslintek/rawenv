@@ -1,0 +1,109 @@
+{
+  "services": [
+    {"name": "PostgreSQL", "port": 5432, "version": "18.2", "pid": 48291, "cpu": "2.1%", "mem": "84MB", "uptime": "2h 14m", "status": "running", "icon": "🐘"},
+    {"name": "Redis", "port": 6379, "version": "7.4", "pid": 48305, "cpu": "0.3%", "mem": "12MB", "uptime": "2h 14m", "status": "running", "icon": "🔴"},
+    {"name": "Meilisearch", "port": 7700, "version": "1.14", "pid": 48312, "cpu": "1.8%", "mem": "156MB", "uptime": "2h 14m", "status": "running", "icon": "🔍"},
+    {"name": "Node.js", "port": 3000, "version": "22.15", "pid": 48320, "cpu": "7.4%", "mem": "210MB", "uptime": "45m", "status": "running", "icon": "💚"},
+    {"name": "SQL Server", "port": 1433, "version": "2025", "pid": null, "cpu": null, "mem": null, "uptime": null, "status": "stopped", "icon": "🗄️"}
+  ],
+  "logs": [
+    {"time": "14:23:01", "msg": "LOG:  database system is ready to accept connections", "level": "normal"},
+    {"time": "14:23:05", "msg": "LOG:  autovacuum launcher started", "level": "normal"},
+    {"time": "14:25:12", "msg": "LOG:  connection received: host=127.0.0.1 port=52341", "level": "active"},
+    {"time": "14:25:12", "msg": "LOG:  connection authorized: user=myapp database=myapp_dev", "level": "active"},
+    {"time": "14:30:44", "msg": "WARNING:  could not open statistics file", "level": "warn"},
+    {"time": "14:35:01", "msg": "LOG:  checkpoint starting: time", "level": "normal"},
+    {"time": "14:35:02", "msg": "LOG:  checkpoint complete: wrote 42 buffers (0.3%)", "level": "normal"},
+    {"time": "14:40:15", "msg": "LOG:  connection received: host=127.0.0.1 port=52388", "level": "active"}
+  ],
+  "aiMessages": [
+    {"role": "assistant", "text": "I detected your project uses PostgreSQL with 100 max connections but only 3 active. I can optimize this to reduce memory by ~40MB."},
+    {"role": "user", "text": "Yes, optimize it"},
+    {"role": "assistant", "text": "Done. Set max_connections=20, shared_buffers=64MB. PostgreSQL restarted. Memory usage dropped from 84MB to 48MB."},
+    {"role": "user", "text": "How do I deploy this to Hetzner?"},
+    {"role": "assistant", "text": "I can generate Terraform configs for a Hetzner CX22 (2 vCPU, 4GB RAM, €4.85/mo). Run `rawenv deploy generate --provider hetzner` then `rawenv deploy apply`. Want me to do it?"}
+  ],
+  "connections": [
+    {"envVar": "DATABASE_URL", "original": "postgres://user:pass@rds.amazonaws.com:5432/prod", "local": "postgres://myapp:****@localhost:5432/myapp_dev", "mode": "local", "badge": "Local replacement"},
+    {"envVar": "REDIS_URL", "original": "redis://elasticache.amazonaws.com:6379", "local": "redis://localhost:6379", "mode": "local", "badge": "Local replacement"},
+    {"envVar": "MEILISEARCH_URL", "original": "https://ms.myapp.com:7700", "local": "localhost:7700", "proxy": "localhost:7700 → ms.myapp.com:7700", "mode": "proxy", "badge": "Remote (proxied)"},
+    {"envVar": "S3_ENDPOINT", "original": "s3.amazonaws.com", "alternative": "MinIO (local S3-compatible)", "mode": "remote", "badge": "Remote"}
+  ],
+  "projects": [
+    {"name": "utilio", "path": "~/Projects/GOTAS/utilio", "stack": ["Node.js", "Qwik", "PostgreSQL", "Redis", "Meilisearch", "SQL Server"], "deps": "14 deps"},
+    {"name": "vialietuva-legacy", "path": "~/Projects/GOTAS/vialietuva-legacy", "stack": ["PHP", "Laravel", "MySQL", "Redis"], "deps": "8 deps"},
+    {"name": "rawenv", "path": "~/Projects/rawenv", "stack": ["Zig"], "deps": "1 dep"},
+    {"name": "mcp-for-page-builders", "path": "/Volumes/Projects/mcp-for-page-builders", "stack": ["Rust", "Cargo"], "deps": "2 deps"},
+    {"name": "my-saas", "path": "~/Projects/my-saas", "stack": ["Node.js", "Next.js", "PostgreSQL", "Redis", "S3"], "deps": "10 deps"},
+    {"name": "blog", "path": "~/Projects/blog", "stack": ["Ruby", "Jekyll"], "deps": "3 deps"},
+    {"name": "data-pipeline", "path": "~/Projects/data-pipeline", "stack": ["Python", "PostgreSQL", "Redis"], "deps": "6 deps"},
+    {"name": "mobile-app", "path": "~/Developer/mobile-app", "stack": ["Node.js", "React Native", "Firebase"], "deps": "5 deps"}
+  ],
+  "settings": {
+    "general": {
+      "storeLocation": "~/.rawenv/store/",
+      "autoStartServices": true,
+      "autoDetectProjects": true,
+      "launchAtLogin": false,
+      "fileWatcher": true,
+      "scanPaths": ["~/Projects", "~/Developer"]
+    },
+    "network": {
+      "localDomain": ".test",
+      "autoTls": true,
+      "proxyPort": 80,
+      "tunnelProvider": "bore (built-in)",
+      "relayServer": "bore.pub"
+    },
+    "cells": {
+      "enableByDefault": true,
+      "defaultMemoryLimit": "256MB",
+      "defaultCpuLimit": "1",
+      "networkIsolation": true
+    },
+    "deploy": {
+      "provider": "Hetzner",
+      "sshKey": "~/.ssh/id_ed25519.pub",
+      "terraformPath": "terraform",
+      "ansiblePath": "ansible-playbook",
+      "autoGenerate": false,
+      "containerRuntime": "Podman",
+      "registry": "ghcr.io/rawenv"
+    },
+    "ai": {
+      "provider": "Auto (Groq → Cerebras → CF)",
+      "providers": ["Auto (Groq → Cerebras → CF)", "Groq (Llama 3.3 70B)", "Cerebras (Qwen3 235B)", "Cloudflare Workers AI", "Google Gemini", "Mistral AI", "Ollama (local)", "Custom OpenAI-compatible"],
+      "apiKey": "",
+      "ollamaEndpoint": "http://localhost:11434",
+      "proactiveSuggestions": true,
+      "autoApplySafeFixes": false,
+      "includeLogsInContext": true,
+      "maxContextSize": 4096,
+      "autonomyLevels": ["suggest-only", "auto-apply-safe", "confirm-dangerous", "full-autonomous"],
+      "defaultAutonomy": "suggest-only"
+    },
+    "theme": {
+      "mode": "dark",
+      "accentColor": "#6366f1",
+      "successColor": "#34d399",
+      "errorColor": "#f87171",
+      "warningColor": "#fbbf24",
+      "borderRadius": 8,
+      "fontSize": 13,
+      "sidebarWidth": 240
+    }
+  },
+  "installer": {
+    "steps": ["welcome", "install", "done"],
+    "platforms": {
+      "macos": {"icon": "🍎", "name": "macOS", "detail": "Apple Silicon · macOS 26", "serviceManager": "launchd", "isolation": "Seatbelt sandbox", "dns": "dnsmasq"},
+      "linux": {"icon": "🐧", "name": "Linux", "detail": "x86_64 · Debian 13", "serviceManager": "systemd", "isolation": "Namespaces + Landlock", "dns": "systemd-resolved"},
+      "windows": {"icon": "🪟", "name": "Windows", "detail": "x86_64 · Windows 11", "serviceManager": "Windows Services", "isolation": "AppContainer", "dns": "Acrylic DNS"}
+    }
+  },
+  "deploy": {
+    "terraform": "# Generated by rawenv from rawenv.toml\n# Provider: Hetzner CX22\n\nresource \"hcloud_server\" \"myapp\" {\n  name        = \"myapp-prod\"\n  server_type = \"cx22\"\n  image       = \"debian-13\"\n  location    = \"fsn1\"\n  ssh_keys    = [hcloud_ssh_key.default.id]\n}",
+    "ansible": "# Generated by rawenv — Ansible playbook\n\n---\n- hosts: production\n  become: true\n  tasks:\n    - name: Install rawenv\n      shell: curl -fsSL rawenv.sh/install | sh\n    - name: Copy config\n      copy: src=rawenv.toml dest=/opt/myapp/rawenv.toml\n    - name: Start services\n      shell: cd /opt/myapp && rawenv up",
+    "containerfile": "FROM debian:13-slim\nRUN curl -fsSL rawenv.sh/install | sh\nCOPY rawenv.toml /app/rawenv.toml\nWORKDIR /app\nRUN rawenv init --from-toml rawenv.toml\nEXPOSE 3000 5432 6379 7700\nCMD [\"rawenv\", \"up\", \"--foreground\"]"
+  }
+}

@@ -1,0 +1,99 @@
+<Page
+    x:Class="Rawenv.Views.DeployPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    RequestedTheme="Dark"
+    Loaded="Page_Loaded">
+
+    <Page.Resources>
+        <SolidColorBrush x:Key="BgPrimary" Color="#0f0f14"/>
+        <SolidColorBrush x:Key="BgSecondary" Color="#16161e"/>
+        <SolidColorBrush x:Key="BgTertiary" Color="#1e1e2a"/>
+        <SolidColorBrush x:Key="AccentPrimary" Color="#6366f1"/>
+        <SolidColorBrush x:Key="AccentSuccess" Color="#34d399"/>
+        <SolidColorBrush x:Key="AccentError" Color="#f87171"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#e2e4f0"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#8b8da6"/>
+        <SolidColorBrush x:Key="BorderDefault" Color="#2a2a3a"/>
+    </Page.Resources>
+
+    <Grid Background="{StaticResource BgPrimary}" Padding="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Grid Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Deploy" FontSize="24" FontWeight="Bold" Foreground="{StaticResource TextPrimary}"
+                       AutomationProperties.AutomationId="DeployTitle"/>
+            <Button x:Name="DeployButton" Grid.Column="1" Content="🚀 Deploy to Hetzner" Padding="16,8"
+                    Background="{StaticResource AccentPrimary}" Foreground="White" CornerRadius="6"
+                    Click="Deploy_Click" AutomationProperties.AutomationId="DeployButton"/>
+        </Grid>
+
+        <!-- Tabs: Terraform / Ansible / Containerfile / Deploy Log -->
+        <Pivot Grid.Row="1" AutomationProperties.AutomationId="DeployTabs">
+            <PivotItem Header="Terraform" AutomationProperties.AutomationId="TabTerraform">
+                <ScrollViewer>
+                    <TextBlock x:Name="TerraformText" FontFamily="Consolas" FontSize="12" Foreground="{StaticResource TextSecondary}"
+                               TextWrapping="Wrap" AutomationProperties.AutomationId="TerraformContent"/>
+                </ScrollViewer>
+            </PivotItem>
+            <PivotItem Header="Ansible" AutomationProperties.AutomationId="TabAnsible">
+                <ScrollViewer>
+                    <TextBlock x:Name="AnsibleText" FontFamily="Consolas" FontSize="12" Foreground="{StaticResource TextSecondary}"
+                               TextWrapping="Wrap" AutomationProperties.AutomationId="AnsibleContent"/>
+                </ScrollViewer>
+            </PivotItem>
+            <PivotItem Header="Containerfile" AutomationProperties.AutomationId="TabContainerfile">
+                <ScrollViewer>
+                    <TextBlock x:Name="ContainerfileText" FontFamily="Consolas" FontSize="12" Foreground="{StaticResource TextSecondary}"
+                               TextWrapping="Wrap" AutomationProperties.AutomationId="ContainerfileContent"/>
+                </ScrollViewer>
+            </PivotItem>
+            <PivotItem Header="Deploy Log" AutomationProperties.AutomationId="TabDeployLog">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <ProgressBar x:Name="DeployProgress" Maximum="1" Height="6"
+                                 Foreground="{StaticResource AccentPrimary}" Background="{StaticResource BgTertiary}" Margin="0,0,0,8"/>
+                    <ListView x:Name="DeployLogList" Grid.Row="1" Background="Transparent"
+                              AutomationProperties.AutomationId="DeployLogs">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Text}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"
+                                           Foreground="#8b8da6" Margin="0,4"/>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </PivotItem>
+        </Pivot>
+
+        <!-- AI Fix Panel -->
+        <Border x:Name="AIFixPanel" Grid.Row="2" Visibility="Collapsed" Background="{StaticResource BgSecondary}"
+                CornerRadius="8" Padding="12" Margin="0,12,0,0" AutomationProperties.AutomationId="AIFixPanel">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="🤖 AI detected a port conflict" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource AccentError}"/>
+                    <TextBlock Text="Redis port 6379 is in use by system redis-server" FontSize="12" Foreground="{StaticResource TextSecondary}"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="Apply AI Fix" Padding="16,8"
+                        Background="{StaticResource AccentSuccess}" Foreground="White" CornerRadius="6"
+                        Click="AIFix_Click" AutomationProperties.AutomationId="AIFixButton"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Page>

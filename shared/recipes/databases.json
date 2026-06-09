@@ -1,0 +1,128 @@
+{
+  "version": "1.0",
+  "services": {
+    "postgresql": {
+      "name": "PostgreSQL",
+      "category": "database",
+      "description": "Advanced open-source relational database",
+      "icon": "🐘",
+      "versions": ["17", "16", "15", "14"],
+      "default_version": "16",
+      "default_port": 5432,
+      "install": {
+        "macos": "curl -fsSL https://get.enterprisedb.com/postgresql/postgresql-{version}-1-osx-binaries.zip -o /tmp/pg.zip && unzip -q /tmp/pg.zip -d ~/.rawenv/store/postgresql-{version}/",
+        "linux": "curl -fsSL https://ftp.postgresql.org/pub/source/v{version}.0/postgresql-{version}.0.tar.gz | tar xz -C ~/.rawenv/store/"
+      },
+      "start": "pg_ctl -D {data_dir} -l {log_dir}/postgresql.log start",
+      "stop": "pg_ctl -D {data_dir} stop",
+      "init": "initdb -D {data_dir}",
+      "config_file": "postgresql.conf",
+      "config_defaults": {
+        "max_connections": "20",
+        "shared_buffers": "64MB",
+        "work_mem": "4MB",
+        "maintenance_work_mem": "64MB",
+        "effective_cache_size": "256MB",
+        "wal_level": "replica",
+        "max_wal_size": "256MB"
+      },
+      "plugins": {
+        "pgvector": {"version": "0.7", "install": "CREATE EXTENSION vector;", "description": "Vector similarity search for AI/ML embeddings"},
+        "postgis": {"version": "3.4", "install": "CREATE EXTENSION postgis;", "description": "Geographic/spatial objects and queries"},
+        "pg_stat_statements": {"version": "1.10", "install": "CREATE EXTENSION pg_stat_statements;", "description": "Query performance statistics"},
+        "pg_trgm": {"version": "1.6", "install": "CREATE EXTENSION pg_trgm;", "description": "Trigram-based text similarity"},
+        "uuid-ossp": {"version": "1.1", "install": "CREATE EXTENSION \"uuid-ossp\";", "description": "UUID generation functions"},
+        "hstore": {"version": "1.8", "install": "CREATE EXTENSION hstore;", "description": "Key-value store in a column"},
+        "pg_cron": {"version": "1.6", "install": "CREATE EXTENSION pg_cron;", "description": "Job scheduler inside PostgreSQL"},
+        "timescaledb": {"version": "2.14", "install": "CREATE EXTENSION timescaledb;", "description": "Time-series data at scale"},
+        "pgaudit": {"version": "16.0", "install": "CREATE EXTENSION pgaudit;", "description": "Audit logging"},
+        "pgrouting": {"version": "3.6", "install": "CREATE EXTENSION pgrouting;", "description": "Geospatial routing"}
+      }
+    },
+    "mysql": {
+      "name": "MySQL",
+      "category": "database",
+      "description": "Popular open-source relational database",
+      "icon": "🐬",
+      "versions": ["8.4", "8.0", "5.7"],
+      "default_version": "8.4",
+      "default_port": 3306,
+      "install": {
+        "macos": "curl -fsSL https://dev.mysql.com/get/Downloads/MySQL-{version}/mysql-{version}-macos14-arm64.tar.gz | tar xz -C ~/.rawenv/store/",
+        "linux": "curl -fsSL https://dev.mysql.com/get/Downloads/MySQL-{version}/mysql-{version}-linux-glibc2.28-x86_64.tar.xz | tar xJ -C ~/.rawenv/store/"
+      },
+      "start": "mysqld --datadir={data_dir} --socket={data_dir}/mysql.sock --port={port} &",
+      "stop": "mysqladmin -S {data_dir}/mysql.sock shutdown",
+      "init": "mysqld --initialize-insecure --datadir={data_dir}",
+      "config_file": "my.cnf",
+      "config_defaults": {
+        "innodb_buffer_pool_size": "128M",
+        "max_connections": "50",
+        "innodb_log_file_size": "48M",
+        "innodb_flush_method": "O_DIRECT"
+      },
+      "plugins": {
+        "group_replication": {"version": "8.4", "install": "INSTALL PLUGIN group_replication SONAME 'group_replication.so';", "description": "Multi-primary replication"},
+        "clone": {"version": "8.0", "install": "INSTALL PLUGIN clone SONAME 'mysql_clone.so';", "description": "Local/remote clone"},
+        "audit_log": {"version": "8.4", "install": "INSTALL PLUGIN audit_log SONAME 'audit_log.so';", "description": "Audit logging"}
+      }
+    },
+    "mariadb": {
+      "name": "MariaDB",
+      "category": "database",
+      "description": "MySQL-compatible community database",
+      "icon": "🦭",
+      "versions": ["11.4", "11.2", "10.11"],
+      "default_version": "11.4",
+      "default_port": 3306,
+      "install": {
+        "macos": "curl -fsSL https://downloads.mariadb.org/rest-api/mariadb/{version}/mariadb-{version}-osx-arm64.tar.gz | tar xz -C ~/.rawenv/store/",
+        "linux": "curl -fsSL https://downloads.mariadb.org/rest-api/mariadb/{version}/mariadb-{version}-linux-x86_64.tar.gz | tar xz -C ~/.rawenv/store/"
+      },
+      "start": "mariadbd --datadir={data_dir} --socket={data_dir}/mariadb.sock --port={port} &",
+      "stop": "mariadb-admin -S {data_dir}/mariadb.sock shutdown",
+      "init": "mariadb-install-db --datadir={data_dir}",
+      "config_file": "my.cnf",
+      "config_defaults": {"innodb_buffer_pool_size": "128M", "max_connections": "50"},
+      "plugins": {
+        "columnstore": {"version": "6.4", "install": "INSTALL SONAME 'ha_columnstore';", "description": "Columnar storage engine"},
+        "spider": {"version": "11.4", "install": "INSTALL SONAME 'ha_spider';", "description": "Sharding engine"}
+      }
+    },
+    "mongodb": {
+      "name": "MongoDB",
+      "category": "database",
+      "description": "Document-oriented NoSQL database",
+      "icon": "🍃",
+      "versions": ["7.0", "6.0"],
+      "default_version": "7.0",
+      "default_port": 27017,
+      "install": {
+        "macos": "curl -fsSL https://fastdl.mongodb.org/osx/mongodb-macos-arm64-{version}.0.tgz | tar xz -C ~/.rawenv/store/",
+        "linux": "curl -fsSL https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu2204-{version}.0.tgz | tar xz -C ~/.rawenv/store/"
+      },
+      "start": "mongod --dbpath {data_dir} --port {port} --logpath {log_dir}/mongod.log --fork",
+      "stop": "mongosh --port {port} --eval 'db.adminCommand({shutdown:1})'",
+      "init": "mkdir -p {data_dir}",
+      "config_file": "mongod.conf",
+      "config_defaults": {"storage.wiredTiger.engineConfig.cacheSizeGB": "0.25", "net.maxIncomingConnections": "50"},
+      "plugins": {}
+    },
+    "sqlite": {
+      "name": "SQLite",
+      "category": "database",
+      "description": "Embedded SQL database (no server needed)",
+      "icon": "📄",
+      "versions": ["3.45"],
+      "default_version": "3.45",
+      "default_port": 0,
+      "install": {"macos": "# Built into macOS", "linux": "apt-get install -y libsqlite3-dev || true"},
+      "start": "# No server needed - embedded",
+      "stop": "# No server needed - embedded",
+      "init": "# Auto-created on first use",
+      "config_file": null,
+      "config_defaults": {},
+      "plugins": {}
+    }
+  }
+}

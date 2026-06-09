@@ -173,6 +173,11 @@ pub fn teardownDNS(allocator: std.mem.Allocator) !void {
     _ = allocator;
 }
 
+/// Alias for setupDNS (task-spec naming).
+pub const installDns = setupDNS;
+/// Alias for teardownDNS (task-spec naming).
+pub const removeDns = teardownDNS;
+
 fn writeFilePrivileged(allocator: std.mem.Allocator, path: []const u8, content: []const u8) !void {
     const exec = @import("exec");
     const path_z = try allocator.dupeZ(u8, path);

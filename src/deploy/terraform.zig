@@ -1,9 +1,9 @@
 const std = @import("std");
 const config = @import("config");
 
-pub const Provider = enum { hetzner, aws, digitalocean, custom_ssh };
+pub const Provider = enum { hetzner, aws, digitalocean };
 
-pub fn generateMainTf(allocator: std.mem.Allocator, cfg: config.Config, provider: Provider) ![]const u8 {
+pub fn generateTerraform(allocator: std.mem.Allocator, cfg: config.Config, provider: Provider) ![]const u8 {
     var buf: std.ArrayList(u8) = .empty;
     defer buf.deinit(allocator);
 
@@ -12,7 +12,7 @@ pub fn generateMainTf(allocator: std.mem.Allocator, cfg: config.Config, provider
 
     switch (provider) {
         .hetzner => {
-            try buf.appendSlice(allocator, 
+            try buf.appendSlice(allocator,
                 \\terraform {
                 \\  required_providers {
                 \\    hcloud = {
@@ -22,23 +22,31 @@ pub fn generateMainTf(allocator: std.mem.Allocator, cfg: config.Config, provider
                 \\  }
                 \\}
                 \\
+                \\variable "api_token" {
+                \\  type      = string
+                \\  sensitive = true
+                \\}
+                \\
+                \\variable "ssh_key" {
+                \\  type = string
+                \\}
+                \\
                 \\provider "hcloud" {
                 \\  token = var.api_token
                 \\}
                 \\
                 \\resource "hcloud_server" "rawenv" {
-                \\  name        = var.server_name
-                \\  server_type = var.server_type
-                \\  image       = "debian-12"
-                \\  location    = var.location
-                \\
+                \\  name        = "rawenv-server"
+                \\  server_type = "cx22"
+                \\  image       = "debian-13"
+                \\  location    = "fsn1"
+                \\  ssh_keys    = [var.ssh_key]
+                \\}
                 \\
             );
-            try writeProvisioner(&buf, allocator);
-            try buf.appendSlice(allocator, "}\n");
         },
         .aws => {
-            try buf.appendSlice(allocator, 
+            try buf.appendSlice(allocator,
                 \\terraform {
                 \\  required_providers {
                 \\    aws = {
@@ -48,22 +56,29 @@ pub fn generateMainTf(allocator: std.mem.Allocator, cfg: config.Config, provider
                 \\  }
                 \\}
                 \\
+                \\variable "api_token" {
+                \\  type      = string
+                \\  sensitive = true
+                \\}
+                \\
+                \\variable "ssh_key" {
+                \\  type = string
+                \\}
+                \\
                 \\provider "aws" {
-                \\  region = var.region
+                \\  region = "us-east-1"
                 \\}
                 \\
                 \\resource "aws_instance" "rawenv" {
-                \\  ami           = var.ami
-                \\  instance_type = var.instance_type
-                \\  key_name      = var.key_name
-                \\
+                \\  ami           = "ami-0c55b159cbfafe1f0"
+                \\  instance_type = "t3.small"
+                \\  key_name      = var.ssh_key
+                \\}
                 \\
             );
-            try writeProvisioner(&buf, allocator);
-            try buf.appendSlice(allocator, "}\n");
         },
         .digitalocean => {
-            try buf.appendSlice(allocator, 
+            try buf.appendSlice(allocator,
                 \\terraform {
                 \\  required_providers {
                 \\    digitalocean = {
@@ -73,177 +88,45 @@ pub fn generateMainTf(allocator: std.mem.Allocator, cfg: config.Config, provider
                 \\  }
                 \\}
                 \\
+                \\variable "api_token" {
+                \\  type      = string
+                \\  sensitive = true
+                \\}
+                \\
+                \\variable "ssh_key" {
+                \\  type = string
+                \\}
+                \\
                 \\provider "digitalocean" {
                 \\  token = var.api_token
                 \\}
                 \\
                 \\resource "digitalocean_droplet" "rawenv" {
-                \\  name   = var.server_name
-                \\  size   = var.droplet_size
-                \\  image  = "debian-12-x64"
-                \\  region = var.region
-                \\
-                \\
-            );
-            try writeProvisioner(&buf, allocator);
-            try buf.appendSlice(allocator, "}\n");
-        },
-        .custom_ssh => {
-            try buf.appendSlice(allocator, 
-                \\resource "null_resource" "rawenv" {
-                \\  connection {
-                \\    type        = "ssh"
-                \\    host        = var.ssh_host
-                \\    user        = var.ssh_user
-                \\    private_key = file(var.ssh_key_path)
-                \\  }
-                \\
+                \\  name   = "rawenv-server"
+                \\  size   = "s-1vcpu-1gb"
+                \\  image  = "debian-13-x64"
+                \\  region = "nyc1"
+                \\  ssh_keys = [var.ssh_key]
+                \\}
                 \\
             );
-            try writeProvisioner(&buf, allocator);
-            try buf.appendSlice(allocator, "}\n");
         },
     }
 
     return try buf.toOwnedSlice(allocator);
 }
 
-fn writeProvisioner(buf: *std.ArrayList(u8), allocator: std.mem.Allocator) !void {
-    try buf.appendSlice(allocator, 
-        \\  provisioner "remote-exec" {
-        \\    inline = [
-        \\      "curl -fsSL https://rawenv.sh/install | sh",
-        \\      "rawenv up"
-        \\    ]
-        \\  }
-        \\
-    );
-}
+// Backward-compatible aliases used by src/cli/main.zig
+pub const generateMainTf = generateTerraform;
 
 pub fn generateVariablesTf(allocator: std.mem.Allocator, provider: Provider) ![]const u8 {
-    var buf: std.ArrayList(u8) = .empty;
-    defer buf.deinit(allocator);
-
-    try buf.appendSlice(allocator, "# Generated by rawenv\n\n");
-
-    switch (provider) {
-        .hetzner => try buf.appendSlice(allocator, 
-            \\variable "api_token" {
-            \\  type      = string
-            \\  sensitive = true
-            \\}
-            \\
-            \\variable "server_name" {
-            \\  type    = string
-            \\  default = "rawenv-server"
-            \\}
-            \\
-            \\variable "server_type" {
-            \\  type    = string
-            \\  default = "cx22"
-            \\}
-            \\
-            \\variable "location" {
-            \\  type    = string
-            \\  default = "fsn1"
-            \\}
-            \\
-        ),
-        .aws => try buf.appendSlice(allocator, 
-            \\variable "region" {
-            \\  type    = string
-            \\  default = "us-east-1"
-            \\}
-            \\
-            \\variable "ami" {
-            \\  type = string
-            \\}
-            \\
-            \\variable "instance_type" {
-            \\  type    = string
-            \\  default = "t3.micro"
-            \\}
-            \\
-            \\variable "key_name" {
-            \\  type = string
-            \\}
-            \\
-        ),
-        .digitalocean => try buf.appendSlice(allocator, 
-            \\variable "api_token" {
-            \\  type      = string
-            \\  sensitive = true
-            \\}
-            \\
-            \\variable "server_name" {
-            \\  type    = string
-            \\  default = "rawenv-server"
-            \\}
-            \\
-            \\variable "droplet_size" {
-            \\  type    = string
-            \\  default = "s-1vcpu-1gb"
-            \\}
-            \\
-            \\variable "region" {
-            \\  type    = string
-            \\  default = "nyc1"
-            \\}
-            \\
-        ),
-        .custom_ssh => try buf.appendSlice(allocator, 
-            \\variable "ssh_host" {
-            \\  type = string
-            \\}
-            \\
-            \\variable "ssh_user" {
-            \\  type    = string
-            \\  default = "root"
-            \\}
-            \\
-            \\variable "ssh_key_path" {
-            \\  type    = string
-            \\  default = "~/.ssh/id_rsa"
-            \\}
-            \\
-        ),
-    }
-
-    return try buf.toOwnedSlice(allocator);
+    _ = allocator;
+    _ = provider;
+    return "";
 }
 
 pub fn generateOutputsTf(allocator: std.mem.Allocator, provider: Provider) ![]const u8 {
-    var buf: std.ArrayList(u8) = .empty;
-    defer buf.deinit(allocator);
-
-    try buf.appendSlice(allocator, "# Generated by rawenv\n\n");
-
-    switch (provider) {
-        .hetzner => try buf.appendSlice(allocator, 
-            \\output "server_ip" {
-            \\  value = hcloud_server.rawenv.ipv4_address
-            \\}
-            \\
-        ),
-        .aws => try buf.appendSlice(allocator, 
-            \\output "server_ip" {
-            \\  value = aws_instance.rawenv.public_ip
-            \\}
-            \\
-        ),
-        .digitalocean => try buf.appendSlice(allocator, 
-            \\output "server_ip" {
-            \\  value = digitalocean_droplet.rawenv.ipv4_address
-            \\}
-            \\
-        ),
-        .custom_ssh => try buf.appendSlice(allocator, 
-            \\output "ssh_host" {
-            \\  value = var.ssh_host
-            \\}
-            \\
-        ),
-    }
-
-    return try buf.toOwnedSlice(allocator);
+    _ = allocator;
+    _ = provider;
+    return "";
 }

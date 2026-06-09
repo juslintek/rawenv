@@ -1,0 +1,869 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		02D72982ECE6A69B6F567B82 /* RawenvUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E936977F6EA4D6F75280FD8B /* RawenvUITests.swift */; };
+		0557EBE4F9423A3DCE5168BF /* AIProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8A1505C4D4EE242E2611A29 /* AIProvider.swift */; };
+		0B540868B5CDB6D14EA0DC25 /* AppIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = 71CF2C68CE3ECE775E14DDE7 /* AppIcon.png */; };
+		0C6CA759C7680F56EDAEDBDB /* ConnectionsVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = B36BC2EEFB92025E32E259F6 /* ConnectionsVM.swift */; };
+		0C9416769624BFFD8D6F87C3 /* DeployEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75A5064AAD5038F04AAD69C2 /* DeployEngine.swift */; };
+		11B50D23B5DA27888BB700B2 /* DeployView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8587E5A5CB714A2B68C7E734 /* DeployView.swift */; };
+		11E28BB428362A4F49F8C873 /* DeployVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9575A31439CDB7DFD1649456 /* DeployVM.swift */; };
+		243009B66627D9A39CB3098B /* ProjectsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCCBE608C238A8552A1A9785 /* ProjectsView.swift */; };
+		24F66F88380C5E93BD7CB1DF /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE37E659D931F6251A20D178 /* main.swift */; };
+		279D2D3613C627A991101B26 /* RawenvApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4F35174CBBB8383C2B5BD5B /* RawenvApp.swift */; };
+		28B6F99AA949B066D96FFA3B /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56917DD674BC10FA6A851C64 /* AppState.swift */; };
+		2E67BD1AC91B91FC64864126 /* TunnelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6557B85F7E60D178119B588 /* TunnelView.swift */; };
+		3D8E8FD1871A07FF961D26AF /* AIMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70E3FD6C2B62CDBA09623B06 /* AIMessage.swift */; };
+		3EC1E5A7BB2B3B8725367095 /* RawenvLib.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = D62F9D48D77EAA924FE23B8E /* RawenvLib.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		3F335CE60F268687FB04252A /* RecipeLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F42812FF9A3BF1AC76C0B74 /* RecipeLibrary.swift */; };
+		3F4F1DFD6EFB3F3461C211EE /* AIChatVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0024FC9C322825E7A0EA215E /* AIChatVM.swift */; };
+		41428E8B19333621A20EE1FC /* RawenvCLI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22AEB4BDA7F389989F7C90E0 /* RawenvCLI.swift */; };
+		4CC3C3D4C2611EBA28D87917 /* AIChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 957E68F2064C32092C7A3F15 /* AIChatView.swift */; };
+		5B0C255E33F201BC18465BDD /* DashboardVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4899D9CBC3F6F6AADAFA470D /* DashboardVM.swift */; };
+		62E3E785E5A43416A33AFEDF /* ConnectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE5DA0DAC48A0A03B64CBCFF /* ConnectionsView.swift */; };
+		642705138B727F7AF28A9905 /* NavigationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3841403EB4C40BADBBF8917A /* NavigationService.swift */; };
+		68AB37C4AEF7366A311F8CD9 /* UninstallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AEC124BFA8F21AB3C2B2EEA /* UninstallView.swift */; };
+		6C47080C6AC6DABC5ABECD8B /* LogEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = C410C8339215C90CE90C3D8A /* LogEntry.swift */; };
+		703367FB1ADC490F4F28466B /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 952BDDACBA49889CD896C97B /* Project.swift */; };
+		70783DCA0FCC8F3414AFFBE7 /* TypeAliases.swift in Sources */ = {isa = PBXBuildFile; fileRef = A15FC21B3327E927FB753A4F /* TypeAliases.swift */; };
+		7097F6C3F797CD02600A2D20 /* Service.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9E4652A9DB71ACA7E3D3AD1 /* Service.swift */; };
+		71A6A466FACEBABC38706B5A /* RawenvLib.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D62F9D48D77EAA924FE23B8E /* RawenvLib.framework */; };
+		746E4A047C9A7720001CBDE8 /* ServiceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB5BBE5B9EAA0D9389BD056D /* ServiceManager.swift */; };
+		7DF3335A6459A59165348077 /* InstallerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CC8A4285BEA22F931B0342B /* InstallerEngine.swift */; };
+		86EBCBDA1A6CD2B442F7AD7D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4B2877DB0CEB471074B77F16 /* Assets.xcassets */; };
+		92F9DC6BD319D5A47CEB259E /* InstallerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEB9AA63D1E05589EC42DBCF /* InstallerView.swift */; };
+		952D1DF385199E0D3E58865B /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2BA4F646810FDEFD8E736FB /* Theme.swift */; };
+		95DEF5A30122CD3E29A029D5 /* SettingsVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED204AE57715792FE75D051 /* SettingsVM.swift */; };
+		9DDEF169B5F4A555A1A8AA16 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 442B9F3BB5FAB91DC9BA5FC7 /* DashboardView.swift */; };
+		A1404794225989BDF7632210 /* InstallFlowVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 613D50A8F335F6BD7E3136F6 /* InstallFlowVM.swift */; };
+		AA9FC06F5995D09F401FE790 /* ProjectsVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = B93748021630B1906E8FA2E7 /* ProjectsVM.swift */; };
+		AF0825FCF51F5F5C81E8CFAE /* InstallerVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331A2FFF08ACA2B5A43D374B /* InstallerVM.swift */; };
+		B3B21549D1AED672E60478FC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C91B56FCD0307F9546C44F0 /* SettingsView.swift */; };
+		B47A00DDEFA5EA53C3961F41 /* DataRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE44232717E6492548D844B /* DataRepository.swift */; };
+		B61C4A3DC1FEDB61FF8BFC8F /* DataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84435FF8154F8BF6515A505E /* DataStore.swift */; };
+		BCE826DF2F1F1245BC32DEA3 /* Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BB6952E2E92B9E79914A25B /* Connection.swift */; };
+		C9803FB8EBF854C86C7E192E /* AIEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54E2267AB383421DB46FB185 /* AIEngine.swift */; };
+		CB755ABC2207054FB39742B0 /* AIProviderCascade.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EFCCEBF254D55395B70261E /* AIProviderCascade.swift */; };
+		CFB0DFF1C67EDDEBCB51921A /* ProjectCreator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31CBAF749731FA5411402A68 /* ProjectCreator.swift */; };
+		D0C16EAEE0FBA671665B4668 /* TunnelVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03868AFF6B9DA6590F85075A /* TunnelVM.swift */; };
+		DFA2EBBE8FC4C1DE889ECFE1 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C6F7839579FEFB25BF9863D /* ThemeManager.swift */; };
+		ED78E6F9B585B6C95D8D1A4A /* ProjectSetupVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 732FF04D8952B7A92F534169 /* ProjectSetupVM.swift */; };
+		F22C09E50717B9A5C99FCAEA /* ScannerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28ACA19D0ADED5907D93442F /* ScannerEngine.swift */; };
+		F7E76E798BED6EB298779CF9 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6712843116970386A8600215 /* MenuBarView.swift */; };
+		F91E98A406083E555C302EF8 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5B058D112DB8FDB4C2AD546 /* ContentView.swift */; };
+		FADA7A0B88249EAD9507816E /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2076C4C565FA7C5DE7A528CE /* Settings.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		675AA321C2A60F7FA6B2153F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D57328B32E25B4D379FECD21 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 68E46F34F3ABDDC1382AABC9;
+			remoteInfo = Rawenv;
+		};
+		B5BE34419307DA0F05545022 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D57328B32E25B4D379FECD21 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 34909411502CCEDADC041062;
+			remoteInfo = RawenvLib;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		CE630E5A77BD77CD46B9B3EC /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				3EC1E5A7BB2B3B8725367095 /* RawenvLib.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0024FC9C322825E7A0EA215E /* AIChatVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIChatVM.swift; sourceTree = "<group>"; };
+		03868AFF6B9DA6590F85075A /* TunnelVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelVM.swift; sourceTree = "<group>"; };
+		04F631865B89634CC620C72A /* RawenvUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RawenvUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		0F73B4EEC5912BB24C5E46C6 /* Rawenv.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rawenv.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1C91B56FCD0307F9546C44F0 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		2076C4C565FA7C5DE7A528CE /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
+		22AEB4BDA7F389989F7C90E0 /* RawenvCLI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RawenvCLI.swift; sourceTree = "<group>"; };
+		28ACA19D0ADED5907D93442F /* ScannerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerEngine.swift; sourceTree = "<group>"; };
+		2EFCCEBF254D55395B70261E /* AIProviderCascade.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProviderCascade.swift; sourceTree = "<group>"; };
+		31CBAF749731FA5411402A68 /* ProjectCreator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectCreator.swift; sourceTree = "<group>"; };
+		331A2FFF08ACA2B5A43D374B /* InstallerVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallerVM.swift; sourceTree = "<group>"; };
+		3841403EB4C40BADBBF8917A /* NavigationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationService.swift; sourceTree = "<group>"; };
+		442B9F3BB5FAB91DC9BA5FC7 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		4899D9CBC3F6F6AADAFA470D /* DashboardVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardVM.swift; sourceTree = "<group>"; };
+		4B2877DB0CEB471074B77F16 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		54E2267AB383421DB46FB185 /* AIEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIEngine.swift; sourceTree = "<group>"; };
+		56917DD674BC10FA6A851C64 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		613D50A8F335F6BD7E3136F6 /* InstallFlowVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallFlowVM.swift; sourceTree = "<group>"; };
+		6712843116970386A8600215 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
+		6AEC124BFA8F21AB3C2B2EEA /* UninstallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UninstallView.swift; sourceTree = "<group>"; };
+		6C6F7839579FEFB25BF9863D /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
+		6F42812FF9A3BF1AC76C0B74 /* RecipeLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeLibrary.swift; sourceTree = "<group>"; };
+		70E3FD6C2B62CDBA09623B06 /* AIMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIMessage.swift; sourceTree = "<group>"; };
+		71CF2C68CE3ECE775E14DDE7 /* AppIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = AppIcon.png; sourceTree = "<group>"; };
+		732FF04D8952B7A92F534169 /* ProjectSetupVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectSetupVM.swift; sourceTree = "<group>"; };
+		75A5064AAD5038F04AAD69C2 /* DeployEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeployEngine.swift; sourceTree = "<group>"; };
+		7BB6952E2E92B9E79914A25B /* Connection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Connection.swift; sourceTree = "<group>"; };
+		7CC8A4285BEA22F931B0342B /* InstallerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallerEngine.swift; sourceTree = "<group>"; };
+		84435FF8154F8BF6515A505E /* DataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataStore.swift; sourceTree = "<group>"; };
+		8587E5A5CB714A2B68C7E734 /* DeployView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeployView.swift; sourceTree = "<group>"; };
+		8BE44232717E6492548D844B /* DataRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataRepository.swift; sourceTree = "<group>"; };
+		952BDDACBA49889CD896C97B /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Project.swift; sourceTree = "<group>"; };
+		9575A31439CDB7DFD1649456 /* DeployVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeployVM.swift; sourceTree = "<group>"; };
+		957E68F2064C32092C7A3F15 /* AIChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIChatView.swift; sourceTree = "<group>"; };
+		A15FC21B3327E927FB753A4F /* TypeAliases.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeAliases.swift; sourceTree = "<group>"; };
+		A4F35174CBBB8383C2B5BD5B /* RawenvApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RawenvApp.swift; sourceTree = "<group>"; };
+		B36BC2EEFB92025E32E259F6 /* ConnectionsVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionsVM.swift; sourceTree = "<group>"; };
+		B93748021630B1906E8FA2E7 /* ProjectsVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectsVM.swift; sourceTree = "<group>"; };
+		BE5DA0DAC48A0A03B64CBCFF /* ConnectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionsView.swift; sourceTree = "<group>"; };
+		BEB9AA63D1E05589EC42DBCF /* InstallerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallerView.swift; sourceTree = "<group>"; };
+		C2BA4F646810FDEFD8E736FB /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		C410C8339215C90CE90C3D8A /* LogEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogEntry.swift; sourceTree = "<group>"; };
+		CED204AE57715792FE75D051 /* SettingsVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsVM.swift; sourceTree = "<group>"; };
+		D5B058D112DB8FDB4C2AD546 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		D62F9D48D77EAA924FE23B8E /* RawenvLib.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RawenvLib.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		E8A1505C4D4EE242E2611A29 /* AIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProvider.swift; sourceTree = "<group>"; };
+		E936977F6EA4D6F75280FD8B /* RawenvUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RawenvUITests.swift; sourceTree = "<group>"; };
+		E9E4652A9DB71ACA7E3D3AD1 /* Service.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Service.swift; sourceTree = "<group>"; };
+		EB5BBE5B9EAA0D9389BD056D /* ServiceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceManager.swift; sourceTree = "<group>"; };
+		F6557B85F7E60D178119B588 /* TunnelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelView.swift; sourceTree = "<group>"; };
+		FCCBE608C238A8552A1A9785 /* ProjectsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectsView.swift; sourceTree = "<group>"; };
+		FE37E659D931F6251A20D178 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		72BC46CCA4C574D2C457191F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				71A6A466FACEBABC38706B5A /* RawenvLib.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		050D5898A1A3A80D74BC23BA /* Projects */ = {
+			isa = PBXGroup;
+			children = (
+				FCCBE608C238A8552A1A9785 /* ProjectsView.swift */,
+			);
+			path = Projects;
+			sourceTree = "<group>";
+		};
+		0A4060E7F69C1B4BECC73D29 /* Installer */ = {
+			isa = PBXGroup;
+			children = (
+				BEB9AA63D1E05589EC42DBCF /* InstallerView.swift */,
+			);
+			path = Installer;
+			sourceTree = "<group>";
+		};
+		0DD78AAFFEE290BC55C803B1 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				56917DD674BC10FA6A851C64 /* AppState.swift */,
+				A4F35174CBBB8383C2B5BD5B /* RawenvApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		1D5E330EE8B8C7B799AE9D26 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				1C91B56FCD0307F9546C44F0 /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		3CD424CEE2B3FF9034F56A8C /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				D5B058D112DB8FDB4C2AD546 /* ContentView.swift */,
+				C2BA4F646810FDEFD8E736FB /* Theme.swift */,
+				75C9A1D5317774656D4F256F /* AIChat */,
+				A055FE5B19BE9490779511D3 /* Connections */,
+				4D25E53779FC0BD7C26D680C /* Dashboard */,
+				E1C9FC60F24BEADD78286344 /* Deploy */,
+				0A4060E7F69C1B4BECC73D29 /* Installer */,
+				AC3F2ACAE483732F14681DCA /* MenuBar */,
+				050D5898A1A3A80D74BC23BA /* Projects */,
+				1D5E330EE8B8C7B799AE9D26 /* Settings */,
+				9AE75EFAD57540C3A62B4968 /* Tunnel */,
+				B53038BF8E0FBD37DAECCE60 /* Uninstall */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		4D25E53779FC0BD7C26D680C /* Dashboard */ = {
+			isa = PBXGroup;
+			children = (
+				442B9F3BB5FAB91DC9BA5FC7 /* DashboardView.swift */,
+			);
+			path = Dashboard;
+			sourceTree = "<group>";
+		};
+		62DE94D1A07BE91FBD5E1302 /* RawenvApp */ = {
+			isa = PBXGroup;
+			children = (
+				71CF2C68CE3ECE775E14DDE7 /* AppIcon.png */,
+				4B2877DB0CEB471074B77F16 /* Assets.xcassets */,
+				FE37E659D931F6251A20D178 /* main.swift */,
+			);
+			name = RawenvApp;
+			path = Sources/RawenvApp;
+			sourceTree = "<group>";
+		};
+		6A199AC9F63C1F1F339D8221 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0F73B4EEC5912BB24C5E46C6 /* Rawenv.app */,
+				D62F9D48D77EAA924FE23B8E /* RawenvLib.framework */,
+				04F631865B89634CC620C72A /* RawenvUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		6E78702421F962434E875AD2 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				70E3FD6C2B62CDBA09623B06 /* AIMessage.swift */,
+				7BB6952E2E92B9E79914A25B /* Connection.swift */,
+				C410C8339215C90CE90C3D8A /* LogEntry.swift */,
+				952BDDACBA49889CD896C97B /* Project.swift */,
+				E9E4652A9DB71ACA7E3D3AD1 /* Service.swift */,
+				2076C4C565FA7C5DE7A528CE /* Settings.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		70577DC26A72EB36F0244E52 = {
+			isa = PBXGroup;
+			children = (
+				B72350AD0364A51CC23A0270 /* Rawenv */,
+				62DE94D1A07BE91FBD5E1302 /* RawenvApp */,
+				7C2DE687A67C42F32195F9B0 /* UITests */,
+				6A199AC9F63C1F1F339D8221 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		75C9A1D5317774656D4F256F /* AIChat */ = {
+			isa = PBXGroup;
+			children = (
+				957E68F2064C32092C7A3F15 /* AIChatView.swift */,
+			);
+			path = AIChat;
+			sourceTree = "<group>";
+		};
+		7C2DE687A67C42F32195F9B0 /* UITests */ = {
+			isa = PBXGroup;
+			children = (
+				E936977F6EA4D6F75280FD8B /* RawenvUITests.swift */,
+			);
+			path = UITests;
+			sourceTree = "<group>";
+		};
+		7D44E282B9F13554B191301C /* Protocols */ = {
+			isa = PBXGroup;
+			children = (
+				E8A1505C4D4EE242E2611A29 /* AIProvider.swift */,
+				8BE44232717E6492548D844B /* DataRepository.swift */,
+				3841403EB4C40BADBBF8917A /* NavigationService.swift */,
+			);
+			path = Protocols;
+			sourceTree = "<group>";
+		};
+		9AE75EFAD57540C3A62B4968 /* Tunnel */ = {
+			isa = PBXGroup;
+			children = (
+				F6557B85F7E60D178119B588 /* TunnelView.swift */,
+			);
+			path = Tunnel;
+			sourceTree = "<group>";
+		};
+		A055FE5B19BE9490779511D3 /* Connections */ = {
+			isa = PBXGroup;
+			children = (
+				BE5DA0DAC48A0A03B64CBCFF /* ConnectionsView.swift */,
+			);
+			path = Connections;
+			sourceTree = "<group>";
+		};
+		AC3F2ACAE483732F14681DCA /* MenuBar */ = {
+			isa = PBXGroup;
+			children = (
+				6712843116970386A8600215 /* MenuBarView.swift */,
+			);
+			path = MenuBar;
+			sourceTree = "<group>";
+		};
+		B53038BF8E0FBD37DAECCE60 /* Uninstall */ = {
+			isa = PBXGroup;
+			children = (
+				6AEC124BFA8F21AB3C2B2EEA /* UninstallView.swift */,
+			);
+			path = Uninstall;
+			sourceTree = "<group>";
+		};
+		B72350AD0364A51CC23A0270 /* Rawenv */ = {
+			isa = PBXGroup;
+			children = (
+				0DD78AAFFEE290BC55C803B1 /* App */,
+				6E78702421F962434E875AD2 /* Models */,
+				7D44E282B9F13554B191301C /* Protocols */,
+				EE8F5021DD05B0F1A3F7A819 /* Services */,
+				D90D1C3B509D9C3736301F5F /* ViewModels */,
+				3CD424CEE2B3FF9034F56A8C /* Views */,
+			);
+			name = Rawenv;
+			path = Sources/Rawenv;
+			sourceTree = "<group>";
+		};
+		D90D1C3B509D9C3736301F5F /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				0024FC9C322825E7A0EA215E /* AIChatVM.swift */,
+				B36BC2EEFB92025E32E259F6 /* ConnectionsVM.swift */,
+				4899D9CBC3F6F6AADAFA470D /* DashboardVM.swift */,
+				9575A31439CDB7DFD1649456 /* DeployVM.swift */,
+				331A2FFF08ACA2B5A43D374B /* InstallerVM.swift */,
+				613D50A8F335F6BD7E3136F6 /* InstallFlowVM.swift */,
+				732FF04D8952B7A92F534169 /* ProjectSetupVM.swift */,
+				B93748021630B1906E8FA2E7 /* ProjectsVM.swift */,
+				CED204AE57715792FE75D051 /* SettingsVM.swift */,
+				03868AFF6B9DA6590F85075A /* TunnelVM.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		E1C9FC60F24BEADD78286344 /* Deploy */ = {
+			isa = PBXGroup;
+			children = (
+				8587E5A5CB714A2B68C7E734 /* DeployView.swift */,
+			);
+			path = Deploy;
+			sourceTree = "<group>";
+		};
+		EE8F5021DD05B0F1A3F7A819 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				54E2267AB383421DB46FB185 /* AIEngine.swift */,
+				2EFCCEBF254D55395B70261E /* AIProviderCascade.swift */,
+				84435FF8154F8BF6515A505E /* DataStore.swift */,
+				75A5064AAD5038F04AAD69C2 /* DeployEngine.swift */,
+				7CC8A4285BEA22F931B0342B /* InstallerEngine.swift */,
+				31CBAF749731FA5411402A68 /* ProjectCreator.swift */,
+				22AEB4BDA7F389989F7C90E0 /* RawenvCLI.swift */,
+				6F42812FF9A3BF1AC76C0B74 /* RecipeLibrary.swift */,
+				28ACA19D0ADED5907D93442F /* ScannerEngine.swift */,
+				EB5BBE5B9EAA0D9389BD056D /* ServiceManager.swift */,
+				6C6F7839579FEFB25BF9863D /* ThemeManager.swift */,
+				A15FC21B3327E927FB753A4F /* TypeAliases.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		34909411502CCEDADC041062 /* RawenvLib */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F42758BB75FE3C24B0380884 /* Build configuration list for PBXNativeTarget "RawenvLib" */;
+			buildPhases = (
+				36F16C82D4CD64BD22EA35CB /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RawenvLib;
+			packageProductDependencies = (
+			);
+			productName = RawenvLib;
+			productReference = D62F9D48D77EAA924FE23B8E /* RawenvLib.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		416645000FCD33119768E49C /* RawenvUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8345397246A7F7CE70644AEE /* Build configuration list for PBXNativeTarget "RawenvUITests" */;
+			buildPhases = (
+				D0B9CB06FC9FEBDE41BAC9FE /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AD2608257C21BEB9D5EC45E5 /* PBXTargetDependency */,
+			);
+			name = RawenvUITests;
+			packageProductDependencies = (
+			);
+			productName = RawenvUITests;
+			productReference = 04F631865B89634CC620C72A /* RawenvUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		68E46F34F3ABDDC1382AABC9 /* Rawenv */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DE82B8C2207FB909E185D635 /* Build configuration list for PBXNativeTarget "Rawenv" */;
+			buildPhases = (
+				706795BE079346B5A2FD34C5 /* Sources */,
+				EC3BC31585D8311C4F3AF123 /* Resources */,
+				72BC46CCA4C574D2C457191F /* Frameworks */,
+				CE630E5A77BD77CD46B9B3EC /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				401DBA185AE88776CB25750C /* PBXTargetDependency */,
+			);
+			name = Rawenv;
+			packageProductDependencies = (
+			);
+			productName = Rawenv;
+			productReference = 0F73B4EEC5912BB24C5E46C6 /* Rawenv.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D57328B32E25B4D379FECD21 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					416645000FCD33119768E49C = {
+						TestTargetID = 68E46F34F3ABDDC1382AABC9;
+					};
+				};
+			};
+			buildConfigurationList = 4EA60F9F1A3E03B4C26BCDBC /* Build configuration list for PBXProject "Rawenv" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 70577DC26A72EB36F0244E52;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 6A199AC9F63C1F1F339D8221 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				68E46F34F3ABDDC1382AABC9 /* Rawenv */,
+				34909411502CCEDADC041062 /* RawenvLib */,
+				416645000FCD33119768E49C /* RawenvUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		EC3BC31585D8311C4F3AF123 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0B540868B5CDB6D14EA0DC25 /* AppIcon.png in Resources */,
+				86EBCBDA1A6CD2B442F7AD7D /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		36F16C82D4CD64BD22EA35CB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3F4F1DFD6EFB3F3461C211EE /* AIChatVM.swift in Sources */,
+				4CC3C3D4C2611EBA28D87917 /* AIChatView.swift in Sources */,
+				C9803FB8EBF854C86C7E192E /* AIEngine.swift in Sources */,
+				3D8E8FD1871A07FF961D26AF /* AIMessage.swift in Sources */,
+				0557EBE4F9423A3DCE5168BF /* AIProvider.swift in Sources */,
+				CB755ABC2207054FB39742B0 /* AIProviderCascade.swift in Sources */,
+				28B6F99AA949B066D96FFA3B /* AppState.swift in Sources */,
+				BCE826DF2F1F1245BC32DEA3 /* Connection.swift in Sources */,
+				0C6CA759C7680F56EDAEDBDB /* ConnectionsVM.swift in Sources */,
+				62E3E785E5A43416A33AFEDF /* ConnectionsView.swift in Sources */,
+				F91E98A406083E555C302EF8 /* ContentView.swift in Sources */,
+				5B0C255E33F201BC18465BDD /* DashboardVM.swift in Sources */,
+				9DDEF169B5F4A555A1A8AA16 /* DashboardView.swift in Sources */,
+				B47A00DDEFA5EA53C3961F41 /* DataRepository.swift in Sources */,
+				B61C4A3DC1FEDB61FF8BFC8F /* DataStore.swift in Sources */,
+				0C9416769624BFFD8D6F87C3 /* DeployEngine.swift in Sources */,
+				11E28BB428362A4F49F8C873 /* DeployVM.swift in Sources */,
+				11B50D23B5DA27888BB700B2 /* DeployView.swift in Sources */,
+				A1404794225989BDF7632210 /* InstallFlowVM.swift in Sources */,
+				7DF3335A6459A59165348077 /* InstallerEngine.swift in Sources */,
+				AF0825FCF51F5F5C81E8CFAE /* InstallerVM.swift in Sources */,
+				92F9DC6BD319D5A47CEB259E /* InstallerView.swift in Sources */,
+				6C47080C6AC6DABC5ABECD8B /* LogEntry.swift in Sources */,
+				F7E76E798BED6EB298779CF9 /* MenuBarView.swift in Sources */,
+				642705138B727F7AF28A9905 /* NavigationService.swift in Sources */,
+				703367FB1ADC490F4F28466B /* Project.swift in Sources */,
+				CFB0DFF1C67EDDEBCB51921A /* ProjectCreator.swift in Sources */,
+				ED78E6F9B585B6C95D8D1A4A /* ProjectSetupVM.swift in Sources */,
+				AA9FC06F5995D09F401FE790 /* ProjectsVM.swift in Sources */,
+				243009B66627D9A39CB3098B /* ProjectsView.swift in Sources */,
+				279D2D3613C627A991101B26 /* RawenvApp.swift in Sources */,
+				41428E8B19333621A20EE1FC /* RawenvCLI.swift in Sources */,
+				3F335CE60F268687FB04252A /* RecipeLibrary.swift in Sources */,
+				F22C09E50717B9A5C99FCAEA /* ScannerEngine.swift in Sources */,
+				7097F6C3F797CD02600A2D20 /* Service.swift in Sources */,
+				746E4A047C9A7720001CBDE8 /* ServiceManager.swift in Sources */,
+				FADA7A0B88249EAD9507816E /* Settings.swift in Sources */,
+				95DEF5A30122CD3E29A029D5 /* SettingsVM.swift in Sources */,
+				B3B21549D1AED672E60478FC /* SettingsView.swift in Sources */,
+				952D1DF385199E0D3E58865B /* Theme.swift in Sources */,
+				DFA2EBBE8FC4C1DE889ECFE1 /* ThemeManager.swift in Sources */,
+				D0C16EAEE0FBA671665B4668 /* TunnelVM.swift in Sources */,
+				2E67BD1AC91B91FC64864126 /* TunnelView.swift in Sources */,
+				70783DCA0FCC8F3414AFFBE7 /* TypeAliases.swift in Sources */,
+				68AB37C4AEF7366A311F8CD9 /* UninstallView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		706795BE079346B5A2FD34C5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				24F66F88380C5E93BD7CB1DF /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D0B9CB06FC9FEBDE41BAC9FE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				02D72982ECE6A69B6F567B82 /* RawenvUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		401DBA185AE88776CB25750C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 34909411502CCEDADC041062 /* RawenvLib */;
+			targetProxy = B5BE34419307DA0F05545022 /* PBXContainerItemProxy */;
+		};
+		AD2608257C21BEB9D5EC45E5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 68E46F34F3ABDDC1382AABC9 /* Rawenv */;
+			targetProxy = 675AA321C2A60F7FA6B2153F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		208B1E8ACC4536B898AEB3DB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		236018CF81C710245DD10E00 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.rawenv.lib;
+				PRODUCT_MODULE_NAME = RawenvLib;
+				PRODUCT_NAME = RawenvLib;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		54ABC67265FCA0CBEB2F9143 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		68776187F3CE3997400E53D3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.rawenv.uitests;
+				SDKROOT = macosx;
+				TEST_TARGET_NAME = Rawenv;
+			};
+			name = Debug;
+		};
+		690F2DDC88E2D70F564BD7FE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Rawenv.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_LSUIElement = NO;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 rawenv. All rights reserved.";
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.rawenv.app;
+				PRODUCT_NAME = Rawenv;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+			};
+			name = Debug;
+		};
+		B071D27818CF29459CBF7ACF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.rawenv.uitests;
+				SDKROOT = macosx;
+				TEST_TARGET_NAME = Rawenv;
+			};
+			name = Release;
+		};
+		C8D69276CB783C4FF5E1F9F0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.rawenv.lib;
+				PRODUCT_MODULE_NAME = RawenvLib;
+				PRODUCT_NAME = RawenvLib;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		EBA2127CD93A6B1F8F265792 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Rawenv.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_LSUIElement = NO;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 rawenv. All rights reserved.";
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.rawenv.app;
+				PRODUCT_NAME = Rawenv;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4EA60F9F1A3E03B4C26BCDBC /* Build configuration list for PBXProject "Rawenv" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				208B1E8ACC4536B898AEB3DB /* Debug */,
+				54ABC67265FCA0CBEB2F9143 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8345397246A7F7CE70644AEE /* Build configuration list for PBXNativeTarget "RawenvUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				68776187F3CE3997400E53D3 /* Debug */,
+				B071D27818CF29459CBF7ACF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DE82B8C2207FB909E185D635 /* Build configuration list for PBXNativeTarget "Rawenv" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				690F2DDC88E2D70F564BD7FE /* Debug */,
+				EBA2127CD93A6B1F8F265792 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F42758BB75FE3C24B0380884 /* Build configuration list for PBXNativeTarget "RawenvLib" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				236018CF81C710245DD10E00 /* Debug */,
+				C8D69276CB783C4FF5E1F9F0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = D57328B32E25B4D379FECD21 /* Project object */;
+}

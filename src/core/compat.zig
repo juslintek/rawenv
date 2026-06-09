@@ -1,8 +1,10 @@
 //! Compatibility shims for std.fs operations removed in Zig 0.16.0.
 //! These use C library calls to avoid the Io dependency.
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub fn makeDirAbsolute(path: []const u8) error{ PathAlreadyExists, AccessDenied, Unexpected }!void {
+    if (comptime builtin.os.tag == .windows) return error.Unexpected;
     const z = std.fmt.allocPrintZ(std.heap.page_allocator, "{s}", .{path}) catch return error.Unexpected;
     defer std.heap.page_allocator.free(z);
     if (std.c.mkdir(z, 0o755) != 0) {
@@ -16,18 +18,21 @@ pub fn makeDirAbsolute(path: []const u8) error{ PathAlreadyExists, AccessDenied,
 }
 
 pub fn accessAbsolute(path: []const u8) bool {
+    if (comptime builtin.os.tag == .windows) return false;
     const z = std.fmt.allocPrintZ(std.heap.page_allocator, "{s}", .{path}) catch return false;
     defer std.heap.page_allocator.free(z);
     return std.c.access(z, 0) == 0;
 }
 
 pub fn deleteFileAbsolute(path: []const u8) void {
+    if (comptime builtin.os.tag == .windows) return;
     const z = std.fmt.allocPrintZ(std.heap.page_allocator, "{s}", .{path}) catch return;
     defer std.heap.page_allocator.free(z);
     _ = std.c.unlink(z);
 }
 
 pub fn symlinkAbsolute(target: []const u8, link_path: []const u8) !void {
+    if (comptime builtin.os.tag == .windows) return error.Unexpected;
     const tz = std.fmt.allocPrintZ(std.heap.page_allocator, "{s}", .{target}) catch return error.Unexpected;
     defer std.heap.page_allocator.free(tz);
     const lz = std.fmt.allocPrintZ(std.heap.page_allocator, "{s}", .{link_path}) catch return error.Unexpected;

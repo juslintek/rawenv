@@ -9,19 +9,25 @@ OS="$(uname -s)"
 ARCH="$(uname -m)"
 
 case "$OS" in
-  Darwin) os_target="macos" ;;
-  Linux)  os_target="linux" ;;
-  *)      echo "Error: unsupported OS: $OS" >&2; exit 1 ;;
+  Darwin)
+    case "$ARCH" in
+      arm64|aarch64) ARTIFACT="rawenv-macos-arm64" ;;
+      x86_64|amd64)  ARTIFACT="rawenv-macos-x64" ;;
+      *) echo "Error: unsupported architecture: $ARCH" >&2; exit 1 ;;
+    esac
+    ;;
+  Linux)
+    case "$ARCH" in
+      aarch64|arm64) ARTIFACT="rawenv-linux-arm64" ;;
+      x86_64|amd64)  ARTIFACT="rawenv-linux-x64" ;;
+      *) echo "Error: unsupported architecture: $ARCH" >&2; exit 1 ;;
+    esac
+    ;;
+  MINGW*|MSYS*|CYGWIN*)
+    ARTIFACT="rawenv-windows-x64.exe"
+    ;;
+  *) echo "Error: unsupported OS: $OS" >&2; exit 1 ;;
 esac
-
-case "$ARCH" in
-  arm64|aarch64) arch_target="aarch64" ;;
-  x86_64|amd64)  arch_target="x86_64" ;;
-  *)             echo "Error: unsupported architecture: $ARCH" >&2; exit 1 ;;
-esac
-
-TARGET="${arch_target}-${os_target}"
-ARCHIVE="rawenv-${TARGET}.tar.gz"
 
 # Get latest version if not specified
 VERSION="${RAWENV_VERSION:-latest}"
@@ -33,26 +39,16 @@ BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-echo "Installing rawenv ${VERSION} (${TARGET})..."
+echo "Installing rawenv ${VERSION} (${ARTIFACT})..."
 
-# Download archive and checksums
-curl -fsSL "${BASE_URL}/${ARCHIVE}" -o "${TMP}/${ARCHIVE}"
-curl -fsSL "${BASE_URL}/SHA256SUMS" -o "${TMP}/SHA256SUMS"
-
-# Verify checksum
-cd "$TMP"
-if command -v sha256sum >/dev/null 2>&1; then
-  grep "$ARCHIVE" SHA256SUMS | sha256sum -c --quiet
-else
-  grep "$ARCHIVE" SHA256SUMS | shasum -a 256 -c --quiet
-fi
+curl -fsSL "${BASE_URL}/${ARTIFACT}" -o "${TMP}/rawenv"
 
 # Install
 mkdir -p "$INSTALL_DIR"
-tar -xzf "$ARCHIVE" -C "$INSTALL_DIR"
+cp "${TMP}/rawenv" "${INSTALL_DIR}/rawenv"
 chmod +x "${INSTALL_DIR}/rawenv"
 
-# Add to PATH
+# Add to PATH hint
 EXPORT_LINE='export PATH="$HOME/.rawenv/bin:$PATH"'
 for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.profile"; do
   if [ -f "$rc" ] && ! grep -qF '.rawenv/bin' "$rc"; then

@@ -1,0 +1,66 @@
+name: GUI Tests
+on:
+  push:
+    branches: [main]
+    paths: ['gui/**', 'shared/**']
+  pull_request:
+    paths: ['gui/**', 'shared/**']
+
+jobs:
+  schema-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npx ajv-cli@5 validate --spec=draft2020 -s shared/schema.json -d shared/mock-data.json
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test
+        run: cd gui/macos && swift build && swift test
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-test-results
+          path: gui/macos/.build/
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build test container
+        run: cd gui/linux && docker build -f Dockerfile.test -t rawenv-linux-test .
+      - name: Run e2e tests
+        run: docker run --name linux-tests rawenv-linux-test
+      - name: Extract test results
+        if: failure()
+        run: docker cp linux-tests:/app/test-results ./linux-test-results || true
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-test-results
+          path: linux-test-results/
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build
+        run: cd gui/windows && dotnet build Rawenv.sln
+      - name: Run unit tests
+        run: cd gui/windows && dotnet test Rawenv.Tests/Rawenv.Tests.csproj --logger trx
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-results
+          path: gui/windows/**/TestResults/

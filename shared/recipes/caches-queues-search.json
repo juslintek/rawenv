@@ -1,0 +1,196 @@
+{
+  "version": "1.0",
+  "services": {
+    "redis": {
+      "name": "Redis",
+      "category": "cache",
+      "description": "In-memory data store, cache, and message broker",
+      "icon": "🔴",
+      "versions": ["7.4", "7.2", "6.2"],
+      "default_version": "7.4",
+      "default_port": 6379,
+      "install": {
+        "macos": "curl -fsSL https://download.redis.io/releases/redis-{version}.0.tar.gz | tar xz -C /tmp/ && cd /tmp/redis-{version}.0 && make -j$(sysctl -n hw.ncpu) && make PREFIX=~/.rawenv/store/redis-{version} install",
+        "linux": "curl -fsSL https://download.redis.io/releases/redis-{version}.0.tar.gz | tar xz -C /tmp/ && cd /tmp/redis-{version}.0 && make -j$(nproc) && make PREFIX=~/.rawenv/store/redis-{version} install"
+      },
+      "start": "redis-server {config_file} --port {port} --daemonize yes --dir {data_dir} --logfile {log_dir}/redis.log",
+      "stop": "redis-cli -p {port} shutdown",
+      "init": "mkdir -p {data_dir}",
+      "config_file": "redis.conf",
+      "config_defaults": {"maxmemory": "64mb", "maxmemory-policy": "allkeys-lru", "save": "\"\"", "appendonly": "no"},
+      "plugins": {
+        "redisearch": {"version": "2.8", "install": "loadmodule /path/to/redisearch.so", "description": "Full-text search and secondary indexing"},
+        "redisjson": {"version": "2.6", "install": "loadmodule /path/to/rejson.so", "description": "Native JSON data type"},
+        "redisbloom": {"version": "2.6", "install": "loadmodule /path/to/redisbloom.so", "description": "Bloom/Cuckoo/TopK/Count-Min filters"},
+        "redistimeseries": {"version": "1.10", "install": "loadmodule /path/to/redistimeseries.so", "description": "Time-series data structure"},
+        "redisgraph": {"version": "2.12", "install": "loadmodule /path/to/redisgraph.so", "description": "Graph database on Redis"}
+      }
+    },
+    "valkey": {
+      "name": "Valkey",
+      "category": "cache",
+      "description": "Open-source Redis fork (Linux Foundation)",
+      "icon": "🔑",
+      "versions": ["8.0", "7.2"],
+      "default_version": "8.0",
+      "default_port": 6379,
+      "install": {
+        "macos": "curl -fsSL https://github.com/valkey-io/valkey/archive/refs/tags/{version}.0.tar.gz | tar xz -C /tmp/ && cd /tmp/valkey-{version}.0 && make -j$(sysctl -n hw.ncpu) && make PREFIX=~/.rawenv/store/valkey-{version} install",
+        "linux": "curl -fsSL https://github.com/valkey-io/valkey/archive/refs/tags/{version}.0.tar.gz | tar xz -C /tmp/ && cd /tmp/valkey-{version}.0 && make -j$(nproc) && make PREFIX=~/.rawenv/store/valkey-{version} install"
+      },
+      "start": "valkey-server --port {port} --daemonize yes --dir {data_dir}",
+      "stop": "valkey-cli -p {port} shutdown",
+      "init": "mkdir -p {data_dir}",
+      "config_file": "valkey.conf",
+      "config_defaults": {"maxmemory": "64mb", "maxmemory-policy": "allkeys-lru"},
+      "plugins": {}
+    },
+    "memcached": {
+      "name": "Memcached",
+      "category": "cache",
+      "description": "High-performance distributed memory cache",
+      "icon": "⚡",
+      "versions": ["1.6"],
+      "default_version": "1.6",
+      "default_port": 11211,
+      "install": {
+        "macos": "brew install memcached || curl -fsSL https://memcached.org/files/memcached-1.6.28.tar.gz | tar xz -C /tmp/ && cd /tmp/memcached-1.6.28 && ./configure --prefix=$HOME/.rawenv/store/memcached-1.6 && make install",
+        "linux": "curl -fsSL https://memcached.org/files/memcached-1.6.28.tar.gz | tar xz -C /tmp/ && cd /tmp/memcached-1.6.28 && ./configure --prefix=$HOME/.rawenv/store/memcached-1.6 && make -j$(nproc) install"
+      },
+      "start": "memcached -d -p {port} -m 64 -l 127.0.0.1 -P {data_dir}/memcached.pid",
+      "stop": "kill $(cat {data_dir}/memcached.pid)",
+      "init": "mkdir -p {data_dir}",
+      "config_file": null,
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "rabbitmq": {
+      "name": "RabbitMQ",
+      "category": "queue",
+      "description": "Message broker with AMQP, MQTT, STOMP support",
+      "icon": "🐰",
+      "versions": ["3.13", "3.12"],
+      "default_version": "3.13",
+      "default_port": 5672,
+      "install": {
+        "macos": "curl -fsSL https://github.com/rabbitmq/rabbitmq-server/releases/download/v{version}.0/rabbitmq-server-generic-unix-{version}.0.tar.xz | tar xJ -C ~/.rawenv/store/",
+        "linux": "curl -fsSL https://github.com/rabbitmq/rabbitmq-server/releases/download/v{version}.0/rabbitmq-server-generic-unix-{version}.0.tar.xz | tar xJ -C ~/.rawenv/store/"
+      },
+      "start": "RABBITMQ_MNESIA_BASE={data_dir} RABBITMQ_LOG_BASE={log_dir} rabbitmq-server -detached",
+      "stop": "rabbitmqctl shutdown",
+      "init": "mkdir -p {data_dir}",
+      "config_file": "rabbitmq.conf",
+      "config_defaults": {"listeners.tcp.default": "5672", "management.tcp.port": "15672", "vm_memory_high_watermark.relative": "0.4"},
+      "plugins": {
+        "management": {"version": "3.13", "install": "rabbitmq-plugins enable rabbitmq_management", "description": "Web UI management console (port 15672)"},
+        "shovel": {"version": "3.13", "install": "rabbitmq-plugins enable rabbitmq_shovel rabbitmq_shovel_management", "description": "Message transfer between brokers"},
+        "delayed_message": {"version": "3.13", "install": "rabbitmq-plugins enable rabbitmq_delayed_message_exchange", "description": "Delayed message delivery"},
+        "mqtt": {"version": "3.13", "install": "rabbitmq-plugins enable rabbitmq_mqtt", "description": "MQTT protocol support"},
+        "stomp": {"version": "3.13", "install": "rabbitmq-plugins enable rabbitmq_stomp", "description": "STOMP protocol support"}
+      }
+    },
+    "nats": {
+      "name": "NATS",
+      "category": "queue",
+      "description": "Cloud-native messaging system",
+      "icon": "📨",
+      "versions": ["2.10"],
+      "default_version": "2.10",
+      "default_port": 4222,
+      "install": {
+        "macos": "curl -fsSL https://github.com/nats-io/nats-server/releases/download/v{version}.0/nats-server-v{version}.0-darwin-arm64.tar.gz | tar xz -C ~/.rawenv/store/",
+        "linux": "curl -fsSL https://github.com/nats-io/nats-server/releases/download/v{version}.0/nats-server-v{version}.0-linux-amd64.tar.gz | tar xz -C ~/.rawenv/store/"
+      },
+      "start": "nats-server -p {port} -sd {data_dir} --log {log_dir}/nats.log &",
+      "stop": "nats-server --signal stop={data_dir}/nats-server.pid",
+      "init": "mkdir -p {data_dir}",
+      "config_file": "nats.conf",
+      "config_defaults": {"max_payload": "1MB", "max_connections": "1000"},
+      "plugins": {
+        "jetstream": {"version": "2.10", "install": "# Enable in config: jetstream { store_dir: {data_dir}/jetstream }", "description": "Persistent streaming and KV store"}
+      }
+    },
+    "kafka": {
+      "name": "Apache Kafka",
+      "category": "queue",
+      "description": "Distributed event streaming platform",
+      "icon": "📊",
+      "versions": ["3.7", "3.6"],
+      "default_version": "3.7",
+      "default_port": 9092,
+      "install": {
+        "macos": "curl -fsSL https://downloads.apache.org/kafka/{version}.0/kafka_2.13-{version}.0.tgz | tar xz -C ~/.rawenv/store/",
+        "linux": "curl -fsSL https://downloads.apache.org/kafka/{version}.0/kafka_2.13-{version}.0.tgz | tar xz -C ~/.rawenv/store/"
+      },
+      "start": "kafka-server-start.sh -daemon {config_file}",
+      "stop": "kafka-server-stop.sh",
+      "init": "kafka-storage.sh format -t $(kafka-storage.sh random-uuid) -c {config_file}",
+      "config_file": "kraft-server.properties",
+      "config_defaults": {"log.dirs": "{data_dir}", "num.partitions": "3", "log.retention.hours": "168"},
+      "plugins": {
+        "schema_registry": {"version": "7.6", "install": "# Run confluent schema-registry separately", "description": "Schema management for Avro/Protobuf/JSON"},
+        "connect": {"version": "3.7", "install": "connect-standalone.sh {config_file}", "description": "Kafka Connect for data integration"}
+      }
+    },
+    "meilisearch": {
+      "name": "Meilisearch",
+      "category": "search",
+      "description": "Lightning-fast search engine",
+      "icon": "🔍",
+      "versions": ["1.8", "1.7"],
+      "default_version": "1.8",
+      "default_port": 7700,
+      "install": {
+        "macos": "curl -fsSL https://github.com/meilisearch/meilisearch/releases/download/v{version}.0/meilisearch-macos-apple-silicon -o ~/.rawenv/store/meilisearch-{version}/meilisearch && chmod +x ~/.rawenv/store/meilisearch-{version}/meilisearch",
+        "linux": "curl -fsSL https://github.com/meilisearch/meilisearch/releases/download/v{version}.0/meilisearch-linux-amd64 -o ~/.rawenv/store/meilisearch-{version}/meilisearch && chmod +x ~/.rawenv/store/meilisearch-{version}/meilisearch"
+      },
+      "start": "meilisearch --http-addr 127.0.0.1:{port} --db-path {data_dir} --env development &",
+      "stop": "pkill -f 'meilisearch.*{port}'",
+      "init": "mkdir -p {data_dir}",
+      "config_file": null,
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "elasticsearch": {
+      "name": "Elasticsearch",
+      "category": "search",
+      "description": "Distributed search and analytics engine",
+      "icon": "🔎",
+      "versions": ["8.13", "8.12", "7.17"],
+      "default_version": "8.13",
+      "default_port": 9200,
+      "install": {
+        "macos": "curl -fsSL https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{version}.0-darwin-aarch64.tar.gz | tar xz -C ~/.rawenv/store/",
+        "linux": "curl -fsSL https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{version}.0-linux-x86_64.tar.gz | tar xz -C ~/.rawenv/store/"
+      },
+      "start": "ES_PATH_DATA={data_dir} ES_PATH_LOGS={log_dir} elasticsearch -d -p {data_dir}/es.pid",
+      "stop": "kill $(cat {data_dir}/es.pid)",
+      "init": "mkdir -p {data_dir}",
+      "config_file": "elasticsearch.yml",
+      "config_defaults": {"xpack.security.enabled": "false", "discovery.type": "single-node", "cluster.name": "rawenv"},
+      "plugins": {
+        "analysis-icu": {"version": "8.13", "install": "elasticsearch-plugin install analysis-icu", "description": "ICU text analysis"},
+        "ingest-attachment": {"version": "8.13", "install": "elasticsearch-plugin install ingest-attachment", "description": "Extract file attachments"}
+      }
+    },
+    "typesense": {
+      "name": "Typesense",
+      "category": "search",
+      "description": "Fast, typo-tolerant search engine",
+      "icon": "⌨️",
+      "versions": ["27.0", "26.0"],
+      "default_version": "27.0",
+      "default_port": 8108,
+      "install": {
+        "macos": "curl -fsSL https://dl.typesense.org/releases/{version}/typesense-server-{version}-darwin-arm64.tar.gz | tar xz -C ~/.rawenv/store/typesense-{version}/",
+        "linux": "curl -fsSL https://dl.typesense.org/releases/{version}/typesense-server-{version}-linux-amd64.tar.gz | tar xz -C ~/.rawenv/store/typesense-{version}/"
+      },
+      "start": "typesense-server --data-dir={data_dir} --api-port={port} --api-key=rawenv-dev &",
+      "stop": "pkill -f 'typesense-server.*{port}'",
+      "init": "mkdir -p {data_dir}",
+      "config_file": null,
+      "config_defaults": {},
+      "plugins": {}
+    }
+  }
+}

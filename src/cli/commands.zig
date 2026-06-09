@@ -6,6 +6,7 @@ const resolver = @import("resolver");
 
 /// Read a file using posix APIs (no Io dependency).
 fn readFileSimple(allocator: std.mem.Allocator, path: [*:0]const u8) ?[]const u8 {
+    if (comptime builtin.os.tag == .windows) return null; // Windows: skip posix file ops
     const fd = std.posix.openat(std.posix.AT.FDCWD, std.mem.sliceTo(path, 0), .{}, 0) catch return null;
     defer _ = std.c.close(fd);
     var buf_list: std.ArrayList(u8) = .empty;
@@ -20,6 +21,7 @@ fn readFileSimple(allocator: std.mem.Allocator, path: [*:0]const u8) ?[]const u8
 
 /// Write content to a file using posix APIs.
 fn writeFileSimple(path: [*:0]const u8, content: []const u8) bool {
+    if (comptime builtin.os.tag == .windows) return false; // Windows: skip posix file ops
     const fd = std.posix.openat(std.posix.AT.FDCWD, std.mem.sliceTo(path, 0), .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644) catch return false;
     defer _ = std.c.close(fd);
     var written: usize = 0;
@@ -57,9 +59,13 @@ pub fn runInit(allocator: std.mem.Allocator, stdout: anytype) !void {
     const cwd_path = std.mem.sliceTo(cwd_ptr, 0);
     const project_name = std.fs.path.basename(cwd_path);
 
-    // Generate TOML
-    const rt_entries: []const config.Config.Entry = @ptrCast(result.runtimes);
-    const svc_entries: []const config.Config.Entry = @ptrCast(result.services);
+    // Generate TOML (detector entries -> config entries; port/service_type default).
+    const rt_entries = try allocator.alloc(config.Config.Entry, result.runtimes.len);
+    defer allocator.free(rt_entries);
+    for (result.runtimes, 0..) |e, i| rt_entries[i] = .{ .key = e.key, .value = e.value };
+    const svc_entries = try allocator.alloc(config.Config.Entry, result.services.len);
+    defer allocator.free(svc_entries);
+    for (result.services, 0..) |e, i| svc_entries[i] = .{ .key = e.key, .value = e.value };
     const toml = try config.generate(allocator, project_name, rt_entries, svc_entries);
     defer allocator.free(toml);
 
@@ -108,14 +114,8 @@ pub fn runAdd(allocator: std.mem.Allocator, stdout: anytype, package_spec: []con
     };
     defer allocator.free(pkg.url);
 
-    store.add(allocator, pkg, stdout) catch |err| {
-        switch (err) {
-            error.Sha256Mismatch => try stdout.writeAll("Error: SHA256 verification failed\n"),
-            error.DownloadFailed => try stdout.writeAll("Error: download failed\n"),
-            error.ExtractionFailed => try stdout.writeAll("Error: extraction failed\n"),
-            error.HomeNotSet => try stdout.writeAll("Error: HOME environment variable not set\n"),
-            else => try stdout.writeAll("Error: installation failed\n"),
-        }
+    store.add(allocator, pkg, stdout) catch {
+        try stdout.writeAll("Error: installation failed\n");
     };
 }
 
@@ -141,11 +141,22 @@ pub fn runUp(allocator: std.mem.Allocator, stdout: anytype) !void {
     try service.up(allocator, result.cfg, stdout);
 }
 
-pub fn runServicesList(allocator: std.mem.Allocator, stdout: anytype) !void {
+pub fn runServicesList(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !void {
     var result = (try loadConfig(allocator, stdout)) orelse return;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
-    try service.list(allocator, result.cfg, stdout);
+    if (json_mode) {
+        const services = try service.listServices(allocator, result.cfg);
+        defer service.freeServices(allocator, services);
+        try stdout.writeAll("[");
+        for (services, 0..) |svc, idx| {
+            if (idx > 0) try stdout.writeAll(",");
+            try stdout.print("{{\"name\":\"{s}\",\"version\":\"{s}\",\"status\":\"stopped\",\"port\":{d}}}", .{ svc.name, svc.version, svc.port });
+        }
+        try stdout.writeAll("]\n");
+    } else {
+        try service.list(allocator, result.cfg, stdout);
+    }
 }
 
 pub fn runShell(allocator: std.mem.Allocator, stdout: anytype) !void {
@@ -200,10 +211,10 @@ pub fn runProxy(allocator: std.mem.Allocator, stdout: anytype) !void {
     var p = proxy.Proxy.init(allocator);
     defer p.deinit();
 
-    var port: u16 = 3000;
-    for (result.cfg.services) |svc| {
-        try p.addRoute(svc.key, port);
-        port += 1;
+    const services = try service.listServices(allocator, result.cfg);
+    defer service.freeServices(allocator, services);
+    for (services) |svc| {
+        try p.addRoute(svc.name, svc.port);
     }
 
     const caddy = try p.generateCaddyConfig(allocator);
@@ -255,7 +266,7 @@ pub fn runTunnel(allocator: std.mem.Allocator, stdout: anytype, port_str: []cons
     try stdout.writeAll("\n");
 }
 
-pub fn runConnections(allocator: std.mem.Allocator, stdout: anytype) !void {
+pub fn runConnections(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !void {
     var result = (try loadConfig(allocator, stdout)) orelse return;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
@@ -263,6 +274,20 @@ pub fn runConnections(allocator: std.mem.Allocator, stdout: anytype) !void {
     var map = connections.ConnectionMap.init(allocator);
     defer map.deinit();
     try map.parseServiceDeps(result.toml);
+
+    if (json_mode) {
+        try stdout.writeAll("[");
+        for (map.links.items, 0..) |link, idx| {
+            if (idx > 0) try stdout.writeAll(",");
+            try stdout.writeAll("{\"from\":\"");
+            try stdout.writeAll(link.from);
+            try stdout.writeAll("\",\"to\":\"");
+            try stdout.writeAll(link.to);
+            try stdout.writeAll("\"}");
+        }
+        try stdout.writeAll("]\n");
+        return;
+    }
 
     if (map.count() == 0) {
         try stdout.writeAll("No service dependencies found.\n");
@@ -299,12 +324,29 @@ pub fn runMenubar(allocator: std.mem.Allocator, stdout: anytype) !void {
     }
 }
 
-pub fn runDiscover(allocator: std.mem.Allocator, stdout: anytype) !void {
+pub fn runDiscover(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !void {
     const results = discover.discover(allocator) catch {
+        if (json_mode) { try stdout.writeAll("[]\n"); return; }
         try stdout.writeAll("Error: discovery failed\n");
         return;
     };
     defer discover.freeResults(allocator, results);
+
+    if (json_mode) {
+        try stdout.writeAll("[");
+        for (results, 0..) |p, idx| {
+            if (idx > 0) try stdout.writeAll(",");
+            try stdout.writeAll("{\"path\":\"");
+            try stdout.writeAll(p.path);
+            try stdout.writeAll("\",\"stack\":\"");
+            try stdout.writeAll(p.stack);
+            try stdout.writeAll("\",\"has_rawenv\":");
+            try stdout.writeAll(if (p.has_rawenv_toml) "true" else "false");
+            try stdout.writeAll("}");
+        }
+        try stdout.writeAll("]\n");
+        return;
+    }
 
     if (results.len == 0) {
         try stdout.writeAll("No projects found.\n");
@@ -321,7 +363,7 @@ pub fn runDiscover(allocator: std.mem.Allocator, stdout: anytype) !void {
 
 pub fn runUninstall(_: std.mem.Allocator, stdout: anytype) !void {
     const home = if (comptime builtin.os.tag == .windows) blk: {
-        break :blk std.process.getEnvVarOwned(std.heap.page_allocator, "USERPROFILE") catch {
+        break :blk if (std.c.getenv("USERPROFILE")) |s| std.mem.sliceTo(s, 0) else null orelse {
             try stdout.writeAll("Error: USERPROFILE not set\n");
             return;
         };
@@ -342,7 +384,7 @@ pub fn runUninstall(_: std.mem.Allocator, stdout: anytype) !void {
     try stdout.writeAll("\nProceed? [y/N] ");
 
     var buf: [16]u8 = undefined;
-    const n_raw = std.c.read(0, &buf, buf.len);
+    const n_raw = if (comptime builtin.os.tag == .windows) @as(isize, 0) else std.c.read(0, &buf, buf.len);
     const n: usize = if (n_raw > 0) @intCast(n_raw) else 0;
     if (n == 0) return;
     const answer = std.mem.trimEnd(u8, buf[0..n], "\r\n");

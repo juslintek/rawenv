@@ -1,0 +1,252 @@
+{
+  "version": "1.0",
+  "services": {
+    "discourse": {
+      "name": "Discourse",
+      "category": "forum",
+      "description": "Modern discussion platform with trust levels and plugins",
+      "icon": "💬",
+      "versions": ["3.2", "3.1"],
+      "default_version": "3.2",
+      "default_port": 3000,
+      "install": {
+        "macos": "git clone --branch v{version}.0 --depth 1 https://github.com/discourse/discourse.git {data_dir}",
+        "linux": "git clone --branch v{version}.0 --depth 1 https://github.com/discourse/discourse.git {data_dir}"
+      },
+      "start": "cd {data_dir} && bundle exec rails server -p {port} > {log_dir}/discourse.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && bundle install && bundle exec rake db:migrate",
+      "config_file": "config/discourse.conf",
+      "config_defaults": {"db_host": "localhost", "db_name": "discourse_dev"},
+      "plugins": {}
+    },
+    "flarum": {
+      "name": "Flarum",
+      "category": "forum",
+      "description": "Simple, elegant PHP forum software",
+      "icon": "🗣️",
+      "versions": ["1.8", "1.7"],
+      "default_version": "1.8",
+      "default_port": 8080,
+      "install": {
+        "macos": "composer create-project flarum/flarum={version} {data_dir}",
+        "linux": "composer create-project flarum/flarum={version} {data_dir}"
+      },
+      "start": "cd {data_dir} && php -S 127.0.0.1:{port} -t public > {log_dir}/flarum.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && php flarum install",
+      "config_file": "config.php",
+      "config_defaults": {"url": "http://localhost:{port}"},
+      "plugins": {}
+    },
+    "nodebb": {
+      "name": "NodeBB",
+      "category": "forum",
+      "description": "Node.js-based forum with real-time features",
+      "icon": "🟦",
+      "versions": ["3.8", "3.7"],
+      "default_version": "3.8",
+      "default_port": 4567,
+      "install": {
+        "macos": "git clone --branch v{version}.0 --depth 1 https://github.com/NodeBB/NodeBB.git {data_dir}",
+        "linux": "git clone --branch v{version}.0 --depth 1 https://github.com/NodeBB/NodeBB.git {data_dir}"
+      },
+      "start": "cd {data_dir} && ./nodebb start > {log_dir}/nodebb.log 2>&1 &",
+      "stop": "cd {data_dir} && ./nodebb stop",
+      "init": "cd {data_dir} && npm install && ./nodebb setup",
+      "config_file": "config.json",
+      "config_defaults": {"port": "{port}", "database": "redis"},
+      "plugins": {}
+    },
+    "vanilla-forums": {
+      "name": "Vanilla Forums",
+      "category": "forum",
+      "description": "Cloud-first community forum platform",
+      "icon": "🍦",
+      "versions": ["4.3", "4.2"],
+      "default_version": "4.3",
+      "default_port": 8080,
+      "install": {
+        "macos": "composer create-project vanilla/vanilla={version} {data_dir}",
+        "linux": "composer create-project vanilla/vanilla={version} {data_dir}"
+      },
+      "start": "cd {data_dir} && php -S 127.0.0.1:{port} > {log_dir}/vanilla.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": null,
+      "config_file": "conf/config.php",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "erpnext": {
+      "name": "ERPNext",
+      "category": "erp",
+      "description": "Full-featured open-source ERP built on Frappe",
+      "icon": "🏢",
+      "versions": ["15.0", "14.0"],
+      "default_version": "15.0",
+      "default_port": 8000,
+      "install": {
+        "macos": "pip install frappe-bench && bench init {data_dir} --frappe-branch version-{version}",
+        "linux": "pip install frappe-bench && bench init {data_dir} --frappe-branch version-{version}"
+      },
+      "start": "cd {data_dir} && bench start > {log_dir}/erpnext.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && bench new-site site1.local && bench get-app erpnext --branch version-{version} && bench --site site1.local install-app erpnext",
+      "config_file": "sites/common_site_config.json",
+      "config_defaults": {"webserver_port": "{port}"},
+      "plugins": {}
+    },
+    "odoo": {
+      "name": "Odoo",
+      "category": "erp",
+      "description": "All-in-one business management suite (ERP, CRM, eCommerce)",
+      "icon": "🟣",
+      "versions": ["17.0", "16.0"],
+      "default_version": "17.0",
+      "default_port": 8069,
+      "install": {
+        "macos": "git clone --branch {version} --depth 1 https://github.com/odoo/odoo.git {data_dir}",
+        "linux": "git clone --branch {version} --depth 1 https://github.com/odoo/odoo.git {data_dir}"
+      },
+      "start": "cd {data_dir} && python odoo-bin --http-port={port} --data-dir={data_dir}/data > {log_dir}/odoo.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && pip install -r requirements.txt",
+      "config_file": "odoo.conf",
+      "config_defaults": {"http_port": "{port}", "db_host": "localhost"},
+      "plugins": {}
+    },
+    "dolibarr": {
+      "name": "Dolibarr",
+      "category": "erp",
+      "description": "Modular ERP and CRM for small businesses",
+      "icon": "📋",
+      "versions": ["19.0", "18.0"],
+      "default_version": "19.0",
+      "default_port": 8080,
+      "install": {
+        "macos": "curl -fsSL https://github.com/Dolibarr/dolibarr/archive/refs/tags/{version}.0.tar.gz | tar xz -C {data_dir}/",
+        "linux": "curl -fsSL https://github.com/Dolibarr/dolibarr/archive/refs/tags/{version}.0.tar.gz | tar xz -C {data_dir}/"
+      },
+      "start": "cd {data_dir} && php -S 127.0.0.1:{port} -t htdocs > {log_dir}/dolibarr.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": null,
+      "config_file": "htdocs/conf/conf.php",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "suitecrm": {
+      "name": "SuiteCRM",
+      "category": "crm",
+      "description": "Enterprise-ready open-source CRM (SugarCRM fork)",
+      "icon": "📇",
+      "versions": ["8.6", "8.5"],
+      "default_version": "8.6",
+      "default_port": 8080,
+      "install": {
+        "macos": "curl -fsSL https://github.com/salesagility/SuiteCRM-Core/releases/download/v{version}.0/SuiteCRM-{version}.0.zip -o /tmp/suite.zip && unzip -q /tmp/suite.zip -d {data_dir}/",
+        "linux": "curl -fsSL https://github.com/salesagility/SuiteCRM-Core/releases/download/v{version}.0/SuiteCRM-{version}.0.zip -o /tmp/suite.zip && unzip -q /tmp/suite.zip -d {data_dir}/"
+      },
+      "start": "cd {data_dir} && php -S 127.0.0.1:{port} -t public > {log_dir}/suitecrm.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && php bin/console suitecrm:app:install",
+      "config_file": ".env.local",
+      "config_defaults": {"DATABASE_URL": "mysql://root@localhost:3306/suitecrm"},
+      "plugins": {}
+    },
+    "espocrm": {
+      "name": "EspoCRM",
+      "category": "crm",
+      "description": "Lightweight CRM with customizable entities and workflows",
+      "icon": "📊",
+      "versions": ["8.3", "8.2"],
+      "default_version": "8.3",
+      "default_port": 8080,
+      "install": {
+        "macos": "curl -fsSL https://github.com/espocrm/espocrm/archive/refs/tags/{version}.0.tar.gz | tar xz -C {data_dir}/",
+        "linux": "curl -fsSL https://github.com/espocrm/espocrm/archive/refs/tags/{version}.0.tar.gz | tar xz -C {data_dir}/"
+      },
+      "start": "cd {data_dir} && php -S 127.0.0.1:{port} > {log_dir}/espocrm.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": null,
+      "config_file": "data/config.php",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "twenty-crm": {
+      "name": "Twenty CRM",
+      "category": "crm",
+      "description": "Modern open-source CRM alternative to Salesforce",
+      "icon": "🔵",
+      "versions": ["0.21", "0.20"],
+      "default_version": "0.21",
+      "default_port": 3000,
+      "install": {
+        "macos": "git clone --branch v{version}.0 --depth 1 https://github.com/twentyhq/twenty.git {data_dir}",
+        "linux": "git clone --branch v{version}.0 --depth 1 https://github.com/twentyhq/twenty.git {data_dir}"
+      },
+      "start": "cd {data_dir} && npx nx serve twenty-server --port {port} > {log_dir}/twenty.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && npm install && npx nx run twenty-server:database:init",
+      "config_file": ".env",
+      "config_defaults": {"PG_DATABASE_URL": "postgres://localhost:5432/twenty"},
+      "plugins": {}
+    },
+    "monica": {
+      "name": "Monica",
+      "category": "crm",
+      "description": "Personal relationship management (contacts, activities, notes)",
+      "icon": "❤️",
+      "versions": ["4.1", "4.0"],
+      "default_version": "4.1",
+      "default_port": 8080,
+      "install": {
+        "macos": "git clone --branch v{version}.0 --depth 1 https://github.com/monicahq/monica.git {data_dir}",
+        "linux": "git clone --branch v{version}.0 --depth 1 https://github.com/monicahq/monica.git {data_dir}"
+      },
+      "start": "cd {data_dir} && php artisan serve --port {port} > {log_dir}/monica.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && composer install && php artisan setup:production",
+      "config_file": ".env",
+      "config_defaults": {"DB_CONNECTION": "mysql", "DB_HOST": "127.0.0.1"},
+      "plugins": {}
+    },
+    "invoice-ninja": {
+      "name": "Invoice Ninja",
+      "category": "crm",
+      "description": "Open-source invoicing, payments, and time tracking",
+      "icon": "🥷",
+      "versions": ["5.10", "5.9"],
+      "default_version": "5.10",
+      "default_port": 8000,
+      "install": {
+        "macos": "curl -fsSL https://github.com/invoiceninja/invoiceninja/releases/download/v{version}.0/invoiceninja.tar -o /tmp/in.tar && tar xf /tmp/in.tar -C {data_dir}/",
+        "linux": "curl -fsSL https://github.com/invoiceninja/invoiceninja/releases/download/v{version}.0/invoiceninja.tar -o /tmp/in.tar && tar xf /tmp/in.tar -C {data_dir}/"
+      },
+      "start": "cd {data_dir} && php artisan serve --port {port} > {log_dir}/invoiceninja.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && php artisan ninja:setup",
+      "config_file": ".env",
+      "config_defaults": {"DB_HOST": "127.0.0.1", "DB_DATABASE": "invoiceninja"},
+      "plugins": {}
+    },
+    "crater": {
+      "name": "Crater",
+      "category": "crm",
+      "description": "Open-source invoicing app for freelancers and small businesses",
+      "icon": "🌋",
+      "versions": ["6.0", "5.0"],
+      "default_version": "6.0",
+      "default_port": 8000,
+      "install": {
+        "macos": "git clone --branch v{version}.0 --depth 1 https://github.com/crater-invoice/crater.git {data_dir}",
+        "linux": "git clone --branch v{version}.0 --depth 1 https://github.com/crater-invoice/crater.git {data_dir}"
+      },
+      "start": "cd {data_dir} && php artisan serve --port {port} > {log_dir}/crater.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && composer install && php artisan crater:install",
+      "config_file": ".env",
+      "config_defaults": {"DB_CONNECTION": "mysql", "DB_HOST": "127.0.0.1"},
+      "plugins": {}
+    }
+  }
+}

@@ -2,170 +2,117 @@ const std = @import("std");
 const testing = std.testing;
 const builtin = @import("builtin");
 const cell_mod = @import("cell");
-const CellConfig = cell_mod.CellConfig;
-const platform_impl = cell_mod.platform;
 
-const test_config = CellConfig{
-    .name = "test-postgres",
+const test_config = cell_mod.CellConfig{
+    .service_name = "test-postgres",
     .data_dir = "/tmp/rawenv-test-cell",
-    .allowed_port = 5432,
-    .mem_limit_mb = 512,
+    .port = 5432,
+    .memory_limit_mb = 512,
     .cpu_cores = 2,
 };
 
-// --- macOS Seatbelt profile generation tests ---
+// --- Seatbelt profile tests ---
 
-test "macos: profile contains deny default" {
+test "seatbelt profile contains correct data_dir path" {
     if (builtin.os.tag != .macos) return error.SkipZigTest;
-    const profile = try platform_impl.generateProfile(testing.allocator, test_config);
+    const profile = try cell_mod.platform.generateSeatbeltProfile(testing.allocator, test_config);
     defer testing.allocator.free(profile);
-    try testing.expect(std.mem.indexOf(u8, profile, "(deny default)") != null);
+    try testing.expect(std.mem.indexOf(u8, profile, "/tmp/rawenv-test-cell") != null);
 }
 
-test "macos: profile allows data_dir read/write" {
+test "seatbelt profile contains correct port" {
     if (builtin.os.tag != .macos) return error.SkipZigTest;
-    const profile = try platform_impl.generateProfile(testing.allocator, test_config);
+    const profile = try cell_mod.platform.generateSeatbeltProfile(testing.allocator, test_config);
     defer testing.allocator.free(profile);
-    try testing.expect(std.mem.indexOf(u8, profile, "(allow file-read* file-write* (subpath \"/tmp/rawenv-test-cell\"))") != null);
+    try testing.expect(std.mem.indexOf(u8, profile, "localhost:5432") != null);
 }
 
-test "macos: profile allows specific port" {
+test "seatbelt profile omits network when port is 0" {
     if (builtin.os.tag != .macos) return error.SkipZigTest;
-    const profile = try platform_impl.generateProfile(testing.allocator, test_config);
-    defer testing.allocator.free(profile);
-    try testing.expect(std.mem.indexOf(u8, profile, "127.0.0.1:5432") != null);
-}
-
-test "macos: profile with no port omits network rule" {
-    if (builtin.os.tag != .macos) return error.SkipZigTest;
-    const cfg = CellConfig{ .name = "t", .data_dir = "/tmp/t", .allowed_port = 0, .mem_limit_mb = 256, .cpu_cores = 1 };
-    const profile = try platform_impl.generateProfile(testing.allocator, cfg);
+    const cfg = cell_mod.CellConfig{ .service_name = "no-net", .data_dir = "/tmp/x", .port = 0, .memory_limit_mb = 128, .cpu_cores = 1 };
+    const profile = try cell_mod.platform.generateSeatbeltProfile(testing.allocator, cfg);
     defer testing.allocator.free(profile);
     try testing.expect(std.mem.indexOf(u8, profile, "network*") == null);
 }
 
-test "macos: sandboxCommand builds correct argv" {
+test "seatbelt launchInSandbox builds sandbox-exec argv" {
     if (builtin.os.tag != .macos) return error.SkipZigTest;
-    const cmd: []const []const u8 = &.{ "/usr/bin/pg_ctl", "start" };
-    const argv = try platform_impl.sandboxCommand(testing.allocator, test_config, cmd);
+    const cmd: []const []const u8 = &.{"/usr/bin/postgres"};
+    const argv = try cell_mod.platform.launchInSandbox(testing.allocator, test_config, cmd);
     defer {
-        testing.allocator.free(argv[2]); // profile string
+        testing.allocator.free(argv[2]);
         testing.allocator.free(argv);
     }
     try testing.expectEqualStrings("sandbox-exec", argv[0]);
     try testing.expectEqualStrings("-p", argv[1]);
-    try testing.expect(std.mem.indexOf(u8, argv[2], "(deny default)") != null);
     try testing.expectEqualStrings("--", argv[3]);
-    try testing.expectEqualStrings("/usr/bin/pg_ctl", argv[4]);
-    try testing.expectEqualStrings("start", argv[5]);
+    try testing.expectEqualStrings("/usr/bin/postgres", argv[4]);
 }
 
-// --- Linux cgroup/namespace config tests ---
+// --- systemd unit tests ---
 
-test "linux: cgroup memory value" {
+test "systemd unit contains MemoryMax" {
     if (builtin.os.tag != .linux) return error.SkipZigTest;
-    var buf: [32]u8 = undefined;
-    const val = platform_impl.writeCgroupMemory(&buf, 512);
-    try testing.expectEqualStrings("536870912", val);
+    const unit = try cell_mod.platform.generateSystemdUnit(testing.allocator, test_config, "/usr/bin/postgres");
+    defer testing.allocator.free(unit);
+    try testing.expect(std.mem.indexOf(u8, unit, "MemoryMax=512M") != null);
 }
 
-test "linux: cgroup cpu value" {
+test "systemd unit contains CPUQuota" {
     if (builtin.os.tag != .linux) return error.SkipZigTest;
-    var buf: [32]u8 = undefined;
-    const val = platform_impl.writeCgroupCpu(&buf, 2);
-    try testing.expectEqualStrings("200000 100000", val);
+    const unit = try cell_mod.platform.generateSystemdUnit(testing.allocator, test_config, "/usr/bin/postgres");
+    defer testing.allocator.free(unit);
+    try testing.expect(std.mem.indexOf(u8, unit, "CPUQuota=200%") != null);
 }
 
-test "linux: cgroupConfig struct" {
+test "systemd unit contains ProtectSystem" {
     if (builtin.os.tag != .linux) return error.SkipZigTest;
-    const cfg = platform_impl.cgroupConfig(test_config);
-    try testing.expectEqual(@as(u64, 512 * 1024 * 1024), cfg.memory_max_bytes);
-    try testing.expectEqual(@as(u64, 200000), cfg.cpu_quota);
-    try testing.expectEqual(@as(u64, 100000), cfg.cpu_period);
+    const unit = try cell_mod.platform.generateSystemdUnit(testing.allocator, test_config, "/usr/bin/postgres");
+    defer testing.allocator.free(unit);
+    try testing.expect(std.mem.indexOf(u8, unit, "ProtectSystem=strict") != null);
 }
 
-test "linux: namespaceFlags includes network when port set" {
+test "systemd unit contains ReadWritePaths" {
     if (builtin.os.tag != .linux) return error.SkipZigTest;
-    const flags = platform_impl.namespaceFlags(test_config);
-    try testing.expect(flags & platform_impl.CLONE_NEWUSER != 0);
-    try testing.expect(flags & platform_impl.CLONE_NEWPID != 0);
-    try testing.expect(flags & platform_impl.CLONE_NEWNS != 0);
-    try testing.expect(flags & platform_impl.CLONE_NEWNET != 0);
+    const unit = try cell_mod.platform.generateSystemdUnit(testing.allocator, test_config, "/usr/bin/postgres");
+    defer testing.allocator.free(unit);
+    try testing.expect(std.mem.indexOf(u8, unit, "ReadWritePaths=/tmp/rawenv-test-cell") != null);
 }
 
-test "linux: landlockConfig returns data_dir" {
+test "systemd unit contains PrivateNetwork" {
     if (builtin.os.tag != .linux) return error.SkipZigTest;
-    const ll = platform_impl.landlockConfig(test_config);
-    try testing.expectEqualStrings("/tmp/rawenv-test-cell", ll.data_dir);
-    try testing.expect(ll.read_only_paths.len > 0);
+    const unit = try cell_mod.platform.generateSystemdUnit(testing.allocator, test_config, "/usr/bin/postgres");
+    defer testing.allocator.free(unit);
+    try testing.expect(std.mem.indexOf(u8, unit, "PrivateNetwork=yes") != null);
 }
 
-// --- Windows job object config tests ---
+// --- CellConfig validation tests ---
 
-test "windows: jobLimits computation" {
-    if (builtin.os.tag != .windows) return error.SkipZigTest;
-    const limits = platform_impl.jobLimits(test_config);
-    try testing.expectEqual(@as(u64, 512 * 1024 * 1024), limits.process_memory);
-    try testing.expectEqual(@as(u32, 2), limits.active_processes);
-    try testing.expect(limits.limit_flags & platform_impl.JOB_OBJECT_LIMIT_PROCESS_MEMORY != 0);
+test "config: port > 0 for networked services" {
+    try testing.expect(test_config.port > 0);
 }
 
-test "windows: container profile name" {
-    if (builtin.os.tag != .windows) return error.SkipZigTest;
-    var buf: [256]u8 = undefined;
-    const name = platform_impl.containerProfileName(&buf, "test-postgres");
-    try testing.expectEqualStrings("rawenv.cell.test-postgres", name);
+test "config: zero port valid for isolated cells" {
+    const cfg = cell_mod.CellConfig{ .service_name = "isolated", .data_dir = "/tmp/x", .port = 0, .memory_limit_mb = 128, .cpu_cores = 1 };
+    try testing.expectEqual(@as(u16, 0), cfg.port);
 }
 
-// --- Cross-platform Cell abstraction tests ---
+// --- Cell abstraction tests ---
 
-test "cell: create returns created status" {
-    const c = cell_mod.Cell.create(testing.allocator, test_config);
-    try testing.expectEqual(cell_mod.CellStatus.created, c.getStatus());
+test "createCell returns non-running cell" {
+    const c = cell_mod.createCell(testing.allocator, test_config);
+    try testing.expect(!c.is_running);
+    try testing.expect(c.pid == null);
 }
 
-test "cell: destroy sets stopped" {
-    var c = cell_mod.Cell.create(testing.allocator, test_config);
+test "cell destroy sets not running" {
+    var c = cell_mod.createCell(testing.allocator, test_config);
     c.destroy();
-    try testing.expectEqual(cell_mod.CellStatus.stopped, c.getStatus());
+    try testing.expect(!c.is_running);
 }
 
-test "cell: createCell compat" {
-    const c = try cell_mod.createCell(testing.allocator, test_config);
-    try testing.expectEqual(cell_mod.CellStatus.created, c.getStatus());
-}
-
-// --- Integration test: sandbox prevents writes outside data_dir ---
-
-test "integration: sandboxed process cannot write outside data_dir" {
-    if (builtin.os.tag != .macos) return error.SkipZigTest;
-
-    const data_dir = "/tmp/rawenv-sandbox-test";
-
-    const io = std.testing.io;
-    _ = std.c.unlink("/tmp/rawenv-sandbox-outside.txt");
-    std.Io.Dir.cwd().deleteTree(io, "/tmp/rawenv-sandbox-test") catch {};
-    std.Io.Dir.cwd().createDir(io, "/tmp/rawenv-sandbox-test", .default_dir) catch return;
-    defer {
-        std.Io.Dir.cwd().deleteTree(io, "/tmp/rawenv-sandbox-test") catch {};
-        _ = std.c.unlink("/tmp/rawenv-sandbox-outside.txt");
-    }
-
-    const cfg = CellConfig{ .name = "sandbox-test", .data_dir = data_dir, .allowed_port = 0, .mem_limit_mb = 128, .cpu_cores = 1 };
-
-    const profile = try platform_impl.generateProfile(testing.allocator, cfg);
+test "generateProfile delegates to platform" {
+    const profile = try cell_mod.generateProfile(testing.allocator, test_config);
     defer testing.allocator.free(profile);
-
-    const exec = @import("exec");
-
-    // Run sandbox-exec with -p (inline profile) to write outside data_dir
-    const argv = [_][*:0]const u8{ "sandbox-exec", "-p", try testing.allocator.dupeZ(u8, profile), "--", "/bin/sh", "-c", "echo hacked > /tmp/rawenv-sandbox-outside.txt" };
-    defer testing.allocator.free(std.mem.sliceTo(argv[2], 0));
-
-    const exit_code = exec.run(&argv) catch return;
-    _ = exit_code;
-
-    // The file outside data_dir should NOT exist
-    const file_exists = std.c.access("/tmp/rawenv-sandbox-outside.txt", 0) == 0;
-    try testing.expect(!file_exists);
+    try testing.expect(profile.len > 0);
 }

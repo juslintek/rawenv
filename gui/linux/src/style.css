@@ -1,0 +1,161 @@
+window, .background {
+    background-color: #0f0f14;
+    color: #e2e4f0;
+}
+
+.card, .boxed-list {
+    background-color: #16161e;
+    border-radius: 10px;
+    border: 1px solid #2a2a3a;
+}
+
+.stats-card {
+    background-color: #16161e;
+    border-radius: 10px;
+    padding: 16px;
+    border: 1px solid #2a2a3a;
+}
+
+.accent-text { color: #6366f1; }
+.success { color: #34d399; }
+.error-text { color: #f87171; }
+.warning-text { color: #fbbf24; }
+.dim-label { color: #8b8da6; }
+
+.monospace {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 13px;
+}
+
+.status-dot-running { color: #34d399; }
+.status-dot-stopped { color: #f87171; }
+
+progressbar trough {
+    background-color: #1e1e2a;
+    border-radius: 9999px;
+    min-height: 6px;
+}
+
+progressbar progress {
+    background-color: #6366f1;
+    border-radius: 9999px;
+    min-height: 6px;
+}
+
+.suggested-action {
+    background-color: #6366f1;
+    color: white;
+    border-radius: 6px;
+}
+
+.destructive-action {
+    background-color: #f87171;
+    color: white;
+    border-radius: 6px;
+}
+
+.navigation-sidebar {
+    background-color: #16161e;
+}
+
+navigation-sidebar-view, .navigation-view {
+    background-color: #16161e;
+}
+
+.navigation-sidebar row:selected {
+    background-color: #1e1e2a;
+}
+
+.message-bubble-user {
+    background-color: #6366f1;
+    color: white;
+    border-radius: 12px;
+    padding: 10px 14px;
+}
+
+.message-bubble-assistant {
+    background-color: #1e1e2a;
+    color: #e2e4f0;
+    border-radius: 12px;
+    padding: 10px 14px;
+}
+
+.deploy-log {
+    background-color: #0a0a0f;
+    border-radius: 8px;
+    padding: 12px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+}
+
+.deploy-log-error {
+    color: #f87171;
+}
+
+.connection-card {
+    background-color: #16161e;
+    border-radius: 10px;
+    padding: 14px;
+    border: 1px solid #2a2a3a;
+}
+
+.mode-badge-local {
+    background-color: rgba(99, 102, 241, 0.2);
+    color: #6366f1;
+    border-radius: 4px;
+    padding: 2px 8px;
+}
+
+.mode-badge-proxy {
+    background-color: rgba(52, 211, 153, 0.2);
+    color: #34d399;
+    border-radius: 4px;
+    padding: 2px 8px;
+}
+
+.mode-badge-tunnel {
+    background-color: rgba(251, 191, 36, 0.2);
+    color: #fbbf24;
+    border-radius: 4px;
+    padding: 2px 8px;
+}
+
+notebook header {
+    background-color: #16161e;
+}
+
+notebook tab {
+    background-color: transparent;
+    color: #8b8da6;
+}
+
+notebook tab:checked {
+    color: #6366f1;
+    border-bottom: 3px solid #6366f1;
+}
+
+.sidebar-panel {
+    background-color: #16161e;
+    min-height: 100%;
+}
+
+listview {
+    background-color: #16161e;
+}
+
+listview row {
+    background-color: transparent;
+}
+
+textview {
+    background-color: #0f0f14;
+    color: #e2e4f0;
+}
+
+textview text {
+    background-color: #0f0f14;
+}
+
+scrolledwindow {
+    background-color: #0f0f14;
+}

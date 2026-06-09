@@ -1,0 +1,96 @@
+<Page
+    x:Class="Rawenv.Views.InstallerPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    RequestedTheme="Dark">
+
+    <Page.Resources>
+        <SolidColorBrush x:Key="BgPrimary" Color="#0f0f14"/>
+        <SolidColorBrush x:Key="BgSecondary" Color="#16161e"/>
+        <SolidColorBrush x:Key="BgTertiary" Color="#1e1e2a"/>
+        <SolidColorBrush x:Key="AccentPrimary" Color="#6366f1"/>
+        <SolidColorBrush x:Key="AccentSuccess" Color="#34d399"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#e2e4f0"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#8b8da6"/>
+    </Page.Resources>
+
+    <Grid Background="{StaticResource BgPrimary}" Padding="48" VerticalAlignment="Center" HorizontalAlignment="Center">
+        <!-- Step Indicator -->
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8" Margin="0,0,0,24"
+                    AutomationProperties.AutomationId="InstallerStepIndicator">
+            <Ellipse x:Name="Step1Dot" Width="10" Height="10" Fill="{StaticResource AccentPrimary}"/>
+            <Rectangle Width="40" Height="2" Fill="{StaticResource BgTertiary}" VerticalAlignment="Center"/>
+            <Ellipse x:Name="Step2Dot" Width="10" Height="10" Fill="{StaticResource BgTertiary}"/>
+            <Rectangle Width="40" Height="2" Fill="{StaticResource BgTertiary}" VerticalAlignment="Center"/>
+            <Ellipse x:Name="Step3Dot" Width="10" Height="10" Fill="{StaticResource BgTertiary}"/>
+        </StackPanel>
+
+        <!-- Welcome State (Step 1) -->
+        <StackPanel x:Name="WelcomePanel" Grid.Row="1" Spacing="16" HorizontalAlignment="Center" MaxWidth="480"
+                    AutomationProperties.AutomationId="InstallerWelcome">
+            <TextBlock Text="⚡ rawenv" FontSize="32" FontWeight="Bold" Foreground="{StaticResource AccentPrimary}" HorizontalAlignment="Center"/>
+            <TextBlock Text="Native dev environments. Zero dependencies." FontSize="16" Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Center"/>
+
+            <Border Background="{StaticResource BgSecondary}" CornerRadius="10" Padding="20" Margin="0,24,0,0">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="🪟 Windows" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"/>
+                    <TextBlock Text="x86_64 · Windows 11" FontSize="13" Foreground="{StaticResource TextSecondary}"/>
+                    <TextBlock Text="Service Manager: Windows Services" FontSize="12" Foreground="{StaticResource TextSecondary}"/>
+                    <TextBlock Text="Isolation: AppContainer" FontSize="12" Foreground="{StaticResource TextSecondary}"/>
+                    <TextBlock Text="DNS: Acrylic DNS" FontSize="12" Foreground="{StaticResource TextSecondary}"/>
+                </StackPanel>
+            </Border>
+
+            <Button Content="Install rawenv" HorizontalAlignment="Center" Padding="24,10"
+                    Background="{StaticResource AccentPrimary}" Foreground="White" CornerRadius="6"
+                    Click="Install_Click" AutomationProperties.AutomationId="InstallButton"/>
+        </StackPanel>
+
+        <!-- Installing State (Step 2) -->
+        <StackPanel x:Name="InstallingPanel" Grid.Row="1" Visibility="Collapsed" Spacing="16" HorizontalAlignment="Center" MaxWidth="480"
+                    AutomationProperties.AutomationId="InstallerProgress">
+            <TextBlock Text="Installing…" FontSize="24" FontWeight="Bold" Foreground="{StaticResource TextPrimary}" HorizontalAlignment="Center"/>
+            <ProgressBar x:Name="InstallProgress" Maximum="1" Height="6" Foreground="{StaticResource AccentPrimary}"
+                         Background="{StaticResource BgTertiary}" Margin="0,8,0,0"/>
+            <TextBlock x:Name="StepLabel" FontSize="14" Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Center"/>
+
+            <ItemsControl x:Name="StepsList" Margin="0,16,0,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                            <TextBlock Text="✓" FontSize="12" Foreground="#34d399"/>
+                            <TextBlock Text="{x:Bind}" FontFamily="Consolas" FontSize="12" Foreground="#8b8da6"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+
+        <!-- Done State (Step 3) -->
+        <StackPanel x:Name="DonePanel" Grid.Row="1" Visibility="Collapsed" Spacing="16" HorizontalAlignment="Center" MaxWidth="480"
+                    AutomationProperties.AutomationId="InstallerDone">
+            <TextBlock Text="✓" FontSize="48" Foreground="{StaticResource AccentSuccess}" HorizontalAlignment="Center"/>
+            <TextBlock Text="Installation Complete" FontSize="24" FontWeight="Bold" Foreground="{StaticResource TextPrimary}" HorizontalAlignment="Center"/>
+            <TextBlock Text="rawenv is ready. Open a terminal and run:" FontSize="14" Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Center"/>
+            <Border Background="{StaticResource BgTertiary}" CornerRadius="6" Padding="16,10">
+                <TextBlock Text="rawenv init" FontFamily="Consolas" FontSize="14" Foreground="{StaticResource AccentPrimary}" HorizontalAlignment="Center"/>
+            </Border>
+
+            <StackPanel Spacing="8" Margin="0,16,0,0">
+                <TextBlock Text="What was installed:" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}"/>
+                <TextBlock Text="• rawenv binary → C:\\Program Files\\rawenv\\rawenv.exe" FontFamily="Consolas" FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+                <TextBlock Text="• Service manager registered" FontFamily="Consolas" FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+                <TextBlock Text="• PATH updated" FontFamily="Consolas" FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+            </StackPanel>
+
+            <Button Content="Go to Dashboard" HorizontalAlignment="Center" Padding="24,10"
+                    Background="{StaticResource AccentPrimary}" Foreground="White" CornerRadius="6"
+                    Click="GoToDashboard_Click" AutomationProperties.AutomationId="GoToDashboardButton"/>
+        </StackPanel>
+    </Grid>
+</Page>

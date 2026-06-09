@@ -1,0 +1,385 @@
+{
+  "version": "1.0",
+  "services": {
+    "nuxtjs": {
+      "name": "Nuxt.js",
+      "category": "framework",
+      "description": "Vue.js SSR framework with file-based routing and auto-imports",
+      "icon": "💚",
+      "versions": ["3.12", "3.11"],
+      "default_version": "3.12",
+      "default_port": 3000,
+      "install": {
+        "macos": "npx nuxi@{version} init {data_dir}",
+        "linux": "npx nuxi@{version} init {data_dir}"
+      },
+      "start": "cd {data_dir} && npx nuxt dev --port {port} > {log_dir}/nuxt.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && npm install",
+      "config_file": "nuxt.config.ts",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "sveltekit": {
+      "name": "SvelteKit",
+      "category": "framework",
+      "description": "Full-stack Svelte framework with SSR and adapters",
+      "icon": "🔶",
+      "versions": ["2.5", "2.0"],
+      "default_version": "2.5",
+      "default_port": 5173,
+      "install": {
+        "macos": "npm create svelte@latest {data_dir}",
+        "linux": "npm create svelte@latest {data_dir}"
+      },
+      "start": "cd {data_dir} && npx vite dev --port {port} > {log_dir}/sveltekit.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && npm install",
+      "config_file": "svelte.config.js",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "remix": {
+      "name": "Remix",
+      "category": "framework",
+      "description": "Full-stack React framework focused on web standards",
+      "icon": "💿",
+      "versions": ["2.9", "2.8"],
+      "default_version": "2.9",
+      "default_port": 3000,
+      "install": {
+        "macos": "npx create-remix@{version} {data_dir}",
+        "linux": "npx create-remix@{version} {data_dir}"
+      },
+      "start": "cd {data_dir} && npx remix vite:dev --port {port} > {log_dir}/remix.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && npm install",
+      "config_file": "vite.config.ts",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "astro": {
+      "name": "Astro",
+      "category": "framework",
+      "description": "Content-focused web framework with island architecture",
+      "icon": "🚀",
+      "versions": ["4.10", "4.9"],
+      "default_version": "4.10",
+      "default_port": 4321,
+      "install": {
+        "macos": "npm create astro@latest -- --template minimal {data_dir}",
+        "linux": "npm create astro@latest -- --template minimal {data_dir}"
+      },
+      "start": "cd {data_dir} && npx astro dev --port {port} > {log_dir}/astro.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && npm install",
+      "config_file": "astro.config.mjs",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "hono": {
+      "name": "Hono",
+      "category": "framework",
+      "description": "Ultrafast web framework for Deno, Bun, and Cloudflare Workers",
+      "icon": "🔥",
+      "versions": ["4.4", "4.3"],
+      "default_version": "4.4",
+      "default_port": 3000,
+      "install": {
+        "macos": "npm create hono@latest {data_dir}",
+        "linux": "npm create hono@latest {data_dir}"
+      },
+      "start": "cd {data_dir} && npx tsx src/index.ts > {log_dir}/hono.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && npm install",
+      "config_file": null,
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "fiber": {
+      "name": "Fiber",
+      "category": "framework",
+      "description": "Express-inspired Go web framework built on Fasthttp",
+      "icon": "🧬",
+      "versions": ["2.52", "2.51"],
+      "default_version": "2.52",
+      "default_port": 3000,
+      "install": {
+        "macos": "go install github.com/gofiber/fiber/v2@v{version}.0",
+        "linux": "go install github.com/gofiber/fiber/v2@v{version}.0"
+      },
+      "start": "cd {data_dir} && go run . > {log_dir}/fiber.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && go mod init app && go mod tidy",
+      "config_file": null,
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "echo": {
+      "name": "Echo",
+      "category": "framework",
+      "description": "High-performance Go web framework with middleware support",
+      "icon": "🔵",
+      "versions": ["4.12", "4.11"],
+      "default_version": "4.12",
+      "default_port": 8080,
+      "install": {
+        "macos": "go install github.com/labstack/echo/v4@v{version}.0",
+        "linux": "go install github.com/labstack/echo/v4@v{version}.0"
+      },
+      "start": "cd {data_dir} && go run . > {log_dir}/echo.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && go mod init app && go mod tidy",
+      "config_file": null,
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "axum": {
+      "name": "Axum",
+      "category": "framework",
+      "description": "Ergonomic Rust web framework built on Tokio and Tower",
+      "icon": "🦀",
+      "versions": ["0.7", "0.6"],
+      "default_version": "0.7",
+      "default_port": 3000,
+      "install": {
+        "macos": "cargo install cargo-generate && cargo generate --git https://github.com/tokio-rs/axum --name {data_dir}",
+        "linux": "cargo install cargo-generate && cargo generate --git https://github.com/tokio-rs/axum --name {data_dir}"
+      },
+      "start": "cd {data_dir} && cargo run > {log_dir}/axum.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && cargo build",
+      "config_file": null,
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "rocket": {
+      "name": "Rocket",
+      "category": "framework",
+      "description": "Type-safe Rust web framework with code generation",
+      "icon": "🚀",
+      "versions": ["0.5", "0.4"],
+      "default_version": "0.5",
+      "default_port": 8000,
+      "install": {
+        "macos": "cargo init {data_dir} && cd {data_dir} && cargo add rocket@{version}",
+        "linux": "cargo init {data_dir} && cd {data_dir} && cargo add rocket@{version}"
+      },
+      "start": "cd {data_dir} && ROCKET_PORT={port} cargo run > {log_dir}/rocket.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && cargo build",
+      "config_file": "Rocket.toml",
+      "config_defaults": {"port": "{port}", "address": "127.0.0.1"},
+      "plugins": {}
+    },
+    "ktor": {
+      "name": "Ktor",
+      "category": "framework",
+      "description": "Asynchronous Kotlin web framework by JetBrains",
+      "icon": "🟣",
+      "versions": ["2.3", "2.2"],
+      "default_version": "2.3",
+      "default_port": 8080,
+      "install": {
+        "macos": "curl -fsSL https://start.ktor.io/generate -o {data_dir}/ktor.zip && unzip -q {data_dir}/ktor.zip -d {data_dir}/",
+        "linux": "curl -fsSL https://start.ktor.io/generate -o {data_dir}/ktor.zip && unzip -q {data_dir}/ktor.zip -d {data_dir}/"
+      },
+      "start": "cd {data_dir} && ./gradlew run > {log_dir}/ktor.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && ./gradlew build",
+      "config_file": "application.conf",
+      "config_defaults": {"port": "{port}"},
+      "plugins": {}
+    },
+    "quarkus": {
+      "name": "Quarkus",
+      "category": "framework",
+      "description": "Supersonic Subatomic Java framework for cloud-native apps",
+      "icon": "⚡",
+      "versions": ["3.11", "3.10"],
+      "default_version": "3.11",
+      "default_port": 8080,
+      "install": {
+        "macos": "curl -fsSL https://github.com/quarkusio/quarkus/releases/download/{version}.0.Final/quarkus-cli-{version}.0.Final.tar.gz | tar xz -C ~/.rawenv/store/quarkus-{version}/",
+        "linux": "curl -fsSL https://github.com/quarkusio/quarkus/releases/download/{version}.0.Final/quarkus-cli-{version}.0.Final.tar.gz | tar xz -C ~/.rawenv/store/quarkus-{version}/"
+      },
+      "start": "cd {data_dir} && ./mvnw quarkus:dev -Dquarkus.http.port={port} > {log_dir}/quarkus.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "quarkus create app {data_dir}",
+      "config_file": "application.properties",
+      "config_defaults": {"quarkus.http.port": "{port}"},
+      "plugins": {}
+    },
+    "nestjs": {
+      "name": "NestJS",
+      "category": "framework",
+      "description": "Progressive Node.js framework with TypeScript and decorators",
+      "icon": "🐱",
+      "versions": ["10.3", "10.2"],
+      "default_version": "10.3",
+      "default_port": 3000,
+      "install": {
+        "macos": "npx @nestjs/cli@{version} new {data_dir}",
+        "linux": "npx @nestjs/cli@{version} new {data_dir}"
+      },
+      "start": "cd {data_dir} && npx nest start --watch > {log_dir}/nestjs.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && npm install",
+      "config_file": "nest-cli.json",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "adonisjs": {
+      "name": "AdonisJS",
+      "category": "framework",
+      "description": "Full-featured Node.js MVC framework with Lucid ORM",
+      "icon": "🟪",
+      "versions": ["6.3", "6.2"],
+      "default_version": "6.3",
+      "default_port": 3333,
+      "install": {
+        "macos": "npm init adonisjs@latest -- {data_dir}",
+        "linux": "npm init adonisjs@latest -- {data_dir}"
+      },
+      "start": "cd {data_dir} && node ace serve --watch --port {port} > {log_dir}/adonis.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && npm install",
+      "config_file": "adonisrc.ts",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "hapijs": {
+      "name": "Hapi.js",
+      "category": "framework",
+      "description": "Configuration-driven Node.js framework for enterprise APIs",
+      "icon": "🟠",
+      "versions": ["21.3", "21.2"],
+      "default_version": "21.3",
+      "default_port": 3000,
+      "install": {
+        "macos": "mkdir -p {data_dir} && cd {data_dir} && npm init -y && npm install @hapi/hapi@{version}",
+        "linux": "mkdir -p {data_dir} && cd {data_dir} && npm init -y && npm install @hapi/hapi@{version}"
+      },
+      "start": "cd {data_dir} && node server.js > {log_dir}/hapi.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": null,
+      "config_file": null,
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "koajs": {
+      "name": "Koa.js",
+      "category": "framework",
+      "description": "Expressive middleware framework by the Express team",
+      "icon": "🟤",
+      "versions": ["2.15", "2.14"],
+      "default_version": "2.15",
+      "default_port": 3000,
+      "install": {
+        "macos": "mkdir -p {data_dir} && cd {data_dir} && npm init -y && npm install koa@{version}",
+        "linux": "mkdir -p {data_dir} && cd {data_dir} && npm init -y && npm install koa@{version}"
+      },
+      "start": "cd {data_dir} && node app.js > {log_dir}/koa.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": null,
+      "config_file": null,
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "flask": {
+      "name": "Flask",
+      "category": "framework",
+      "description": "Lightweight Python micro-framework with Jinja2 templates",
+      "icon": "🧪",
+      "versions": ["3.0", "2.3"],
+      "default_version": "3.0",
+      "default_port": 5000,
+      "install": {
+        "macos": "pip install flask=={version}",
+        "linux": "pip install flask=={version}"
+      },
+      "start": "cd {data_dir} && flask run --port {port} > {log_dir}/flask.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && python -m venv .venv && . .venv/bin/activate && pip install flask",
+      "config_file": null,
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "pyramid": {
+      "name": "Pyramid",
+      "category": "framework",
+      "description": "Flexible Python web framework for small and large apps",
+      "icon": "🔺",
+      "versions": ["2.0", "1.10"],
+      "default_version": "2.0",
+      "default_port": 6543,
+      "install": {
+        "macos": "pip install pyramid=={version}",
+        "linux": "pip install pyramid=={version}"
+      },
+      "start": "cd {data_dir} && pserve development.ini http_port={port} > {log_dir}/pyramid.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && python -m venv .venv && . .venv/bin/activate && pip install pyramid cookiecutter",
+      "config_file": "development.ini",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "sinatra": {
+      "name": "Sinatra",
+      "category": "framework",
+      "description": "Minimal Ruby DSL for web applications",
+      "icon": "🎵",
+      "versions": ["4.0", "3.2"],
+      "default_version": "4.0",
+      "default_port": 4567,
+      "install": {
+        "macos": "gem install sinatra -v {version}",
+        "linux": "gem install sinatra -v {version}"
+      },
+      "start": "cd {data_dir} && ruby app.rb -p {port} > {log_dir}/sinatra.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "cd {data_dir} && bundle init && bundle add sinatra puma",
+      "config_file": null,
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "hanami": {
+      "name": "Hanami",
+      "category": "framework",
+      "description": "Modern Ruby full-stack framework with clean architecture",
+      "icon": "🌸",
+      "versions": ["2.1", "2.0"],
+      "default_version": "2.1",
+      "default_port": 2300,
+      "install": {
+        "macos": "gem install hanami -v {version}",
+        "linux": "gem install hanami -v {version}"
+      },
+      "start": "cd {data_dir} && bundle exec hanami server --port {port} > {log_dir}/hanami.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "hanami new {data_dir}",
+      "config_file": "config/app.rb",
+      "config_defaults": {},
+      "plugins": {}
+    },
+    "lucky": {
+      "name": "Lucky",
+      "category": "framework",
+      "description": "Type-safe Crystal web framework with compile-time checks",
+      "icon": "🍀",
+      "versions": ["1.1", "1.0"],
+      "default_version": "1.1",
+      "default_port": 5000,
+      "install": {
+        "macos": "brew install luckyframework/homebrew-lucky/lucky",
+        "linux": "curl -fsSL https://github.com/luckyframework/lucky_cli/releases/download/v{version}.0/lucky_cli-v{version}.0-linux-x86_64.tar.gz | tar xz -C ~/.rawenv/store/lucky-{version}/"
+      },
+      "start": "cd {data_dir} && lucky dev --port {port} > {log_dir}/lucky.log 2>&1 &",
+      "stop": "kill $(lsof -ti:{port})",
+      "init": "lucky init {data_dir}",
+      "config_file": "config/server.cr",
+      "config_defaults": {},
+      "plugins": {}
+    }
+  }
+}

@@ -8,52 +8,32 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: aarch64-macos
-            os: macos-latest
-            ext: tar.gz
-          - target: x86_64-macos
-            os: macos-latest
-            ext: tar.gz
-          - target: x86_64-linux
-            os: ubuntu-latest
-            ext: tar.gz
-          - target: aarch64-linux
-            os: ubuntu-latest
-            ext: tar.gz
-          - target: x86_64-windows
-            os: windows-latest
-            ext: zip
+          - os: macos-14
+            target: aarch64-macos
+            artifact: rawenv-macos-arm64
+          - os: macos-14
+            target: x86_64-macos
+            artifact: rawenv-macos-x64
+          - os: ubuntu-latest
+            target: x86_64-linux
+            artifact: rawenv-linux-x64
+          - os: ubuntu-latest
+            target: aarch64-linux
+            artifact: rawenv-linux-arm64
+          - os: windows-latest
+            target: x86_64-windows
+            artifact: rawenv-windows-x64.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.15.2
-      - name: Build
-        run: zig build -Doptimize=ReleaseSafe
-      - name: Package (unix)
-        if: matrix.ext == 'tar.gz'
-        run: tar czf rawenv-${{ matrix.target }}.tar.gz -C zig-out/bin rawenv
-      - name: Package (windows)
-        if: matrix.ext == 'zip'
-        shell: pwsh
-        run: Compress-Archive -Path zig-out/bin/rawenv.exe -DestinationPath rawenv-${{ matrix.target }}.zip
-      - name: Build DMG (macOS arm64)
-        if: matrix.target == 'aarch64-macos'
-        run: |
-          bash packaging/build-dmg.sh "${GITHUB_REF_NAME#v}"
-          mv packaging/rawenv-*-arm64.dmg rawenv-macos.dmg
-      - name: Upload archive
-        uses: actions/upload-artifact@v4
+          version: 0.16.0
+      - run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseSafe
+      - uses: actions/upload-artifact@v4
         with:
-          name: rawenv-${{ matrix.target }}
-          path: rawenv-${{ matrix.target }}.${{ matrix.ext }}
-      - name: Upload DMG
-        if: matrix.target == 'aarch64-macos'
-        uses: actions/upload-artifact@v4
-        with:
-          name: rawenv-macos-dmg
-          path: rawenv-macos.dmg
+          name: ${{ matrix.artifact }}
+          path: zig-out/bin/rawenv*
 
   release:
     needs: build
@@ -64,14 +44,13 @@ jobs:
       - uses: actions/download-artifact@v4
       - name: Generate SHA256SUMS
         run: |
-          find . -name 'rawenv-*' -type f | sort | while read f; do
+          find . -name 'rawenv*' -type f ! -name 'SHA256SUMS' | sort | while read f; do
             sha256sum "$f" | sed 's|  .*/|  |'
           done > SHA256SUMS
           cat SHA256SUMS
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
           files: |
-            rawenv-*/rawenv-*
+            **/rawenv*
             SHA256SUMS
           generate_release_notes: true

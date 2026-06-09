@@ -3,32 +3,75 @@ const builtin = @import("builtin");
 const config = @import("config");
 const resolver = @import("resolver");
 
-fn mkdirCompat(path: []const u8) error{ PathAlreadyExists, Unexpected }!void {
-    const p = std.posix.toPosixPath(path) catch return error.Unexpected;
-    if (std.c.mkdir(&p, 0o755) != 0) return error.PathAlreadyExists;
+pub const ServiceStatus = enum {
+    running,
+    stopped,
+    starting,
+    @"error",
+};
+
+fn mkdirP(allocator: std.mem.Allocator, path: []const u8) void {
+    if (comptime builtin.os.tag == .windows) return;
+    var i: usize = 1;
+    while (i < path.len) : (i += 1) {
+        if (path[i] == '/') {
+            const sub = std.fmt.allocPrintSentinel(allocator, "{s}", .{path[0..i]}, 0) catch return;
+            defer allocator.free(sub);
+            _ = std.c.mkdir(sub, 0o755);
+        }
+    }
+    const full = std.fmt.allocPrintSentinel(allocator, "{s}", .{path}, 0) catch return;
+    defer allocator.free(full);
+    _ = std.c.mkdir(full, 0o755);
 }
 
-fn accessCompat(path: []const u8) bool {
-    const p = std.posix.toPosixPath(path) catch return false;
-    return std.c.access(&p, 0) == 0;
+fn accessPath(allocator: std.mem.Allocator, path: []const u8) bool {
+    if (comptime builtin.os.tag == .windows) return false;
+    const z = std.fmt.allocPrintSentinel(allocator, "{s}", .{path}, 0) catch return false;
+    defer allocator.free(z);
+    return std.c.access(z, 0) == 0;
 }
 
-fn unlinkCompat(path: []const u8) void {
-    const p = std.posix.toPosixPath(path) catch return;
-    _ = std.c.unlink(&p);
+/// Run a command using fork/exec, wait for completion. Returns exit code.
+fn runCommand(allocator: std.mem.Allocator, argv: []const []const u8) !u8 {
+    if (comptime builtin.os.tag == .windows) return 1;
+
+    const argv_z = try allocator.alloc(?[*:0]const u8, argv.len + 1);
+    defer allocator.free(argv_z);
+    for (argv, 0..) |arg, idx| {
+        argv_z[idx] = (try allocator.dupeZ(u8, arg)).ptr;
+    }
+    argv_z[argv.len] = null;
+    defer for (argv_z[0..argv.len]) |ptr| {
+        if (ptr) |p| allocator.free(std.mem.sliceTo(p, 0));
+    };
+
+    const argv_sentinel: [*:null]const ?[*:0]const u8 = @ptrCast(argv_z.ptr);
+
+    const pid = std.c.fork();
+    if (pid < 0) return 1;
+    if (pid == 0) {
+        _ = std.c.execve(argv_z[0].?, argv_sentinel, std.c.environ);
+        std.c._exit(127);
+    }
+    var status: c_int = 0;
+    _ = std.c.waitpid(pid, &status, 0);
+    const exit_code: u8 = @intCast(@as(c_uint, @bitCast(status)) >> 8 & 0xff);
+    return exit_code;
 }
 
-fn symlinkCompat(target: []const u8, link_path: []const u8) !void {
-    const t = std.posix.toPosixPath(target) catch return error.NameTooLong;
-    const l = std.posix.toPosixPath(link_path) catch return error.NameTooLong;
-    if (std.c.symlinkat(&t, std.posix.AT.FDCWD, &l) != 0) return error.SymLinkFailed;
-}
+pub const ServiceInfo = struct {
+    name: []const u8,
+    version: []const u8,
+    port: u16,
+    pid: ?u32,
+    status: ServiceStatus,
+    data_dir: []const u8,
+};
 
 /// Get HOME directory path
 pub fn getHome() ?[]const u8 {
-    if (comptime builtin.os.tag == .windows) {
-        return std.process.getEnvVarOwned(std.heap.page_allocator, "USERPROFILE") catch null;
-    }
+    if (comptime builtin.os.tag == .windows) return null;
     return if (std.c.getenv("HOME")) |s| std.mem.sliceTo(s, 0) else null;
 }
 
@@ -44,6 +87,303 @@ pub fn buildBinPath(allocator: std.mem.Allocator, home: []const u8) ![]const u8 
     return std.fs.path.join(allocator, &.{ home, ".rawenv", "bin" });
 }
 
+/// Default port for known services
+pub fn defaultPort(name: []const u8) u16 {
+    if (std.mem.eql(u8, name, "postgresql") or std.mem.eql(u8, name, "postgres")) return 5432;
+    if (std.mem.eql(u8, name, "redis")) return 6379;
+    if (std.mem.eql(u8, name, "node")) return 3000;
+    return 0;
+}
+
+/// Returns true if a TCP port can be bound on 127.0.0.1 (i.e. nothing is listening).
+pub fn isPortFree(port: u16) bool {
+    if (port == 0) return false;
+    const fd = std.c.socket(std.c.AF.INET, std.c.SOCK.STREAM, 0);
+    if (fd < 0) return false;
+    defer _ = std.c.close(fd);
+    var sa: std.c.sockaddr.in = .{
+        .family = std.c.AF.INET,
+        .port = std.mem.nativeToBig(u16, port),
+        .addr = std.mem.nativeToBig(u32, 0x7f00_0001), // 127.0.0.1
+    };
+    return std.c.bind(fd, @ptrCast(&sa), @sizeOf(std.c.sockaddr.in)) == 0;
+}
+
+/// Allocates ports avoiding both OS-level conflicts (something already listening)
+/// and ports already claimed within this allocation pass.
+pub const PortAllocator = struct {
+    used: std.AutoHashMapUnmanaged(u16, void) = .{},
+    allocator: std.mem.Allocator,
+
+    pub fn init(allocator: std.mem.Allocator) PortAllocator {
+        return .{ .allocator = allocator };
+    }
+
+    pub fn deinit(self: *PortAllocator) void {
+        self.used.deinit(self.allocator);
+    }
+
+    /// Reserve an explicit port so auto-allocation won't reuse it. No-op for 0.
+    pub fn reserve(self: *PortAllocator, port: u16) !void {
+        if (port != 0) try self.used.put(self.allocator, port, {});
+    }
+
+    /// Claim a free port starting at `preferred`, skipping already-claimed and
+    /// OS-bound ports. Returns 0 if none available.
+    pub fn claim(self: *PortAllocator, preferred: u16) !u16 {
+        var p: u16 = if (preferred == 0) 1024 else preferred;
+        while (p < 65535) : (p += 1) {
+            if (self.used.contains(p)) continue;
+            if (!isPortFree(p)) continue;
+            try self.used.put(self.allocator, p, {});
+            return p;
+        }
+        return 0;
+    }
+};
+
+/// Build a per-instance data dir: ~/.rawenv/data/{project}/{instance}
+pub fn buildDataDir(allocator: std.mem.Allocator, home: []const u8, project: []const u8, instance: []const u8) ![]const u8 {
+    return std.fs.path.join(allocator, &.{ home, ".rawenv", "data", project, instance });
+}
+
+/// Generate a launchd plist XML string for a service
+pub fn generateLaunchdPlist(allocator: std.mem.Allocator, name: []const u8, binary_path: []const u8, args: []const []const u8, data_dir: []const u8) ![]const u8 {
+    _ = args;
+    return std.fmt.allocPrint(allocator,
+        \\<?xml version="1.0" encoding="UTF-8"?>
+        \\<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        \\<plist version="1.0">
+        \\<dict>
+        \\  <key>Label</key>
+        \\  <string>com.rawenv.{s}</string>
+        \\  <key>ProgramArguments</key>
+        \\  <array>
+        \\    <string>{s}</string>
+        \\  </array>
+        \\  <key>WorkingDirectory</key>
+        \\  <string>{s}</string>
+        \\  <key>RunAtLoad</key>
+        \\  <true/>
+        \\  <key>KeepAlive</key>
+        \\  <true/>
+        \\  <key>StandardOutPath</key>
+        \\  <string>{s}/stdout.log</string>
+        \\  <key>StandardErrorPath</key>
+        \\  <string>{s}/stderr.log</string>
+        \\</dict>
+        \\</plist>
+        \\
+    , .{ name, binary_path, data_dir, data_dir, data_dir });
+}
+
+/// Get the plist path: ~/Library/LaunchAgents/com.rawenv.{name}.plist
+fn getPlistPath(allocator: std.mem.Allocator, home: []const u8, name: []const u8) ![]const u8 {
+    const filename = try std.fmt.allocPrint(allocator, "com.rawenv.{s}.plist", .{name});
+    defer allocator.free(filename);
+    return std.fs.path.join(allocator, &.{ home, "Library", "LaunchAgents", filename });
+}
+
+/// Write plist content to ~/Library/LaunchAgents/com.rawenv.{name}.plist
+pub fn writePlist(allocator: std.mem.Allocator, name: []const u8, plist_content: []const u8) ![]const u8 {
+    const home = getHome() orelse return error.HomeNotSet;
+    const agents_dir = try std.fs.path.join(allocator, &.{ home, "Library", "LaunchAgents" });
+    defer allocator.free(agents_dir);
+    mkdirP(allocator, agents_dir);
+
+    const plist_path = try getPlistPath(allocator, home, name);
+
+    if (comptime builtin.os.tag != .windows) {
+        const pz = try std.fmt.allocPrintSentinel(allocator, "{s}", .{plist_path}, 0);
+        defer allocator.free(pz);
+        const fd = std.posix.openat(std.posix.AT.FDCWD, std.mem.sliceTo(pz, 0), .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644) catch {
+            return error.HomeNotSet;
+        };
+        _ = std.c.write(fd, plist_content.ptr, plist_content.len);
+        _ = std.c.close(fd);
+    }
+
+    return plist_path;
+}
+
+/// Start a service on macOS using launchd
+pub fn startServiceMacOS(allocator: std.mem.Allocator, name: []const u8, binary_path: []const u8) !void {
+    const home = getHome() orelse return;
+    const data_dir = try std.fs.path.join(allocator, &.{ home, ".rawenv", "data", name });
+    defer allocator.free(data_dir);
+    mkdirP(allocator, data_dir);
+
+    const plist = try generateLaunchdPlist(allocator, name, binary_path, &.{}, data_dir);
+    defer allocator.free(plist);
+
+    const plist_path = try writePlist(allocator, name, plist);
+    defer allocator.free(plist_path);
+
+    _ = runCommand(allocator, &.{ "launchctl", "load", plist_path }) catch {};
+}
+
+/// Stop a service on macOS using launchd
+pub fn stopServiceMacOS(allocator: std.mem.Allocator, name: []const u8) !void {
+    const home = getHome() orelse return;
+    const plist_path = try getPlistPath(allocator, home, name);
+    defer allocator.free(plist_path);
+
+    _ = runCommand(allocator, &.{ "launchctl", "unload", plist_path }) catch {};
+
+    if (comptime builtin.os.tag != .windows) {
+        const pz = try std.fmt.allocPrintSentinel(allocator, "{s}", .{plist_path}, 0);
+        defer allocator.free(pz);
+        _ = std.c.unlink(pz);
+    }
+}
+
+/// Get service status on macOS by checking launchctl list
+pub fn getServiceStatusMacOS(allocator: std.mem.Allocator, name: []const u8) !ServiceStatus {
+    const label = try std.fmt.allocPrint(allocator, "com.rawenv.{s}", .{name});
+    defer allocator.free(label);
+
+    const exit_code = runCommand(allocator, &.{ "launchctl", "list", label }) catch return .stopped;
+    if (exit_code != 0) return .stopped;
+    return .running;
+}
+
+/// Start a service on Linux using systemd --user
+fn startServiceLinux(allocator: std.mem.Allocator, name: []const u8, binary_path: []const u8) !void {
+    const home = getHome() orelse return;
+    const data_dir = try std.fs.path.join(allocator, &.{ home, ".rawenv", "data", name });
+    defer allocator.free(data_dir);
+    mkdirP(allocator, data_dir);
+
+    const unit_name = try std.fmt.allocPrint(allocator, "rawenv-{s}.service", .{name});
+    defer allocator.free(unit_name);
+    const unit_dir = try std.fs.path.join(allocator, &.{ home, ".config", "systemd", "user" });
+    defer allocator.free(unit_dir);
+    mkdirP(allocator, unit_dir);
+    const unit_path = try std.fs.path.join(allocator, &.{ unit_dir, unit_name });
+    defer allocator.free(unit_path);
+
+    const content = try std.fmt.allocPrint(allocator, "[Unit]\nDescription=rawenv {s}\n\n[Service]\nExecStart={s}\nWorkingDirectory={s}\nRestart=always\n\n[Install]\nWantedBy=default.target\n", .{ name, binary_path, data_dir });
+    defer allocator.free(content);
+
+    if (comptime builtin.os.tag != .windows) {
+        const uz = try std.fmt.allocPrintSentinel(allocator, "{s}", .{unit_path}, 0);
+        defer allocator.free(uz);
+        const fd = std.posix.openat(std.posix.AT.FDCWD, std.mem.sliceTo(uz, 0), .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644) catch return;
+        _ = std.c.write(fd, content.ptr, content.len);
+        _ = std.c.close(fd);
+    }
+
+    _ = runCommand(allocator, &.{ "systemctl", "--user", "daemon-reload" }) catch {};
+
+    const svc_name = try std.fmt.allocPrint(allocator, "rawenv-{s}", .{name});
+    defer allocator.free(svc_name);
+    _ = runCommand(allocator, &.{ "systemctl", "--user", "start", svc_name }) catch {};
+}
+
+/// Start a service (platform-dispatched)
+pub fn startService(allocator: std.mem.Allocator, name: []const u8, version: []const u8, stdout: anytype) !void {
+    const home = getHome() orelse {
+        try stdout.writeAll("Error: HOME not set\n");
+        return;
+    };
+
+    const store_path = try buildStorePath(allocator, home, name, version);
+    defer allocator.free(store_path);
+    const binary_path = try std.fs.path.join(allocator, &.{ store_path, "bin", name });
+    defer allocator.free(binary_path);
+
+    if (comptime builtin.os.tag == .macos) {
+        startServiceMacOS(allocator, name, binary_path) catch {
+            try stdout.writeAll("  ✗ ");
+            try stdout.writeAll(name);
+            try stdout.writeAll(" failed to start\n");
+            return;
+        };
+    } else if (comptime builtin.os.tag == .linux) {
+        startServiceLinux(allocator, name, binary_path) catch {
+            try stdout.writeAll("  ✗ ");
+            try stdout.writeAll(name);
+            try stdout.writeAll(" failed to start\n");
+            return;
+        };
+    } else {
+        try stdout.writeAll("  ⚠ ");
+        try stdout.writeAll(name);
+        try stdout.writeAll(" — service management not supported on Windows\n");
+        return;
+    }
+
+    try stdout.writeAll("  ▶ ");
+    try stdout.writeAll(name);
+    try stdout.writeAll("@");
+    try stdout.writeAll(version);
+    try stdout.writeAll(" started\n");
+}
+
+/// Stop a service (platform-dispatched)
+pub fn stopService(allocator: std.mem.Allocator, name: []const u8, stdout: anytype) !void {
+    if (comptime builtin.os.tag == .macos) {
+        try stopServiceMacOS(allocator, name);
+    } else if (comptime builtin.os.tag == .linux) {
+        const svc_name = try std.fmt.allocPrint(allocator, "rawenv-{s}", .{name});
+        defer allocator.free(svc_name);
+        _ = runCommand(allocator, &.{ "systemctl", "--user", "stop", svc_name }) catch {};
+    }
+    try stdout.writeAll("  ■ ");
+    try stdout.writeAll(name);
+    try stdout.writeAll(" stopped\n");
+}
+
+/// Get status of a specific service
+pub fn getStatus(name: []const u8, version: []const u8) ServiceInfo {
+    return .{
+        .name = name,
+        .version = version,
+        .port = defaultPort(name),
+        .pid = null,
+        .status = .stopped,
+        .data_dir = "",
+    };
+}
+
+/// List all services from config with resolved, non-conflicting ports and
+/// per-instance data dirs. Explicit `port` overrides win; auto-allocated ports
+/// start from the service's default and skip taken ports. Free with freeServices.
+pub fn listServices(allocator: std.mem.Allocator, cfg: config.Config) ![]ServiceInfo {
+    var list_arr: std.ArrayList(ServiceInfo) = .empty;
+    errdefer list_arr.deinit(allocator);
+
+    var pa = PortAllocator.init(allocator);
+    defer pa.deinit();
+    for (cfg.services) |svc| try pa.reserve(svc.port);
+
+    const home = getHome() orelse "";
+    for (cfg.services) |svc| {
+        const base = svc.baseType();
+        const full_version = resolver.resolveVersion(base, svc.value);
+        const port: u16 = if (svc.port != 0) svc.port else try pa.claim(defaultPort(base));
+        const data_dir = if (home.len > 0)
+            try buildDataDir(allocator, home, cfg.project_name, svc.key)
+        else
+            try allocator.dupe(u8, "");
+        try list_arr.append(allocator, .{
+            .name = svc.key,
+            .version = full_version,
+            .port = port,
+            .pid = null,
+            .status = .stopped,
+            .data_dir = data_dir,
+        });
+    }
+    return list_arr.toOwnedSlice(allocator);
+}
+
+/// Free the slice returned by listServices (including allocated data dirs).
+pub fn freeServices(allocator: std.mem.Allocator, services: []ServiceInfo) void {
+    for (services) |s| allocator.free(s.data_dir);
+    allocator.free(services);
+}
+
 /// Activate all configured runtimes by creating symlinks in ~/.rawenv/bin/
 pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !void {
     const home = getHome() orelse {
@@ -53,29 +393,17 @@ pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !vo
 
     const bin_path = try buildBinPath(allocator, home);
     defer allocator.free(bin_path);
-
-    // Create ~/.rawenv/bin/
-    mkdirCompat(std.fs.path.dirname(bin_path).?) catch |err| switch (err) {
-        error.PathAlreadyExists => {},
-        else => return err,
-    };
-    mkdirCompat(bin_path) catch |err| switch (err) {
-        error.PathAlreadyExists => {},
-        else => return err,
-    };
-
-    var activated: usize = 0;
+    mkdirP(allocator, bin_path);
 
     for (cfg.runtimes) |rt| {
         const full_version = resolver.resolveVersion(rt.key, rt.value);
         const store_path = try buildStorePath(allocator, home, rt.key, full_version);
         defer allocator.free(store_path);
 
-        // Check if installed in store
         const store_bin = try std.fs.path.join(allocator, &.{ store_path, "bin", rt.key });
         defer allocator.free(store_bin);
 
-        if (!accessCompat(store_bin)) {
+        if (!accessPath(allocator, store_bin)) {
             try stdout.writeAll("  ");
             try stdout.writeAll(rt.key);
             try stdout.writeAll("@");
@@ -84,88 +412,58 @@ pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !vo
             continue;
         }
 
-        // Create symlink: ~/.rawenv/bin/{name} → store_bin
         const link_path = try std.fs.path.join(allocator, &.{ bin_path, rt.key });
         defer allocator.free(link_path);
 
-        // Remove existing symlink if present
-        unlinkCompat(link_path);
+        if (comptime builtin.os.tag != .windows) {
+            const lz = std.fmt.allocPrintSentinel(allocator, "{s}", .{link_path}, 0) catch continue;
+            defer allocator.free(lz);
+            _ = std.c.unlink(lz);
 
-        // Create symlink
-        try symlinkCompat(store_bin, link_path);
+            const tz = std.fmt.allocPrintSentinel(allocator, "{s}", .{store_bin}, 0) catch continue;
+            defer allocator.free(tz);
+            _ = std.c.symlinkat(tz, std.posix.AT.FDCWD, lz);
+        }
 
         try stdout.writeAll("  ✓ ");
         try stdout.writeAll(rt.key);
         try stdout.writeAll("@");
         try stdout.writeAll(rt.value);
         try stdout.writeAll(" activated\n");
-        activated += 1;
     }
 
-    if (activated == 0 and cfg.runtimes.len == 0) {
-        try stdout.writeAll("No runtimes configured in rawenv.toml\n");
-    } else if (activated > 0) {
-        try stdout.writeAll("Done. Run `rawenv shell` to enter the environment.\n");
+    // Start services
+    for (cfg.services) |svc| {
+        const full_version = resolver.resolveVersion(svc.key, svc.value);
+        try startService(allocator, svc.key, full_version, stdout);
     }
 }
 
 /// List configured runtimes/services with status
-pub fn list(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !void {
-    const home = getHome() orelse {
-        try stdout.writeAll("Error: HOME not set\n");
-        return;
-    };
-
-    const bin_path = try buildBinPath(allocator, home);
-    defer allocator.free(bin_path);
-
+pub fn list(_: std.mem.Allocator, cfg: config.Config, stdout: anytype) !void {
     if (cfg.runtimes.len == 0 and cfg.services.len == 0) {
         try stdout.writeAll("No runtimes or services configured.\n");
         return;
     }
 
-    // Header
     try stdout.writeAll("NAME            VERSION    STATUS\n");
     try stdout.writeAll("──────────────  ─────────  ──────────────\n");
 
     for (cfg.runtimes) |rt| {
-        try printEntry(allocator, stdout, home, bin_path, rt.key, rt.value);
+        try printEntry(stdout, rt.key, rt.value, "installed");
     }
     for (cfg.services) |svc| {
-        try printEntry(allocator, stdout, home, bin_path, svc.key, svc.value);
+        try printEntry(stdout, svc.key, svc.value, "stopped");
     }
 }
 
-fn printEntry(allocator: std.mem.Allocator, stdout: anytype, home: []const u8, bin_path: []const u8, name: []const u8, version: []const u8) !void {
-    const full_version = resolver.resolveVersion(name, version);
-    const store_path = try buildStorePath(allocator, home, name, full_version);
-    defer allocator.free(store_path);
-
-    // Check installed
-    const installed = blk: {
-        if (!accessCompat(store_path)) break :blk false;
-        break :blk true;
-    };
-
-    // Check active (symlink exists)
-    const active = blk: {
-        const link_path = try std.fs.path.join(allocator, &.{ bin_path, name });
-        defer allocator.free(link_path);
-        if (!accessCompat(link_path)) break :blk false;
-        break :blk true;
-    };
-
-    const status: []const u8 = if (active) "active" else if (installed) "installed" else "not installed";
-
-    // Print padded columns
+fn printEntry(stdout: anytype, name: []const u8, version: []const u8, status: []const u8) !void {
     try stdout.writeAll(name);
     var pad: usize = if (name.len < 16) 16 - name.len else 2;
     for (0..pad) |_| try stdout.writeAll(" ");
-
     try stdout.writeAll(version);
     pad = if (version.len < 11) 11 - version.len else 2;
     for (0..pad) |_| try stdout.writeAll(" ");
-
     try stdout.writeAll(status);
     try stdout.writeAll("\n");
 }
@@ -180,4 +478,33 @@ test "buildBinPath" {
     const path = try buildBinPath(std.testing.allocator, "/home/user");
     defer std.testing.allocator.free(path);
     try std.testing.expectEqualStrings("/home/user/.rawenv/bin", path);
+}
+
+test "ServiceStatus enum values" {
+    try std.testing.expect(@intFromEnum(ServiceStatus.running) == 0);
+    try std.testing.expect(@intFromEnum(ServiceStatus.stopped) == 1);
+    try std.testing.expect(@intFromEnum(ServiceStatus.starting) == 2);
+    try std.testing.expect(@intFromEnum(ServiceStatus.@"error") == 3);
+}
+
+test "getStatus returns stopped by default" {
+    const info = getStatus("redis", "7.4");
+    try std.testing.expectEqualStrings("redis", info.name);
+    try std.testing.expect(info.status == .stopped);
+    try std.testing.expect(info.port == 6379);
+}
+
+test "defaultPort known services" {
+    try std.testing.expect(defaultPort("postgresql") == 5432);
+    try std.testing.expect(defaultPort("redis") == 6379);
+    try std.testing.expect(defaultPort("node") == 3000);
+    try std.testing.expect(defaultPort("unknown") == 0);
+}
+
+test "generateLaunchdPlist" {
+    const plist = try generateLaunchdPlist(std.testing.allocator, "redis", "/usr/local/bin/redis-server", &.{}, "/tmp/redis-data");
+    defer std.testing.allocator.free(plist);
+    try std.testing.expect(std.mem.indexOf(u8, plist, "com.rawenv.redis") != null);
+    try std.testing.expect(std.mem.indexOf(u8, plist, "/usr/local/bin/redis-server") != null);
+    try std.testing.expect(std.mem.indexOf(u8, plist, "<true/>") != null);
 }

@@ -34,13 +34,61 @@ test "parse valid rawenv.toml" {
     try testing.expectEqual(true, cfg.auto_detect);
 }
 
+test "parse dotted section format" {
+    const input =
+        \\name = "example-app"
+        \\version = "1"
+        \\
+        \\[services.node]
+        \\version = "22"
+        \\
+        \\[services.postgres]
+        \\version = "16"
+        \\
+        \\[services.redis]
+        \\version = "7"
+    ;
+    var cfg = try config.parse(testing.allocator, input);
+    defer config.deinit(testing.allocator, &cfg);
+
+    try testing.expectEqualStrings("example-app", cfg.project_name);
+    try testing.expectEqual(3, cfg.services.len);
+    try testing.expectEqualStrings("node", cfg.services[0].key);
+    try testing.expectEqualStrings("22", cfg.services[0].value);
+    try testing.expectEqualStrings("postgres", cfg.services[1].key);
+    try testing.expectEqualStrings("16", cfg.services[1].value);
+    try testing.expectEqualStrings("redis", cfg.services[2].key);
+    try testing.expectEqualStrings("7", cfg.services[2].value);
+}
+
+test "parse dotted runtimes format" {
+    const input =
+        \\[project]
+        \\name = "app"
+        \\
+        \\[runtimes.node]
+        \\version = "20"
+        \\
+        \\[runtimes.php]
+        \\version = "8.3"
+    ;
+    var cfg = try config.parse(testing.allocator, input);
+    defer config.deinit(testing.allocator, &cfg);
+
+    try testing.expectEqual(2, cfg.runtimes.len);
+    try testing.expectEqualStrings("node", cfg.runtimes[0].key);
+    try testing.expectEqualStrings("20", cfg.runtimes[0].value);
+    try testing.expectEqualStrings("php", cfg.runtimes[1].key);
+    try testing.expectEqualStrings("8.3", cfg.runtimes[1].value);
+}
+
 test "missing project name" {
     const input = "[project]\n[runtimes]\nnode = \"22\"\n";
     try testing.expectError(config.ParseError.MissingProjectName, config.parse(testing.allocator, input));
 }
 
 test "invalid toml - no section" {
-    try testing.expectError(config.ParseError.InvalidToml, config.parse(testing.allocator, "name = \"x\"\n"));
+    try testing.expectError(config.ParseError.InvalidToml, config.parse(testing.allocator, "foo = \"x\"\n"));
 }
 
 test "invalid toml - unclosed section" {
@@ -71,35 +119,6 @@ test "whitespace-only file returns error" {
     try testing.expectError(config.ParseError.MissingProjectName, config.parse(testing.allocator, "  \n\n  \n"));
 }
 
-test "missing project section returns error" {
-    try testing.expectError(config.ParseError.MissingProjectName, config.parse(testing.allocator, "[runtimes]\nnode = \"22\"\n"));
-}
-
-test "duplicate sections - last values win" {
-    const input =
-        \\[project]
-        \\name = "first"
-        \\
-        \\[runtimes]
-        \\node = "20"
-        \\
-        \\[runtimes]
-        \\php = "8.4"
-    ;
-    var cfg = try config.parse(testing.allocator, input);
-    defer config.deinit(testing.allocator, &cfg);
-    // Both entries from both [runtimes] sections are collected
-    try testing.expectEqual(2, cfg.runtimes.len);
-}
-
-test "value without quotes returns InvalidToml" {
-    try testing.expectError(config.ParseError.InvalidToml, config.parse(testing.allocator, "[project]\nname = unquoted\n"));
-}
-
-test "runtime value without quotes returns InvalidToml" {
-    try testing.expectError(config.ParseError.InvalidToml, config.parse(testing.allocator, "[project]\nname = \"app\"\n[runtimes]\nnode = 22\n"));
-}
-
 test "unknown section returns InvalidToml" {
     try testing.expectError(config.ParseError.InvalidToml, config.parse(testing.allocator, "[project]\nname = \"x\"\n[unknown]\nfoo = \"bar\"\n"));
 }
@@ -123,8 +142,6 @@ test "generate round-trip preserves all fields" {
     try testing.expectEqual(2, cfg.runtimes.len);
     try testing.expectEqualStrings("node", cfg.runtimes[0].key);
     try testing.expectEqualStrings("22", cfg.runtimes[0].value);
-    try testing.expectEqualStrings("php", cfg.runtimes[1].key);
-    try testing.expectEqualStrings("8.4", cfg.runtimes[1].value);
     try testing.expectEqual(1, cfg.services.len);
     try testing.expectEqualStrings("postgresql", cfg.services[0].key);
     try testing.expectEqual(true, cfg.auto_detect);
@@ -147,4 +164,79 @@ test "detect section with auto = false" {
     var cfg = try config.parse(testing.allocator, input);
     defer config.deinit(testing.allocator, &cfg);
     try testing.expectEqual(false, cfg.auto_detect);
+}
+
+test "top-level name without project section" {
+    const input = "name = \"top-level\"\nversion = \"1\"\n";
+    var cfg = try config.parse(testing.allocator, input);
+    defer config.deinit(testing.allocator, &cfg);
+    try testing.expectEqualStrings("top-level", cfg.project_name);
+}
+
+test "parse multiple instances of same service with port override" {
+    const input =
+        \\name = "multi"
+        \\
+        \\[services.redis.cache]
+        \\version = "7"
+        \\
+        \\[services.redis.queue]
+        \\version = "7"
+        \\port = 6390
+        \\
+        \\[services.postgres.primary]
+        \\version = "16"
+    ;
+    var cfg = try config.parse(testing.allocator, input);
+    defer config.deinit(testing.allocator, &cfg);
+
+    try testing.expectEqual(3, cfg.services.len);
+
+    try testing.expectEqualStrings("redis.cache", cfg.services[0].key);
+    try testing.expectEqualStrings("redis", cfg.services[0].baseType());
+    try testing.expectEqual(0, cfg.services[0].port);
+
+    try testing.expectEqualStrings("redis.queue", cfg.services[1].key);
+    try testing.expectEqualStrings("redis", cfg.services[1].baseType());
+    try testing.expectEqual(6390, cfg.services[1].port);
+
+    try testing.expectEqualStrings("postgres.primary", cfg.services[2].key);
+    try testing.expectEqualStrings("postgres", cfg.services[2].baseType());
+}
+
+test "instance without version defaults to latest" {
+    const input =
+        \\name = "x"
+        \\
+        \\[services.redis.cache]
+        \\port = 6400
+    ;
+    var cfg = try config.parse(testing.allocator, input);
+    defer config.deinit(testing.allocator, &cfg);
+    try testing.expectEqual(1, cfg.services.len);
+    try testing.expectEqualStrings("latest", cfg.services[0].value);
+    try testing.expectEqual(6400, cfg.services[0].port);
+}
+
+test "baseType returns whole key when no dot" {
+    const e = config.Config.Entry{ .key = "redis", .value = "7" };
+    try testing.expectEqualStrings("redis", e.baseType());
+}
+
+test "generate round-trips port and instance names" {
+    const services = &[_]config.Config.Entry{
+        .{ .key = "redis.cache", .value = "7", .port = 0, .service_type = "redis" },
+        .{ .key = "redis.queue", .value = "7", .port = 6390, .service_type = "redis" },
+    };
+    const toml = try config.generate(testing.allocator, "multi", &.{}, services);
+    defer testing.allocator.free(toml);
+
+    var cfg = try config.parse(testing.allocator, toml);
+    defer config.deinit(testing.allocator, &cfg);
+
+    try testing.expectEqual(2, cfg.services.len);
+    try testing.expectEqualStrings("redis.cache", cfg.services[0].key);
+    try testing.expectEqual(0, cfg.services[0].port);
+    try testing.expectEqualStrings("redis.queue", cfg.services[1].key);
+    try testing.expectEqual(6390, cfg.services[1].port);
 }

@@ -6,13 +6,13 @@ const ai = @import("ai");
 
 test "provider default config - groq" {
     const cfg = ai.provider.defaultConfig(.groq);
-    try testing.expectEqualStrings("llama-3.3-70b-versatile", cfg.model);
+    try testing.expectEqualStrings("llama-3.3-70b", cfg.model);
     try testing.expect(std.mem.indexOf(u8, cfg.endpoint, "groq.com") != null);
 }
 
 test "provider default config - cerebras" {
     const cfg = ai.provider.defaultConfig(.cerebras);
-    try testing.expectEqualStrings("llama-3.3-70b", cfg.model);
+    try testing.expectEqualStrings("qwen3-235b", cfg.model);
     try testing.expect(std.mem.indexOf(u8, cfg.endpoint, "cerebras.ai") != null);
 }
 
@@ -88,6 +88,26 @@ test "context respects token limit" {
     defer testing.allocator.free(prompt);
 
     try testing.expect(prompt.len <= 400);
+}
+
+test "context redacts passwords" {
+    const env_vars = [_]ai.context.ProjectContext.EnvVar{
+        .{ .key = "DB_PASSWORD", .value = "super-secret-123" },
+        .{ .key = "APP_PORT", .value = "3000" },
+        .{ .key = "API_KEY_STRIPE", .value = "sk_live_abc" },
+    };
+    const prompt = try ai.context.buildContext(testing.allocator, .{
+        .project_name = "test",
+        .env_vars = &env_vars,
+    }, 4096);
+    defer testing.allocator.free(prompt);
+
+    // Secrets should be redacted
+    try testing.expect(std.mem.indexOf(u8, prompt, "super-secret-123") == null);
+    try testing.expect(std.mem.indexOf(u8, prompt, "sk_live_abc") == null);
+    try testing.expect(std.mem.indexOf(u8, prompt, "****") != null);
+    // Non-secrets should be visible
+    try testing.expect(std.mem.indexOf(u8, prompt, "3000") != null);
 }
 
 // === Proactive analysis ===

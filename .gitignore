@@ -15,3 +15,15 @@ AGENTS.md
 test_io*
 packaging/rawenv-*.dmg
 lib/raylib/
+gui/macos/.build/
+gui/windows/.vs/
+gui/windows/bin/
+gui/windows/obj/
+default.profraw
+.ralph-tui/
+.ralph/
+ralph.yml
+prd.json
+RALPH_HANDOVER.md
+STATE.md
+PROMPT.mdscripts/vms/

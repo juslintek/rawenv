@@ -1,5 +1,36 @@
 const std = @import("std");
 
+pub const ConnectionMode = enum { local, remote, proxy };
+
+pub const ConnectionInfo = struct {
+    env_var: []const u8,
+    original_url: []const u8,
+    local_url: []const u8,
+    mode: ConnectionMode,
+};
+
+/// Given a remote URL, suggest a localhost replacement preserving scheme and port.
+pub fn suggestLocalUrl(allocator: std.mem.Allocator, url: []const u8) ![]u8 {
+    const scheme = extractScheme(url) orelse "tcp";
+    const port = extractPort(url);
+    if (port) |p| {
+        return std.fmt.allocPrint(allocator, "{s}://localhost:{d}", .{ scheme, p });
+    }
+    return std.fmt.allocPrint(allocator, "{s}://localhost", .{scheme});
+}
+
+fn extractPort(url: []const u8) ?u16 {
+    const after_scheme = if (std.mem.indexOf(u8, url, "://")) |i| url[i + 3 ..] else return null;
+    const after_user = if (std.mem.indexOfScalar(u8, after_scheme, '@')) |i| after_scheme[i + 1 ..] else after_scheme;
+    const colon = std.mem.indexOfScalar(u8, after_user, ':') orelse return null;
+    const after_colon = after_user[colon + 1 ..];
+    const end = for (after_colon, 0..) |c, i| {
+        if (c < '0' or c > '9') break i;
+    } else after_colon.len;
+    if (end == 0) return null;
+    return std.fmt.parseInt(u16, after_colon[0..end], 10) catch null;
+}
+
 pub const Connection = struct {
     name: []const u8,
     url: []const u8,

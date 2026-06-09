@@ -5,6 +5,23 @@ pub const Route = struct {
     target_port: u16,
 };
 
+pub const ProxyRoute = struct {
+    domain: []const u8,
+    target_port: u16,
+    tls: bool = false,
+};
+
+/// Generate a Caddyfile from a slice of ProxyRoute (with TLS support).
+pub fn generateCaddyfile(allocator: std.mem.Allocator, routes: []const ProxyRoute) ![]u8 {
+    var buf: std.ArrayList(u8) = .empty;
+    for (routes) |route| {
+        try buf.print(allocator, "{s} {{\n    reverse_proxy localhost:{d}\n", .{ route.domain, route.target_port });
+        if (route.tls) try buf.appendSlice(allocator, "    tls internal\n");
+        try buf.appendSlice(allocator, "}\n\n");
+    }
+    return buf.toOwnedSlice(allocator);
+}
+
 pub const ProxyConfig = struct {
     listen_port: u16 = 80,
     routes: std.StringHashMapUnmanaged(u16) = .empty,

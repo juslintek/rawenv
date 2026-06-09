@@ -1,0 +1,282 @@
+{
+  "version": "1.0",
+  "templates": {
+    "nextjs": {
+      "name": "Next.js",
+      "language": "TypeScript",
+      "category": "fullstack",
+      "icon": "▲",
+      "description": "React framework with SSR, API routes, and file-based routing",
+      "services": ["node", "postgresql", "redis"],
+      "files": {
+        "package.json": "{\"name\":\"{project_name}\",\"version\":\"1.0.0\",\"scripts\":{\"dev\":\"next dev\",\"build\":\"next build\",\"start\":\"next start\"},\"dependencies\":{\"next\":\"^14\",\"react\":\"^18\",\"react-dom\":\"^18\"},\"engines\":{\"node\":\">=22\"}}",
+        ".env": "DATABASE_URL=postgres://localhost:5432/{project_name}_dev\nREDIS_URL=redis://localhost:6379\nNEXTAUTH_SECRET=dev-secret"
+      }
+    },
+    "laravel": {
+      "name": "Laravel",
+      "language": "PHP",
+      "category": "fullstack",
+      "icon": "🔺",
+      "description": "PHP framework with Eloquent ORM, queues, and Blade templates",
+      "services": ["php", "mysql", "redis", "mailpit"],
+      "files": {
+        "composer.json": "{\"name\":\"{project_name}\",\"require\":{\"php\":\"^8.4\",\"laravel/framework\":\"^11.0\"},\"require-dev\":{\"phpunit/phpunit\":\"^11.0\"}}",
+        ".env": "DB_CONNECTION=mysql\nDB_HOST=127.0.0.1\nDB_PORT=3306\nDB_DATABASE={project_name}\nREDIS_HOST=127.0.0.1\nMAIL_MAILER=smtp\nMAIL_HOST=127.0.0.1\nMAIL_PORT=1025"
+      }
+    },
+    "rails": {
+      "name": "Ruby on Rails",
+      "language": "Ruby",
+      "category": "fullstack",
+      "icon": "💎",
+      "description": "Full-stack Ruby framework with ActiveRecord and ActionCable",
+      "services": ["ruby", "postgresql", "redis"],
+      "files": {
+        "Gemfile": "source 'https://rubygems.org'\ngem 'rails', '~> 7.1'\ngem 'pg'\ngem 'redis'\ngem 'puma'",
+        ".env": "DATABASE_URL=postgres://localhost:5432/{project_name}_dev\nREDIS_URL=redis://localhost:6379"
+      }
+    },
+    "fastapi": {
+      "name": "FastAPI",
+      "language": "Python",
+      "category": "api",
+      "icon": "⚡",
+      "description": "High-performance Python API framework with async support",
+      "services": ["python", "postgresql", "redis"],
+      "files": {
+        "pyproject.toml": "[project]\nname = \"{project_name}\"\nversion = \"0.1.0\"\ndependencies = [\"fastapi\", \"uvicorn\", \"sqlalchemy\", \"redis\"]",
+        "requirements.txt": "fastapi==0.111.0\nuvicorn==0.30.0\nsqlalchemy==2.0.30\nredis==5.0.4\nalembic==1.13.1",
+        ".env": "DATABASE_URL=postgresql://localhost:5432/{project_name}_dev\nREDIS_URL=redis://localhost:6379"
+      }
+    },
+    "django": {
+      "name": "Django",
+      "language": "Python",
+      "category": "fullstack",
+      "icon": "🎸",
+      "description": "Batteries-included Python web framework",
+      "services": ["python", "postgresql", "redis", "rabbitmq"],
+      "files": {
+        "requirements.txt": "django==5.0\npsycopg2-binary==2.9\ndjango-redis==5.4\ncelery==5.4\ngunicorn==22.0",
+        ".env": "DATABASE_URL=postgres://localhost:5432/{project_name}_dev\nREDIS_URL=redis://localhost:6379\nCELERY_BROKER_URL=amqp://localhost:5672"
+      }
+    },
+    "express": {
+      "name": "Express.js",
+      "language": "JavaScript",
+      "category": "api",
+      "icon": "🟡",
+      "description": "Minimal Node.js web framework",
+      "services": ["node", "mongodb", "redis"],
+      "files": {
+        "package.json": "{\"name\":\"{project_name}\",\"version\":\"1.0.0\",\"scripts\":{\"start\":\"node index.js\",\"dev\":\"nodemon index.js\"},\"dependencies\":{\"express\":\"^4.18\",\"mongoose\":\"^8\",\"redis\":\"^4\"},\"engines\":{\"node\":\">=22\"}}",
+        ".env": "MONGO_URL=mongodb://localhost:27017/{project_name}_dev\nREDIS_URL=redis://localhost:6379\nPORT=3000"
+      }
+    },
+    "gin": {
+      "name": "Gin (Go)",
+      "language": "Go",
+      "category": "api",
+      "icon": "🐹",
+      "description": "High-performance Go HTTP framework",
+      "services": ["go", "postgresql", "redis"],
+      "files": {
+        "go.mod": "module {project_name}\n\ngo 1.22\n\nrequire (\n\tgithub.com/gin-gonic/gin v1.9.1\n\tgithub.com/go-redis/redis/v9 v9.5.1\n\tgithub.com/jackc/pgx/v5 v5.5.5\n)",
+        ".env": "DATABASE_URL=postgres://localhost:5432/{project_name}_dev\nREDIS_URL=redis://localhost:6379"
+      }
+    },
+    "actix": {
+      "name": "Actix Web (Rust)",
+      "language": "Rust",
+      "category": "api",
+      "icon": "🦀",
+      "description": "Blazing fast Rust web framework",
+      "services": ["postgresql", "redis"],
+      "files": {
+        "Cargo.toml": "[package]\nname = \"{project_name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nactix-web = \"4\"\nsqlx = { version = \"0.7\", features = [\"postgres\", \"runtime-tokio\"] }\nredis = \"0.25\"",
+        ".env": "DATABASE_URL=postgres://localhost:5432/{project_name}_dev\nREDIS_URL=redis://localhost:6379"
+      }
+    },
+    "phoenix": {
+      "name": "Phoenix (Elixir)",
+      "language": "Elixir",
+      "category": "fullstack",
+      "icon": "🔥",
+      "description": "Real-time Elixir web framework with LiveView",
+      "services": ["postgresql"],
+      "files": {
+        "mix.exs": "defmodule {project_name_camel}.MixProject do\n  use Mix.Project\n  def project do [{:app, :{project_name}}, {:version, \"0.1.0\"}, {:elixir, \"~> 1.16\"}] end\n  def application do [extra_applications: [:logger]] end\n  defp deps do [{:phoenix, \"~> 1.7\"}, {:phoenix_live_view, \"~> 0.20\"}, {:ecto_sql, \"~> 3.11\"}, {:postgrex, \">= 0.0.0\"}] end\nend",
+        ".env": "DATABASE_URL=postgres://localhost:5432/{project_name}_dev\nSECRET_KEY_BASE=dev-secret-key-base-that-is-at-least-64-bytes-long-for-phoenix"
+      }
+    },
+    "spring": {
+      "name": "Spring Boot (Java)",
+      "language": "Java",
+      "category": "api",
+      "icon": "☕",
+      "description": "Enterprise Java framework with auto-configuration",
+      "services": ["postgresql", "redis", "kafka"],
+      "files": {
+        "pom.xml": "<project><modelVersion>4.0.0</modelVersion><groupId>com.{project_name}</groupId><artifactId>{project_name}</artifactId><version>0.1.0</version><parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId><version>3.2.5</version></parent></project>",
+        "application.properties": "spring.datasource.url=jdbc:postgresql://localhost:5432/{project_name}_dev\nspring.redis.host=localhost\nspring.kafka.bootstrap-servers=localhost:9092"
+      }
+    },
+    "nuxtjs": {
+      "name": "Nuxt.js",
+      "language": "TypeScript",
+      "category": "fullstack",
+      "icon": "💚",
+      "description": "Vue.js SSR framework with auto-imports and file-based routing",
+      "services": ["node", "postgresql", "redis"],
+      "files": {
+        "package.json": "{\"name\":\"{project_name}\",\"version\":\"1.0.0\",\"scripts\":{\"dev\":\"nuxt dev\",\"build\":\"nuxt build\",\"start\":\"nuxt start\"},\"devDependencies\":{\"nuxt\":\"^3.12\"},\"engines\":{\"node\":\">=22\"}}",
+        ".env": "DATABASE_URL=postgres://localhost:5432/{project_name}_dev\nREDIS_URL=redis://localhost:6379"
+      }
+    },
+    "sveltekit": {
+      "name": "SvelteKit",
+      "language": "TypeScript",
+      "category": "fullstack",
+      "icon": "🔶",
+      "description": "Full-stack Svelte framework with SSR and adapters",
+      "services": ["node", "postgresql"],
+      "files": {
+        "package.json": "{\"name\":\"{project_name}\",\"version\":\"1.0.0\",\"scripts\":{\"dev\":\"vite dev\",\"build\":\"vite build\",\"preview\":\"vite preview\"},\"devDependencies\":{\"@sveltejs/kit\":\"^2.5\",\"svelte\":\"^4\",\"vite\":\"^5\"},\"engines\":{\"node\":\">=22\"}}",
+        ".env": "DATABASE_URL=postgres://localhost:5432/{project_name}_dev"
+      }
+    },
+    "remix": {
+      "name": "Remix",
+      "language": "TypeScript",
+      "category": "fullstack",
+      "icon": "💿",
+      "description": "Full-stack React framework focused on web standards",
+      "services": ["node", "postgresql", "redis"],
+      "files": {
+        "package.json": "{\"name\":\"{project_name}\",\"version\":\"1.0.0\",\"scripts\":{\"dev\":\"remix vite:dev\",\"build\":\"remix vite:build\",\"start\":\"remix-serve build/server/index.js\"},\"dependencies\":{\"@remix-run/node\":\"^2.9\",\"@remix-run/react\":\"^2.9\",\"react\":\"^18\",\"react-dom\":\"^18\"},\"engines\":{\"node\":\">=22\"}}",
+        ".env": "DATABASE_URL=postgres://localhost:5432/{project_name}_dev\nREDIS_URL=redis://localhost:6379"
+      }
+    },
+    "astro": {
+      "name": "Astro",
+      "language": "TypeScript",
+      "category": "fullstack",
+      "icon": "🚀",
+      "description": "Content-focused framework with island architecture",
+      "services": ["node"],
+      "files": {
+        "package.json": "{\"name\":\"{project_name}\",\"version\":\"1.0.0\",\"scripts\":{\"dev\":\"astro dev\",\"build\":\"astro build\",\"preview\":\"astro preview\"},\"dependencies\":{\"astro\":\"^4.10\"},\"engines\":{\"node\":\">=22\"}}",
+        ".env": "PUBLIC_SITE_URL=http://localhost:4321"
+      }
+    },
+    "nestjs": {
+      "name": "NestJS",
+      "language": "TypeScript",
+      "category": "api",
+      "icon": "🐱",
+      "description": "Progressive Node.js framework with decorators and DI",
+      "services": ["node", "postgresql", "redis"],
+      "files": {
+        "package.json": "{\"name\":\"{project_name}\",\"version\":\"1.0.0\",\"scripts\":{\"start:dev\":\"nest start --watch\",\"build\":\"nest build\",\"start:prod\":\"node dist/main\"},\"dependencies\":{\"@nestjs/core\":\"^10.3\",\"@nestjs/common\":\"^10.3\",\"@nestjs/typeorm\":\"^10.0\",\"typeorm\":\"^0.3\",\"pg\":\"^8\"},\"engines\":{\"node\":\">=22\"}}",
+        ".env": "DATABASE_URL=postgres://localhost:5432/{project_name}_dev\nREDIS_URL=redis://localhost:6379\nPORT=3000"
+      }
+    },
+    "adonisjs": {
+      "name": "AdonisJS",
+      "language": "TypeScript",
+      "category": "fullstack",
+      "icon": "🟪",
+      "description": "Full-featured Node.js MVC framework with Lucid ORM",
+      "services": ["node", "postgresql", "redis"],
+      "files": {
+        "package.json": "{\"name\":\"{project_name}\",\"version\":\"1.0.0\",\"scripts\":{\"dev\":\"node ace serve --watch\",\"build\":\"node ace build\"},\"dependencies\":{\"@adonisjs/core\":\"^6.3\",\"@adonisjs/lucid\":\"^20\"},\"engines\":{\"node\":\">=22\"}}",
+        ".env": "DB_CONNECTION=pg\nPG_HOST=localhost\nPG_PORT=5432\nPG_DB_NAME={project_name}_dev\nREDIS_HOST=localhost\nPORT=3333"
+      }
+    },
+    "flask-app": {
+      "name": "Flask",
+      "language": "Python",
+      "category": "api",
+      "icon": "🧪",
+      "description": "Lightweight Python micro-framework",
+      "services": ["python", "postgresql", "redis"],
+      "files": {
+        "requirements.txt": "flask==3.0.0\nflask-sqlalchemy==3.1.1\nflask-migrate==4.0.5\nredis==5.0.4\ngunicorn==22.0.0",
+        ".env": "DATABASE_URL=postgresql://localhost:5432/{project_name}_dev\nREDIS_URL=redis://localhost:6379\nFLASK_APP=app\nFLASK_ENV=development"
+      }
+    },
+    "django-rest": {
+      "name": "Django REST",
+      "language": "Python",
+      "category": "api",
+      "icon": "🎸",
+      "description": "Django with REST framework for building APIs",
+      "services": ["python", "postgresql", "redis"],
+      "files": {
+        "requirements.txt": "django==5.0\ndjangorestframework==3.15.1\npsycopg2-binary==2.9\ndjango-redis==5.4\ndjango-filter==24.2\ngunicorn==22.0",
+        ".env": "DATABASE_URL=postgres://localhost:5432/{project_name}_dev\nREDIS_URL=redis://localhost:6379\nSECRET_KEY=dev-secret-key"
+      }
+    },
+    "fiber-app": {
+      "name": "Fiber (Go)",
+      "language": "Go",
+      "category": "api",
+      "icon": "🧬",
+      "description": "Express-inspired Go web framework built on Fasthttp",
+      "services": ["go", "postgresql", "redis"],
+      "files": {
+        "go.mod": "module {project_name}\n\ngo 1.22\n\nrequire (\n\tgithub.com/gofiber/fiber/v2 v2.52.0\n\tgithub.com/go-redis/redis/v9 v9.5.1\n\tgithub.com/jackc/pgx/v5 v5.5.5\n)",
+        ".env": "DATABASE_URL=postgres://localhost:5432/{project_name}_dev\nREDIS_URL=redis://localhost:6379\nPORT=3000"
+      }
+    },
+    "axum-app": {
+      "name": "Axum (Rust)",
+      "language": "Rust",
+      "category": "api",
+      "icon": "🦀",
+      "description": "Ergonomic Rust web framework built on Tokio and Tower",
+      "services": ["postgresql", "redis"],
+      "files": {
+        "Cargo.toml": "[package]\nname = \"{project_name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\naxum = \"0.7\"\ntokio = { version = \"1\", features = [\"full\"] }\nsqlx = { version = \"0.7\", features = [\"postgres\", \"runtime-tokio\"] }\nredis = \"0.25\"\nserde = { version = \"1\", features = [\"derive\"] }",
+        ".env": "DATABASE_URL=postgres://localhost:5432/{project_name}_dev\nREDIS_URL=redis://localhost:6379\nPORT=3000"
+      }
+    },
+    "wordpress-theme": {
+      "name": "WordPress Theme Dev",
+      "language": "PHP",
+      "category": "fullstack",
+      "icon": "📝",
+      "description": "WordPress theme development environment",
+      "services": ["php", "mysql", "mailpit"],
+      "files": {
+        "composer.json": "{\"name\":\"{project_name}\",\"require\":{\"php\":\"^8.2\"},\"require-dev\":{\"wp-cli/wp-cli\":\"^2.10\"}}",
+        ".env": "DB_NAME={project_name}\nDB_USER=root\nDB_PASSWORD=\nDB_HOST=127.0.0.1\nWP_HOME=http://localhost:8080\nWP_SITEURL=http://localhost:8080"
+      }
+    },
+    "shopify-app": {
+      "name": "Shopify App",
+      "language": "TypeScript",
+      "category": "fullstack",
+      "icon": "🟢",
+      "description": "Shopify app with Remix and Prisma",
+      "services": ["node", "postgresql", "redis"],
+      "files": {
+        "package.json": "{\"name\":\"{project_name}\",\"version\":\"1.0.0\",\"scripts\":{\"dev\":\"shopify app dev\",\"build\":\"remix vite:build\"},\"dependencies\":{\"@shopify/shopify-app-remix\":\"^3\",\"@remix-run/node\":\"^2\",\"@prisma/client\":\"^5\"},\"engines\":{\"node\":\">=22\"}}",
+        ".env": "DATABASE_URL=postgres://localhost:5432/{project_name}_dev\nSHOPIFY_API_KEY=your-api-key\nSHOPIFY_API_SECRET=your-api-secret"
+      }
+    },
+    "medusa-storefront": {
+      "name": "Medusa Storefront",
+      "language": "TypeScript",
+      "category": "fullstack",
+      "icon": "🟣",
+      "description": "Headless e-commerce with Medusa backend and Next.js storefront",
+      "services": ["node", "postgresql", "redis"],
+      "files": {
+        "package.json": "{\"name\":\"{project_name}\",\"version\":\"1.0.0\",\"scripts\":{\"dev\":\"next dev\",\"build\":\"next build\"},\"dependencies\":{\"next\":\"^14\",\"react\":\"^18\",\"@medusajs/medusa-js\":\"^6\"},\"engines\":{\"node\":\">=22\"}}",
+        ".env": "NEXT_PUBLIC_MEDUSA_BACKEND_URL=http://localhost:9000\nDATABASE_URL=postgres://localhost:5432/{project_name}_dev\nREDIS_URL=redis://localhost:6379"
+      }
+    }
+  }
+}

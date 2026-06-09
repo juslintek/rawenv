@@ -1,0 +1,105 @@
+<Page
+    x:Class="Rawenv.Views.ProjectsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:Rawenv.Models"
+    RequestedTheme="Dark"
+    Loaded="Page_Loaded">
+
+    <Page.Resources>
+        <SolidColorBrush x:Key="BgPrimary" Color="#0f0f14"/>
+        <SolidColorBrush x:Key="BgSecondary" Color="#16161e"/>
+        <SolidColorBrush x:Key="BgTertiary" Color="#1e1e2a"/>
+        <SolidColorBrush x:Key="AccentPrimary" Color="#6366f1"/>
+        <SolidColorBrush x:Key="AccentSuccess" Color="#34d399"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#e2e4f0"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#8b8da6"/>
+        <SolidColorBrush x:Key="BorderDefault" Color="#2a2a3a"/>
+    </Page.Resources>
+
+    <Grid Background="{StaticResource BgPrimary}" Padding="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="Projects" FontSize="24" FontWeight="Bold" Foreground="{StaticResource TextPrimary}"
+                           AutomationProperties.AutomationId="ProjectsTitle"/>
+                <TextBlock x:Name="ProjectCountLabel" FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="0,4,0,0"/>
+            </StackPanel>
+            <Button Grid.Column="1" x:Name="ScanButton" Content="🔍 Scan for Projects" Padding="16,8"
+                    Background="{StaticResource AccentPrimary}" Foreground="White" CornerRadius="6"
+                    Click="Scan_Click" AutomationProperties.AutomationId="ScanButton"/>
+        </Grid>
+
+        <!-- Scanning Progress -->
+        <Border x:Name="ScanningPanel" Grid.Row="1" Visibility="Collapsed" Background="{StaticResource BgSecondary}"
+                CornerRadius="8" Padding="16" Margin="0,16,0,0" AutomationProperties.AutomationId="ScanningProgress">
+            <StackPanel Spacing="8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Scanning…" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"/>
+                    <TextBlock x:Name="ScanPercent" Grid.Column="1" FontSize="12" Foreground="{StaticResource TextSecondary}"/>
+                </Grid>
+                <ProgressBar x:Name="ScanProgress" Maximum="1" Height="4" Foreground="{StaticResource AccentPrimary}" Background="{StaticResource BgTertiary}"/>
+                <TextBlock x:Name="ScanPath" FontFamily="Consolas" FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Project List -->
+        <ListView x:Name="ProjectList" Grid.Row="2" Margin="0,16,0,0" Background="Transparent"
+                  SelectionChanged="ProjectList_SelectionChanged"
+                  AutomationProperties.AutomationId="ProjectsList">
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="models:Project">
+                    <Border Background="#16161e" CornerRadius="8" Padding="16" Margin="0,4"
+                            BorderBrush="#2a2a3a" BorderThickness="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="{x:Bind Name}" FontSize="14" FontWeight="SemiBold" Foreground="#e2e4f0"/>
+                                <TextBlock Text="{x:Bind Path}" FontFamily="Consolas" FontSize="11" Foreground="#8b8da6" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                <TextBlock Text="{x:Bind Deps}" FontSize="12" Foreground="#8b8da6" HorizontalAlignment="Right"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+        <!-- Setup Panel (shown when project selected) -->
+        <Border x:Name="SetupPanel" Grid.Row="3" Visibility="Collapsed" Background="{StaticResource BgSecondary}"
+                CornerRadius="8" Padding="16" Margin="0,12,0,0" AutomationProperties.AutomationId="ProjectSetupPanel">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock x:Name="SetupProjectName" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"/>
+                    <TextBlock x:Name="SetupProjectPath" FontFamily="Consolas" FontSize="11" Foreground="{StaticResource TextSecondary}" Margin="0,4,0,0"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="rawenv init" Padding="16,8"
+                        Background="{StaticResource AccentSuccess}" Foreground="White" CornerRadius="6"
+                        AutomationProperties.AutomationId="SetupInitButton"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Page>

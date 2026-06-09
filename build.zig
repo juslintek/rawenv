@@ -465,6 +465,57 @@ pub fn build(b: *std.Build) void {
 
     // macOS installer: built separately via `bash packaging/installer/build.sh` (SwiftUI app)
 
+    // Integration tests (spawn the built binary)
+    const integration_init = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/init_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_init.root_module.link_libc = true;
+    const run_init_test = b.addRunArtifact(integration_init);
+    run_init_test.step.dependOn(&exe.step);
+
+    const integration_help = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/help_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_help.root_module.link_libc = true;
+    const run_help_test = b.addRunArtifact(integration_help);
+    run_help_test.step.dependOn(&exe.step);
+
+    const integration_services = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/services_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_services.root_module.link_libc = true;
+    const run_services_test = b.addRunArtifact(integration_services);
+    run_services_test.step.dependOn(&exe.step);
+
+    const integration_step = b.step("test-integration", "Run CLI integration tests");
+    integration_step.dependOn(&run_init_test.step);
+    integration_step.dependOn(&run_help_test.step);
+    integration_step.dependOn(&run_services_test.step);
+
+    const integration_add = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/add_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_add.root_module.link_libc = true;
+    const run_add_test = b.addRunArtifact(integration_add);
+    run_add_test.step.dependOn(&exe.step);
+    integration_step.dependOn(&run_add_test.step);
+
     // Cross-compilation targets
     const cross_targets: []const struct { []const u8, std.Target.Cpu.Arch, std.Target.Os.Tag } = &.{
         .{ "aarch64-macos", .aarch64, .macos },
