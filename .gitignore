@@ -1,29 +1,45 @@
+# Zig build artifacts
 zig-out/
 zig-cache/
 .zig-cache/
-node_modules/
-test-results/
-playwright-report/
+
+# Platform build artifacts
+gui/macos/.build/
+gui/windows/.vs/
+gui/windows/bin/
+gui/windows/obj/
 *.o
 *.a
 *.so
 *.dylib
 *.dll
+default.profraw
+gui/macos/default.profraw
+
+# Node (legacy, removed)
+node_modules/
+test-results/
+playwright-report/
+
+# macOS
 .DS_Store
-.kiro/
-AGENTS.md
-test_io*
+
+# Large binary assets (VM images, ISOs, disk images)
+scripts/vms/
 packaging/rawenv-*.dmg
 lib/raylib/
-gui/macos/.build/
-gui/windows/.vs/
-gui/windows/bin/
-gui/windows/obj/
-default.profraw
-.ralph-tui/
+
+# Agentic / local-only (never commit)
+.kiro/
 .ralph/
+.ralph-tui/
+AGENTS.md
 ralph.yml
 prd.json
 RALPH_HANDOVER.md
 STATE.md
-PROMPT.mdscripts/vms/
+PROMPT.md
+
+# Test artifacts
+test_io*
+test_ascii
