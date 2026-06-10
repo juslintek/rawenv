@@ -37,25 +37,51 @@ const service = @import("service");
 const shell = @import("shell");
 const dns = @import("dns");
 const proxy = @import("proxy");
+const tls = @import("tls");
 const tunnel = @import("tunnel");
 const connections = @import("connections");
 const cell = @import("cell");
 const discover = @import("discover");
+const compose = @import("compose");
 
-pub fn runInit(allocator: std.mem.Allocator, stdout: anytype) !void {
+/// Process exit codes shared across all commands.
+///   ok     (0) — success
+///   user   (1) — user/input error (bad args, unknown package, missing config)
+///   system (2) — system/environment error (network, permissions, I/O, OOM)
+pub const ExitCode = struct {
+    pub const ok: u8 = 0;
+    pub const user: u8 = 1;
+    pub const system: u8 = 2;
+};
+
+/// Write the comma-separated list of installable package names.
+fn writeAvailablePackages(stdout: anytype) !void {
+    for (resolver.available_packages, 0..) |name, idx| {
+        if (idx > 0) try stdout.writeAll(", ");
+        try stdout.writeAll(name);
+    }
+}
+
+pub fn runInit(allocator: std.mem.Allocator, stdout: anytype) !u8 {
     // Check if rawenv.toml already exists
     if (std.c.access("rawenv.toml", 0) == 0) {
         try stdout.writeAll("rawenv.toml already exists — skipping.\n");
-        return;
+        return ExitCode.ok;
     }
 
     // Detect project
-    var result = try detector.detect(allocator, std.Io.Dir.cwd());
+    var result = detector.detect(allocator, std.Io.Dir.cwd()) catch {
+        try stdout.writeAll("Error: failed to scan the current directory. Check that you have read access.\n");
+        return ExitCode.system;
+    };
     defer result.deinit(allocator);
 
     // Derive project name from cwd
     var cwd_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const cwd_ptr = std.c.getcwd(&cwd_buf, cwd_buf.len) orelse return error.CwdFailed;
+    const cwd_ptr = std.c.getcwd(&cwd_buf, cwd_buf.len) orelse {
+        try stdout.writeAll("Error: could not determine the current working directory.\n");
+        return ExitCode.system;
+    };
     const cwd_path = std.mem.sliceTo(cwd_ptr, 0);
     const project_name = std.fs.path.basename(cwd_path);
 
@@ -70,7 +96,10 @@ pub fn runInit(allocator: std.mem.Allocator, stdout: anytype) !void {
     defer allocator.free(toml);
 
     // Write file
-    if (!writeFileSimple("rawenv.toml", toml)) return error.WriteError;
+    if (!writeFileSimple("rawenv.toml", toml)) {
+        try stdout.writeAll("Cannot write rawenv.toml in the current directory. Check permissions.\n");
+        return ExitCode.system;
+    }
 
     // Print summary
     try stdout.writeAll("Created rawenv.toml\n");
@@ -94,29 +123,226 @@ pub fn runInit(allocator: std.mem.Allocator, stdout: anytype) !void {
             try stdout.writeAll("\n");
         }
     }
+    return ExitCode.ok;
 }
 
-pub fn runAdd(allocator: std.mem.Allocator, stdout: anytype, package_spec: []const u8) !void {
+/// Import an existing docker-compose.yml and write an equivalent rawenv.toml.
+/// Maps recognised images (postgres, redis, node, …) to rawenv packages,
+/// preserves port mappings, environment variables and depends_on edges, and
+/// prints warnings for features rawenv cannot represent (custom Dockerfiles,
+/// networks, volumes, unknown images) without failing.
+pub fn runImport(allocator: std.mem.Allocator, stdout: anytype, path: [:0]const u8) !u8 {
+    // Refuse to clobber an existing rawenv.toml.
+    if (std.c.access("rawenv.toml", 0) == 0) {
+        try stdout.writeAll("Error: rawenv.toml already exists. Remove it first, then re-run import.\n");
+        return ExitCode.user;
+    }
+
+    const data = readFileSimple(allocator, path.ptr) orelse {
+        try stdout.print("Error: could not read '{s}'. Check the path and try again.\n", .{path});
+        return ExitCode.user;
+    };
+    defer allocator.free(data);
+
+    // Derive project name from the current directory.
+    var cwd_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const project_name = blk: {
+        const cwd_ptr = std.c.getcwd(&cwd_buf, cwd_buf.len) orelse break :blk "app";
+        break :blk std.fs.path.basename(std.mem.sliceTo(cwd_ptr, 0));
+    };
+
+    var result = compose.importCompose(allocator, data, project_name) catch |err| switch (err) {
+        compose.ImportError.NoServices => {
+            try stdout.writeAll("Error: no 'services:' block found in the compose file.\n");
+            return ExitCode.user;
+        },
+        else => {
+            try stdout.writeAll("Error: failed to import the compose file.\n");
+            return ExitCode.system;
+        },
+    };
+    defer result.deinit(allocator);
+
+    if (result.mapped_count == 0) {
+        try stdout.writeAll("Error: no services in the compose file could be mapped to rawenv packages.\n");
+        for (result.warnings) |w| {
+            try stdout.print("  warning: {s}\n", .{w});
+        }
+        return ExitCode.user;
+    }
+
+    if (!writeFileSimple("rawenv.toml", result.toml)) {
+        try stdout.writeAll("Cannot write rawenv.toml in the current directory. Check permissions.\n");
+        return ExitCode.system;
+    }
+
+    try stdout.print("Imported {s} → rawenv.toml ({d} service", .{ path, result.mapped_count });
+    if (result.mapped_count != 1) try stdout.writeAll("s");
+    try stdout.writeAll(")\n");
+
+    for (result.warnings) |w| {
+        try stdout.print("  warning: {s}\n", .{w});
+    }
+    return ExitCode.ok;
+}
+/// Non-mutating: never writes rawenv.toml (unlike `init`). With `--json`,
+/// emits a single JSON object `{"runtimes":[...],"services":[...]}` so callers
+/// (e.g. the GUI ProjectSetupVM) can read detection results without side effects.
+pub fn runDetect(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !u8 {
+    var result = detector.detect(allocator, std.Io.Dir.cwd()) catch {
+        if (json_mode) {
+            try stdout.writeAll("{\"runtimes\":[],\"services\":[]}\n");
+        } else {
+            try stdout.writeAll("Error: failed to scan the current directory. Check that you have read access.\n");
+        }
+        return ExitCode.system;
+    };
+    defer result.deinit(allocator);
+
+    if (json_mode) {
+        try stdout.writeAll("{\"runtimes\":[");
+        for (result.runtimes, 0..) |rt, idx| {
+            if (idx > 0) try stdout.writeAll(",");
+            try stdout.print("{{\"name\":\"{s}\",\"version\":\"{s}\"}}", .{ rt.key, rt.value });
+        }
+        try stdout.writeAll("],\"services\":[");
+        for (result.services, 0..) |svc, idx| {
+            if (idx > 0) try stdout.writeAll(",");
+            try stdout.print(
+                "{{\"name\":\"{s}\",\"version\":\"{s}\",\"port\":{d},\"status\":\"stopped\"}}",
+                .{ svc.key, svc.value, service.defaultPort(svc.key) },
+            );
+        }
+        try stdout.writeAll("]}\n");
+        return ExitCode.ok;
+    }
+
+    if (result.runtimes.len == 0 and result.services.len == 0) {
+        try stdout.writeAll("No runtimes or services detected.\n");
+        return ExitCode.ok;
+    }
+    if (result.runtimes.len > 0) {
+        try stdout.writeAll("Detected runtimes:\n");
+        for (result.runtimes) |rt| {
+            try stdout.writeAll("  ");
+            try stdout.writeAll(rt.key);
+            try stdout.writeAll(" ");
+            try stdout.writeAll(rt.value);
+            try stdout.writeAll("\n");
+        }
+    }
+    if (result.services.len > 0) {
+        try stdout.writeAll("Detected services:\n");
+        for (result.services) |svc| {
+            try stdout.writeAll("  ");
+            try stdout.writeAll(svc.key);
+            try stdout.writeAll(" ");
+            try stdout.writeAll(svc.value);
+            try stdout.writeAll("\n");
+        }
+    }
+    return ExitCode.ok;
+}
+
+pub fn runAdd(allocator: std.mem.Allocator, stdout: anytype, package_spec: []const u8) !u8 {
     const parsed = resolver.parsePackageSpec(package_spec) orelse {
-        try stdout.writeAll("Usage: rawenv add <package>@<version>\n");
+        try stdout.writeAll("Error: invalid package spec. Expected <package>@<version>.\n");
         try stdout.writeAll("Example: rawenv add node@22\n");
-        return;
+        return ExitCode.user;
     };
 
     const pkg = resolver.resolve(allocator, parsed.name, parsed.version) catch |err| {
         switch (err) {
-            error.UnknownPackage => try stdout.writeAll("Error: unknown package\n"),
-            error.UnknownVersion => try stdout.writeAll("Error: unknown version\n"),
-            error.UnsupportedPlatform => try stdout.writeAll("Error: unsupported platform\n"),
-            error.OutOfMemory => try stdout.writeAll("Error: out of memory\n"),
+            error.UnknownPackage => {
+                try stdout.print("Unknown package: {s}. Available: ", .{parsed.name});
+                try writeAvailablePackages(stdout);
+                try stdout.writeAll("\n");
+                return ExitCode.user;
+            },
+            error.UnknownVersion => {
+                try stdout.print(
+                    "Unknown version '{s}' for package '{s}'. Try a supported version (e.g. rawenv add {s}@<version>).\n",
+                    .{ parsed.version, parsed.name, parsed.name },
+                );
+                return ExitCode.user;
+            },
+            error.UnsupportedPlatform => {
+                try stdout.print("Cannot install {s}: no prebuilt binary for this OS/architecture.\n", .{parsed.name});
+                return ExitCode.system;
+            },
+            error.OutOfMemory => {
+                try stdout.writeAll("Error: out of memory.\n");
+                return ExitCode.system;
+            },
         }
-        return;
     };
     defer allocator.free(pkg.url);
 
-    store.add(allocator, pkg, stdout) catch {
-        try stdout.writeAll("Error: installation failed\n");
+    store.add(allocator, pkg, stdout) catch |err| {
+        switch (err) {
+            error.DownloadFailed => try stdout.print(
+                "Download failed: could not download {s}@{s}. Check your connection and try again.\n",
+                .{ pkg.name, pkg.version },
+            ),
+            error.Sha256Mismatch => try stdout.writeAll(
+                "Download failed: checksum verification failed (the file may be corrupted or incomplete). Try again.\n",
+            ),
+            error.ExtractionFailed => try stdout.writeAll(
+                "Error: failed to extract the downloaded archive. The download may be corrupted; try again.\n",
+            ),
+            error.PermissionDenied => try stdout.writeAll(
+                "Cannot write to ~/.rawenv/. Check permissions.\n",
+            ),
+            error.HomeNotSet => try stdout.writeAll(
+                "Error: HOME environment variable is not set. rawenv needs it to locate ~/.rawenv/.\n",
+            ),
+            else => try stdout.print("Error: installation failed ({t}).\n", .{err}),
+        }
+        return ExitCode.system;
     };
+
+    // Auto-configure the service for first use (initdb / redis.conf) so that
+    // `rawenv up` works immediately with no manual steps. Best-effort: a
+    // configuration hiccup must not turn a successful install into a failure.
+    configureAfterAdd(allocator, pkg, stdout) catch {};
+    return ExitCode.ok;
+}
+
+/// Run service-specific first-run configuration after a package is installed.
+/// Resolves the project + per-instance data dirs from rawenv.toml when present
+/// (so multi-instance services each get their own config/data dir); otherwise
+/// falls back to a single default instance. Idempotent and best-effort.
+fn configureAfterAdd(allocator: std.mem.Allocator, pkg: resolver.ResolvedPackage, stdout: anytype) !void {
+    if (!service.isConfigurableService(pkg.name)) return;
+    if (comptime builtin.os.tag == .windows) return;
+
+    var configured_any = false;
+
+    if (readFileSimple(allocator, "rawenv.toml")) |toml| {
+        defer allocator.free(toml);
+        if (config.parse(allocator, toml)) |parsed| {
+            var cfg = parsed;
+            defer config.deinit(allocator, &cfg);
+            const home = (if (std.c.getenv("HOME")) |s| std.mem.sliceTo(s, 0) else null) orelse return;
+            for (cfg.services) |svc| {
+                if (!service.sameServiceFamily(svc.baseType(), pkg.name)) continue;
+                const port: u16 = if (svc.port != 0) svc.port else service.defaultPort(svc.baseType());
+                const data_dir = service.buildDataDir(allocator, home, cfg.project_name, svc.key) catch continue;
+                defer allocator.free(data_dir);
+                service.autoConfigure(allocator, pkg.name, pkg.version, data_dir, port, stdout) catch {};
+                configured_any = true;
+            }
+        } else |_| {}
+    }
+
+    if (!configured_any) {
+        // No config (or no matching instance): configure a default instance so
+        // the service is usable straight after `rawenv add`.
+        const home = (if (std.c.getenv("HOME")) |s| std.mem.sliceTo(s, 0) else null) orelse return;
+        const data_dir = service.buildDataDir(allocator, home, "default", pkg.name) catch return;
+        defer allocator.free(data_dir);
+        service.autoConfigure(allocator, pkg.name, pkg.version, data_dir, service.defaultPort(pkg.name), stdout) catch {};
+    }
 }
 
 fn loadConfig(allocator: std.mem.Allocator, stdout: anytype) !?struct { cfg: config.Config, toml: []const u8 } {
@@ -134,15 +360,127 @@ fn loadConfig(allocator: std.mem.Allocator, stdout: anytype) !?struct { cfg: con
     return .{ .cfg = cfg, .toml = toml };
 }
 
-pub fn runUp(allocator: std.mem.Allocator, stdout: anytype) !void {
-    var result = (try loadConfig(allocator, stdout)) orelse return;
+pub fn runUp(allocator: std.mem.Allocator, stdout: anytype) !u8 {
+    var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
-    try service.up(allocator, result.cfg, stdout);
+    service.up(allocator, result.cfg, stdout) catch |err| switch (err) {
+        // The circular-dependency message is already printed by service.up.
+        error.CircularDependency => return ExitCode.user,
+        else => {
+            try stdout.writeAll("Error: failed to activate runtimes. Run `rawenv add` for any missing packages, then try again.\n");
+            return ExitCode.system;
+        },
+    };
+
+    // Wire live .test domains + auto-TLS to the running services. Best-effort:
+    // a networking hiccup (no sudo, no Caddy) must not fail an otherwise
+    // successful `up` — instead we persist configs and print next steps.
+    setupNetwork(allocator, result.cfg, stdout) catch {};
+    return ExitCode.ok;
 }
 
-pub fn runServicesList(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !void {
-    var result = (try loadConfig(allocator, stdout)) orelse return;
+/// Configure live `.test` domains, a Caddy reverse proxy, and local TLS for the
+/// project's services after `rawenv up` brings them online:
+///   * Generates a TLS cert (mkcert if available, self-signed openssl fallback)
+///     covering `<project>.test` + `*.<project>.test`, under `~/.rawenv/certs`.
+///   * Builds Caddy routes: `<project>.test` → primary service, and
+///     `<service>.<project>.test` → each service's resolved port, all TLS.
+///   * Persists the Caddyfile to `~/.rawenv/proxy/<project>.Caddyfile` (no
+///     privilege needed) and attempts a non-interactive Caddy reload.
+///   * Adds `/etc/hosts` entries via non-interactive sudo; on failure prints
+///     the exact manual command so the user can finish setup.
+///
+/// Best-effort throughout: every privileged step degrades to a printed hint.
+fn setupNetwork(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !void {
+    if (comptime builtin.os.tag == .windows) return;
+    if (cfg.project_name.len == 0) return;
+
+    const services = try service.listServices(allocator, cfg);
+    defer service.freeServices(allocator, services);
+
+    // Nothing to route — skip silently (a runtimes-only project has no ports).
+    if (services.len == 0) return;
+
+    const home = service.getHome() orelse return;
+
+    try stdout.writeAll("\nWiring .test domains + TLS:\n");
+
+    // 1. TLS certificate (mkcert preferred, self-signed fallback).
+    const cert: ?tls.Certificate = tls.ensureCertificate(allocator, home, cfg.project_name) catch null;
+    defer if (cert) |c| c.deinit(allocator);
+    if (cert) |c| {
+        switch (c.method) {
+            .mkcert => try stdout.writeAll("  \u{2713} TLS cert via mkcert (locally trusted)\n"),
+            .self_signed => try stdout.writeAll("  \u{2713} TLS cert (self-signed — browsers will warn until trusted)\n"),
+        }
+    } else {
+        try stdout.writeAll("  \u{26A0} Could not generate a TLS cert (install mkcert or openssl). Using Caddy internal CA.\n");
+    }
+
+    // 2. Build proxy routes for each service instance + the apex domain.
+    const endpoints = try allocator.alloc(proxy.ServiceEndpoint, services.len);
+    defer allocator.free(endpoints);
+    for (services, 0..) |svc, i| endpoints[i] = .{ .name = svc.name, .port = svc.port };
+
+    const cert_path: ?[]const u8 = if (cert) |c| c.cert_path else null;
+    const key_path: ?[]const u8 = if (cert) |c| c.key_path else null;
+    const routes = try proxy.buildProjectRoutes(allocator, cfg.project_name, endpoints, cert_path, key_path);
+    defer proxy.freeRoutes(allocator, routes);
+
+    const caddyfile = try proxy.generateCaddyfile(allocator, routes);
+    defer allocator.free(caddyfile);
+
+    // 3. Persist the Caddyfile to an unprivileged path.
+    const caddy_path = try std.fmt.allocPrint(allocator, "{s}/.rawenv/proxy/{s}.Caddyfile", .{ home, cfg.project_name });
+    defer allocator.free(caddy_path);
+    if (proxy.writeCaddyfile(allocator, caddy_path, caddyfile)) {
+        try stdout.print("  \u{2713} Caddyfile written: {s}\n", .{caddy_path});
+    } else |_| {
+        try stdout.writeAll("  \u{26A0} Could not write the Caddyfile.\n");
+    }
+
+    // 4. DNS: non-interactive sudo so `up` never blocks on a password prompt.
+    var svc_names: std.ArrayList([]const u8) = .empty;
+    defer svc_names.deinit(allocator);
+    for (cfg.services) |svc| try svc_names.append(allocator, svc.key);
+    const dns_cfg = dns.DnsConfig{ .project = cfg.project_name, .services = svc_names.items };
+
+    if (dns.setupDNSEx(allocator, dns_cfg, false)) {
+        try stdout.print("  \u{2713} DNS: {s}.test → 127.0.0.1 (and per-service subdomains)\n", .{cfg.project_name});
+    } else |_| {
+        try stdout.writeAll("  \u{26A0} DNS not configured (needs sudo). Run: sudo rawenv dns setup\n");
+    }
+
+    // 5. Reload Caddy non-interactively if it's installed.
+    if (tls.binaryOnPath("caddy")) {
+        if (proxy.setupProxyEx(allocator, caddyfile, false)) {
+            try stdout.print("  \u{2713} Caddy reloaded — https://{s}.test is live\n", .{cfg.project_name});
+        } else |_| {
+            try stdout.print("  \u{26A0} Caddy not reloaded (needs sudo). Run: sudo caddy reload --config {s}\n", .{caddy_path});
+        }
+    } else {
+        try stdout.print("  \u{2139} Install Caddy to serve https://{s}.test (brew install caddy)\n", .{cfg.project_name});
+    }
+}
+
+pub fn runDown(allocator: std.mem.Allocator, stdout: anytype) !u8 {
+    var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
+    defer allocator.free(result.toml);
+    defer config.deinit(allocator, &result.cfg);
+    service.down(allocator, result.cfg, stdout) catch |err| switch (err) {
+        // The circular-dependency message is already printed by service.down.
+        error.CircularDependency => return ExitCode.user,
+        else => {
+            try stdout.writeAll("Error: failed to stop services.\n");
+            return ExitCode.system;
+        },
+    };
+    return ExitCode.ok;
+}
+
+pub fn runServicesList(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !u8 {
+    var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
     if (json_mode) {
@@ -157,17 +495,197 @@ pub fn runServicesList(allocator: std.mem.Allocator, stdout: anytype, json_mode:
     } else {
         try service.list(allocator, result.cfg, stdout);
     }
+    return ExitCode.ok;
 }
 
-pub fn runShell(allocator: std.mem.Allocator, stdout: anytype) !void {
-    var result = (try loadConfig(allocator, stdout)) orelse return;
+/// Resolve the store package name + full version for a runtime/service entry,
+/// then check whether its binary is installed in ~/.rawenv/store. Service
+/// instances (e.g. "postgres.primary") map to their base package ("postgres").
+fn isEntryInstalled(allocator: std.mem.Allocator, name: []const u8, version: []const u8) bool {
+    const base = service.baseTypeOf(name);
+    const full = resolver.resolveVersion(base, version);
+    return store.isInstalled(allocator, base, full) catch false;
+}
+
+/// `rawenv status` — one-command project health check. Prints the project name,
+/// config file status, and each service with its status/port. Surfaces warnings
+/// for missing binaries, port conflicts, and stale PIDs. With `--json`, emits a
+/// structured report. Works without rawenv.toml (prints a hint, exits 0).
+pub fn runStatus(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !u8 {
+    const toml = readFileSimple(allocator, "rawenv.toml") orelse {
+        if (json_mode) {
+            try stdout.writeAll("{\"config_found\":false,\"message\":\"No rawenv.toml found. Run rawenv init.\"}\n");
+        } else {
+            try stdout.writeAll("No rawenv.toml found. Run rawenv init.\n");
+        }
+        return ExitCode.ok;
+    };
+    defer allocator.free(toml);
+
+    var cfg = config.parse(allocator, toml) catch {
+        if (json_mode) {
+            try stdout.writeAll("{\"config_found\":true,\"config_valid\":false,\"message\":\"Failed to parse rawenv.toml. Check the file for syntax errors.\"}\n");
+        } else {
+            try stdout.writeAll("Project: (unknown)\n");
+            try stdout.writeAll("Config:  rawenv.toml (invalid — check for syntax errors)\n");
+        }
+        return ExitCode.user;
+    };
+    defer config.deinit(allocator, &cfg);
+
+    const services = try service.listServices(allocator, cfg);
+    defer service.freeServices(allocator, services);
+
+    // Resolve live status for each service once (avoids duplicate probes).
+    const statuses = try allocator.alloc(service.ServiceStatus, services.len);
+    defer allocator.free(statuses);
+    for (services, 0..) |svc, idx| statuses[idx] = service.getServiceStatus(allocator, svc.name);
+
+    if (json_mode) {
+        try stdout.print("{{\"config_found\":true,\"config_valid\":true,\"project\":\"{s}\",\"runtimes\":[", .{cfg.project_name});
+        for (cfg.runtimes, 0..) |rt, idx| {
+            if (idx > 0) try stdout.writeAll(",");
+            const installed = isEntryInstalled(allocator, rt.key, rt.value);
+            try stdout.print("{{\"name\":\"{s}\",\"version\":\"{s}\",\"installed\":{s}}}", .{ rt.key, rt.value, if (installed) "true" else "false" });
+        }
+        try stdout.writeAll("],\"services\":[");
+        for (services, 0..) |svc, idx| {
+            if (idx > 0) try stdout.writeAll(",");
+            const installed = isEntryInstalled(allocator, svc.name, svc.version);
+            const conflict = service.portConflictsWith(services, idx);
+            const stale = service.isStale(statuses[idx], svc.port);
+            try stdout.print(
+                "{{\"name\":\"{s}\",\"version\":\"{s}\",\"port\":{d},\"status\":\"{s}\",\"installed\":{s},\"port_conflict\":{s},\"stale_pid\":{s}}}",
+                .{ svc.name, svc.version, svc.port, @tagName(statuses[idx]), if (installed) "true" else "false", if (conflict) "true" else "false", if (stale) "true" else "false" },
+            );
+        }
+        try stdout.writeAll("],\"warnings\":[");
+        var warn_idx: usize = 0;
+        for (cfg.runtimes) |rt| {
+            if (!isEntryInstalled(allocator, rt.key, rt.value)) {
+                if (warn_idx > 0) try stdout.writeAll(",");
+                try stdout.print("\"{s}: binary not installed\"", .{rt.key});
+                warn_idx += 1;
+            }
+        }
+        for (services, 0..) |svc, idx| {
+            if (!isEntryInstalled(allocator, svc.name, svc.version)) {
+                if (warn_idx > 0) try stdout.writeAll(",");
+                try stdout.print("\"{s}: binary not installed\"", .{svc.name});
+                warn_idx += 1;
+            }
+            if (service.portConflictsWith(services, idx)) {
+                if (warn_idx > 0) try stdout.writeAll(",");
+                try stdout.print("\"{s}: port {d} conflict\"", .{ svc.name, svc.port });
+                warn_idx += 1;
+            }
+            if (service.isStale(statuses[idx], svc.port)) {
+                if (warn_idx > 0) try stdout.writeAll(",");
+                try stdout.print("\"{s}: stale PID (running but port {d} not responding)\"", .{ svc.name, svc.port });
+                warn_idx += 1;
+            }
+        }
+        try stdout.writeAll("]}\n");
+        return ExitCode.ok;
+    }
+
+    // Human-readable report.
+    try stdout.print("Project: {s}\n", .{if (cfg.project_name.len > 0) cfg.project_name else "(unnamed)"});
+    try stdout.writeAll("Config:  rawenv.toml (valid)\n");
+
+    if (cfg.runtimes.len > 0) {
+        try stdout.writeAll("\nRuntimes:\n");
+        for (cfg.runtimes) |rt| {
+            const installed = isEntryInstalled(allocator, rt.key, rt.value);
+            try stdout.print("  {s}", .{rt.key});
+            var pad: usize = if (rt.key.len < 14) 14 - rt.key.len else 2;
+            for (0..pad) |_| try stdout.writeAll(" ");
+            try stdout.print("{s}", .{rt.value});
+            pad = if (rt.value.len < 11) 11 - rt.value.len else 2;
+            for (0..pad) |_| try stdout.writeAll(" ");
+            try stdout.writeAll(if (installed) "installed" else "not installed");
+            try stdout.writeAll("\n");
+        }
+    }
+
+    if (services.len > 0) {
+        try stdout.writeAll("\nServices:\n");
+        try stdout.writeAll("  NAME            VERSION    PORT   STATUS\n");
+        for (services, 0..) |svc, idx| {
+            try stdout.print("  {s}", .{svc.name});
+            var pad: usize = if (svc.name.len < 14) 14 - svc.name.len else 2;
+            for (0..pad) |_| try stdout.writeAll(" ");
+            try stdout.print("{s}", .{svc.version});
+            pad = if (svc.version.len < 11) 11 - svc.version.len else 2;
+            for (0..pad) |_| try stdout.writeAll(" ");
+            var port_buf: [8]u8 = undefined;
+            const port_str = std.fmt.bufPrint(&port_buf, "{d}", .{svc.port}) catch "0";
+            try stdout.writeAll(port_str);
+            pad = if (port_str.len < 7) 7 - port_str.len else 2;
+            for (0..pad) |_| try stdout.writeAll(" ");
+            try stdout.writeAll(@tagName(statuses[idx]));
+            try stdout.writeAll("\n");
+        }
+    }
+
+    if (services.len == 0 and cfg.runtimes.len == 0) {
+        try stdout.writeAll("\nNo runtimes or services configured.\n");
+    }
+
+    // Collect and print warnings.
+    var any_warning = false;
+    for (cfg.runtimes) |rt| {
+        if (!isEntryInstalled(allocator, rt.key, rt.value)) {
+            if (!any_warning) {
+                try stdout.writeAll("\nWarnings:\n");
+                any_warning = true;
+            }
+            try stdout.print("  \u{26A0} {s}: binary not installed — run `rawenv add {s}@{s}`\n", .{ rt.key, rt.key, rt.value });
+        }
+    }
+    for (services, 0..) |svc, idx| {
+        if (!isEntryInstalled(allocator, svc.name, svc.version)) {
+            if (!any_warning) {
+                try stdout.writeAll("\nWarnings:\n");
+                any_warning = true;
+            }
+            try stdout.print("  \u{26A0} {s}: binary not installed — run `rawenv add {s}@{s}`\n", .{ svc.name, service.baseTypeOf(svc.name), svc.version });
+        }
+        if (service.portConflictsWith(services, idx)) {
+            if (!any_warning) {
+                try stdout.writeAll("\nWarnings:\n");
+                any_warning = true;
+            }
+            try stdout.print("  \u{26A0} {s}: port {d} conflicts with another service\n", .{ svc.name, svc.port });
+        }
+        if (service.isStale(statuses[idx], svc.port)) {
+            if (!any_warning) {
+                try stdout.writeAll("\nWarnings:\n");
+                any_warning = true;
+            }
+            try stdout.print("  \u{26A0} {s}: stale PID — reported running but port {d} is not responding\n", .{ svc.name, svc.port });
+        }
+    }
+    if (!any_warning) {
+        try stdout.writeAll("\nNo issues detected.\n");
+    }
+
+    return ExitCode.ok;
+}
+
+pub fn runShell(allocator: std.mem.Allocator, stdout: anytype) !u8 {
+    var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
-    try shell.enter(allocator, result.cfg, stdout);
+    shell.enter(allocator, result.cfg, stdout) catch {
+        try stdout.writeAll("Error: failed to start the rawenv shell.\n");
+        return ExitCode.system;
+    };
+    return ExitCode.ok;
 }
 
-pub fn runDns(allocator: std.mem.Allocator, stdout: anytype) !void {
-    var result = (try loadConfig(allocator, stdout)) orelse return;
+pub fn runDns(allocator: std.mem.Allocator, stdout: anytype) !u8 {
+    var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
 
@@ -182,6 +700,7 @@ pub fn runDns(allocator: std.mem.Allocator, stdout: anytype) !void {
     const entries = try dns.generateHostsEntries(allocator, cfg);
     defer allocator.free(entries);
     try stdout.writeAll(entries);
+    return ExitCode.ok;
 }
 
 pub fn runDnsSetup(allocator: std.mem.Allocator, stdout: anytype) !void {
@@ -203,8 +722,8 @@ pub fn runDnsSetup(allocator: std.mem.Allocator, stdout: anytype) !void {
     try stdout.writeAll("Done. Project is now accessible via .test domains.\n");
 }
 
-pub fn runProxy(allocator: std.mem.Allocator, stdout: anytype) !void {
-    var result = (try loadConfig(allocator, stdout)) orelse return;
+pub fn runProxy(allocator: std.mem.Allocator, stdout: anytype) !u8 {
+    var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
 
@@ -220,6 +739,7 @@ pub fn runProxy(allocator: std.mem.Allocator, stdout: anytype) !void {
     const caddy = try p.generateCaddyConfig(allocator);
     defer allocator.free(caddy);
     try stdout.writeAll(caddy);
+    return ExitCode.ok;
 }
 
 pub fn runProxySetup(allocator: std.mem.Allocator, stdout: anytype) !void {
@@ -250,24 +770,73 @@ pub fn runProxySetup(allocator: std.mem.Allocator, stdout: anytype) !void {
     try stdout.writeAll("Done. Caddy has been reloaded with the new configuration.\n");
 }
 
-pub fn runTunnel(allocator: std.mem.Allocator, stdout: anytype, port_str: []const u8) !void {
-    const port = std.fmt.parseInt(u16, port_str, 10) catch {
-        try stdout.writeAll("Error: invalid port number\n");
-        return;
-    };
-    const cfg = tunnel.TunnelConfig{
-        .local_port = port,
-        .ssh_host = "tunnel.example.com",
-        .ssh_user = "rawenv",
-    };
-    const cmd = try cfg.generateSshCommand(allocator);
-    defer allocator.free(cmd);
-    try stdout.writeAll(cmd);
-    try stdout.writeAll("\n");
+/// Tunnel providers in preference order, with the command to install each.
+const tunnel_providers = [_]struct { name: []const u8, install: []const u8 }{
+    .{ .name = "cloudflared", .install = "brew install cloudflared  (or https://github.com/cloudflare/cloudflared)" },
+    .{ .name = "bore", .install = "cargo install bore-cli  (https://github.com/ekzhang/bore)" },
+    .{ .name = "ngrok", .install = "brew install ngrok  (or https://ngrok.com/download)" },
+};
+
+/// True when an executable named `name` is found on PATH. Scans each PATH
+/// directory and checks for an executable file (X_OK). No subprocess is
+/// spawned, so this is deterministic and works with a cleared environment.
+fn binaryOnPath(name: []const u8) bool {
+    if (comptime builtin.os.tag == .windows) return false;
+    const path_env = std.c.getenv("PATH") orelse return false;
+    const path = std.mem.sliceTo(path_env, 0);
+    var it = std.mem.splitScalar(u8, path, ':');
+    var buf: [std.fs.max_path_bytes]u8 = undefined;
+    while (it.next()) |dir| {
+        if (dir.len == 0) continue;
+        const full = std.fmt.bufPrintZ(&buf, "{s}/{s}", .{ dir, name }) catch continue;
+        if (std.c.access(full, 1) == 0) return true; // X_OK
+    }
+    return false;
 }
 
-pub fn runConnections(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !void {
-    var result = (try loadConfig(allocator, stdout)) orelse return;
+pub fn runTunnel(_: std.mem.Allocator, stdout: anytype, port_str: []const u8) !u8 {
+    const port = std.fmt.parseInt(u16, port_str, 10) catch {
+        try stdout.print("Error: invalid port '{s}'. Expected a number between 1 and 65535.\n", .{port_str});
+        return ExitCode.user;
+    };
+    if (port == 0) {
+        try stdout.writeAll("Error: invalid port '0'. Expected a number between 1 and 65535.\n");
+        return ExitCode.user;
+    }
+
+    // Pick the first tunnel provider available on PATH.
+    var provider: ?[]const u8 = null;
+    for (tunnel_providers) |p| {
+        if (binaryOnPath(p.name)) {
+            provider = p.name;
+            break;
+        }
+    }
+
+    // No provider installed: print an actionable install prompt instead of an
+    // unusable command. Exit code is `user` (1) — the user must act.
+    if (provider == null) {
+        try stdout.print("No tunnel provider found on PATH. Install one to expose local port {d}:\n", .{port});
+        for (tunnel_providers) |p| {
+            try stdout.print("  {s}: {s}\n", .{ p.name, p.install });
+        }
+        return ExitCode.user;
+    }
+
+    // A provider is available: print the command that exposes the local port.
+    const name = provider.?;
+    if (std.mem.eql(u8, name, "cloudflared")) {
+        try stdout.print("cloudflared tunnel --url http://localhost:{d}\n", .{port});
+    } else if (std.mem.eql(u8, name, "bore")) {
+        try stdout.print("bore local {d} --to bore.pub\n", .{port});
+    } else {
+        try stdout.print("ngrok http {d}\n", .{port});
+    }
+    return ExitCode.ok;
+}
+
+pub fn runConnections(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !u8 {
+    var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
 
@@ -286,12 +855,12 @@ pub fn runConnections(allocator: std.mem.Allocator, stdout: anytype, json_mode: 
             try stdout.writeAll("\"}");
         }
         try stdout.writeAll("]\n");
-        return;
+        return ExitCode.ok;
     }
 
     if (map.count() == 0) {
         try stdout.writeAll("No service dependencies found.\n");
-        return;
+        return ExitCode.ok;
     }
     for (map.links.items) |link| {
         try stdout.writeAll(link.from);
@@ -299,9 +868,10 @@ pub fn runConnections(allocator: std.mem.Allocator, stdout: anytype, json_mode: 
         try stdout.writeAll(link.to);
         try stdout.writeAll("\n");
     }
+    return ExitCode.ok;
 }
 
-pub fn runCellInfo(_: std.mem.Allocator, stdout: anytype) !void {
+pub fn runCellInfo(_: std.mem.Allocator, stdout: anytype) !u8 {
     try stdout.writeAll("Isolation backends available on this OS:\n");
     switch (builtin.os.tag) {
         .macos => try stdout.writeAll("  seatbelt (sandbox-exec) — macOS App Sandbox\n"),
@@ -313,22 +883,31 @@ pub fn runCellInfo(_: std.mem.Allocator, stdout: anytype) !void {
         .windows => try stdout.writeAll("  job objects — process memory/CPU limits\n"),
         else => try stdout.writeAll("  none — unsupported OS\n"),
     }
+    return ExitCode.ok;
 }
 
-pub fn runMenubar(allocator: std.mem.Allocator, stdout: anytype) !void {
+pub fn runMenubar(allocator: std.mem.Allocator, stdout: anytype) !u8 {
     const macos = @import("macos");
     if (comptime builtin.os.tag == .macos) {
-        try macos.runMenuBar(allocator);
+        macos.runMenuBar(allocator) catch {
+            try stdout.writeAll("Error: failed to launch the menu bar item.\n");
+            return ExitCode.system;
+        };
+        return ExitCode.ok;
     } else {
-        try stdout.writeAll("Menu bar is only available on macOS\n");
+        try stdout.writeAll("Menu bar is only available on macOS.\n");
+        return ExitCode.user;
     }
 }
 
-pub fn runDiscover(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !void {
+pub fn runDiscover(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !u8 {
     const results = discover.discover(allocator) catch {
-        if (json_mode) { try stdout.writeAll("[]\n"); return; }
-        try stdout.writeAll("Error: discovery failed\n");
-        return;
+        if (json_mode) {
+            try stdout.writeAll("[]\n");
+        } else {
+            try stdout.writeAll("Error: project discovery failed while scanning the filesystem.\n");
+        }
+        return ExitCode.system;
     };
     defer discover.freeResults(allocator, results);
 
@@ -345,12 +924,12 @@ pub fn runDiscover(allocator: std.mem.Allocator, stdout: anytype, json_mode: boo
             try stdout.writeAll("}");
         }
         try stdout.writeAll("]\n");
-        return;
+        return ExitCode.ok;
     }
 
     if (results.len == 0) {
         try stdout.writeAll("No projects found.\n");
-        return;
+        return ExitCode.ok;
     }
     for (results) |p| {
         try stdout.writeAll(p.path);
@@ -359,17 +938,73 @@ pub fn runDiscover(allocator: std.mem.Allocator, stdout: anytype, json_mode: boo
         if (p.has_rawenv_toml) try stdout.writeAll(", rawenv");
         try stdout.writeAll("]\n");
     }
+    return ExitCode.ok;
 }
 
-pub fn runUninstall(_: std.mem.Allocator, stdout: anytype) !void {
+/// Wipe a project's isolated data directories (~/.rawenv/data/{project-name-hash}).
+/// Prompts for confirmation unless `force` is set.
+pub fn runDestroy(allocator: std.mem.Allocator, stdout: anytype, force: bool) !u8 {
+    var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
+    defer allocator.free(result.toml);
+    defer config.deinit(allocator, &result.cfg);
+
+    const project = result.cfg.project_name;
+
+    const home = if (comptime builtin.os.tag == .windows) null else if (std.c.getenv("HOME")) |s| std.mem.sliceTo(s, 0) else null;
+    if (home == null) {
+        try stdout.writeAll("Error: HOME environment variable is not set.\n");
+        return ExitCode.system;
+    }
+
+    const root = try service.buildProjectDataRoot(allocator, home.?, project);
+    defer allocator.free(root);
+
+    if (!force) {
+        try stdout.writeAll("rawenv destroy will permanently remove data for project '");
+        try stdout.writeAll(project);
+        try stdout.writeAll("':\n  ");
+        try stdout.writeAll(root);
+        try stdout.writeAll("\n\nProceed? [y/N] ");
+
+        var buf: [16]u8 = undefined;
+        const n_raw = if (comptime builtin.os.tag == .windows) @as(isize, 0) else std.c.read(0, &buf, buf.len);
+        const n: usize = if (n_raw > 0) @intCast(n_raw) else 0;
+        if (n == 0) {
+            try stdout.writeAll("Aborted.\n");
+            return ExitCode.ok;
+        }
+        const answer = std.mem.trimEnd(u8, buf[0..n], "\r\n");
+        if (!std.mem.eql(u8, answer, "y") and !std.mem.eql(u8, answer, "Y")) {
+            try stdout.writeAll("Aborted.\n");
+            return ExitCode.ok;
+        }
+    }
+
+    // Stop any running services before wiping their data.
+    for (result.cfg.services) |svc| {
+        service.stopService(allocator, svc.key, stdout) catch {};
+    }
+
+    const removed = service.removeProjectData(allocator, project) catch false;
+    if (removed) {
+        try stdout.writeAll("Destroyed data for project '");
+        try stdout.writeAll(project);
+        try stdout.writeAll("'\n");
+    } else {
+        try stdout.writeAll("Nothing to remove (no data dirs found) or removal unsupported on this platform.\n");
+    }
+    return ExitCode.ok;
+}
+
+pub fn runUninstall(_: std.mem.Allocator, stdout: anytype) !u8 {
     const home = if (comptime builtin.os.tag == .windows) blk: {
         break :blk if (std.c.getenv("USERPROFILE")) |s| std.mem.sliceTo(s, 0) else null orelse {
-            try stdout.writeAll("Error: USERPROFILE not set\n");
-            return;
+            try stdout.writeAll("Error: USERPROFILE environment variable is not set.\n");
+            return ExitCode.system;
         };
     } else if (std.c.getenv("HOME")) |s| std.mem.sliceTo(s, 0) else null orelse {
-        try stdout.writeAll("Error: HOME not set\n");
-        return;
+        try stdout.writeAll("Error: HOME environment variable is not set.\n");
+        return ExitCode.system;
     };
     defer if (comptime builtin.os.tag == .windows) std.heap.page_allocator.free(home);
 
@@ -386,17 +1021,23 @@ pub fn runUninstall(_: std.mem.Allocator, stdout: anytype) !void {
     var buf: [16]u8 = undefined;
     const n_raw = if (comptime builtin.os.tag == .windows) @as(isize, 0) else std.c.read(0, &buf, buf.len);
     const n: usize = if (n_raw > 0) @intCast(n_raw) else 0;
-    if (n == 0) return;
+    if (n == 0) {
+        try stdout.writeAll("Aborted.\n");
+        return ExitCode.ok;
+    }
     const answer = std.mem.trimEnd(u8, buf[0..n], "\r\n");
     if (!std.mem.eql(u8, answer, "y") and !std.mem.eql(u8, answer, "Y")) {
         try stdout.writeAll("Aborted.\n");
-        return;
+        return ExitCode.ok;
     }
 
     // Remove ~/.rawenv/
     var rawenv_path_buf: [1024]u8 = undefined;
     // Remove ~/.rawenv/ directory
-    const rm_cmd = std.fmt.bufPrintZ(&rawenv_path_buf, "rm -rf {s}/.rawenv", .{home}) catch return;
+    const rm_cmd = std.fmt.bufPrintZ(&rawenv_path_buf, "rm -rf {s}/.rawenv", .{home}) catch {
+        try stdout.writeAll("Error: home path is too long to process.\n");
+        return ExitCode.system;
+    };
     _ = std.c.unlink(rm_cmd); // Best-effort cleanup; full rm -rf needs Io
     // Note: full recursive delete requires Io in 0.16.0; manual cleanup may be needed
 
@@ -407,6 +1048,7 @@ pub fn runUninstall(_: std.mem.Allocator, stdout: anytype) !void {
     }
 
     try stdout.writeAll("rawenv uninstalled\n");
+    return ExitCode.ok;
 }
 
 fn cleanRcFile(home: []const u8, filename: []const u8) !void {

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      Entitlements for *Developer ID* distribution (outside the Mac App Store).
+
+      Unlike Rawenv.entitlements (App Store), the App Sandbox is intentionally
+      DISABLED here: rawenv is a developer tool that spawns its embedded CLI,
+      manages runtimes under ~/.rawenv, and reads/writes arbitrary project
+      folders the user opens. The Hardened Runtime (required for notarization)
+      is enabled at sign time via `codesign --options runtime`, not here.
+    -->
+
+    <!-- Allow the embedded, separately-signed rawenv CLI to be spawned. -->
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+
+    <!-- The CLI shells out to downloaded runtimes; permit child processes that
+         are signed by us without forcing library validation across the boundary. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>

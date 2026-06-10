@@ -6,6 +6,31 @@ pub const Config = struct {
     services: []Entry = &.{},
     auto_detect: bool = false,
 
+    /// Readiness/health-check policy for a service, configured via
+    /// `[services.X.health]` in rawenv.toml. `rawenv up` polls each started
+    /// service until it becomes ready (or the timeout elapses).
+    pub const HealthCheck = struct {
+        /// Probe strategy. `.auto` picks TCP for datastores and HTTP for web
+        /// services. `.none` disables readiness gating for the service.
+        kind: Kind = .auto,
+        /// Maximum time to wait for readiness, in seconds.
+        timeout_secs: u32 = 30,
+        /// Request path for HTTP probes (ignored for TCP).
+        path: []const u8 = "/",
+        /// Port to probe. 0 means "use the service's resolved port".
+        port: u16 = 0,
+
+        pub const Kind = enum { auto, tcp, http, none };
+    };
+
+    /// An environment variable for a service, configured via a
+    /// `[services.X.env]` table in rawenv.toml. Both fields borrow from the
+    /// parsed input; the outer array is owned and freed by `deinit`.
+    pub const EnvVar = struct {
+        name: []const u8,
+        value: []const u8,
+    };
+
     /// A service/runtime entry. For instances like [services.postgres.primary],
     /// `key` is the full instance id ("postgres.primary"), `service_type` is the
     /// base type ("postgres"), and `port` is an explicit override (0 = auto).
@@ -14,6 +39,18 @@ pub const Config = struct {
         value: []const u8,
         port: u16 = 0,
         service_type: []const u8 = "",
+        health: HealthCheck = .{},
+        /// Names of services this entry depends on, configured via
+        /// `depends_on = ["postgres", "redis"]` under `[services.X]`. Each name
+        /// matches another service by full key or by base type. `rawenv up`
+        /// starts dependencies first; `rawenv down` stops them last. The slice
+        /// elements are borrowed from the parsed input; the outer array is
+        /// owned and freed by `deinit`.
+        depends_on: []const []const u8 = &.{},
+        /// Environment variables for the service, configured via a
+        /// `[services.X.env]` table. The outer array is owned and freed by
+        /// `deinit`; the element strings borrow from the parsed input.
+        env: []const EnvVar = &.{},
 
         /// Base service type: the part before the first '.', or the whole key.
         pub fn baseType(self: Entry) []const u8 {
@@ -29,14 +66,20 @@ pub const ParseError = error{
     MissingProjectName,
 };
 
-const SectionKind = enum { none, project, runtimes, services, detect, runtime_item, service_item };
+const SectionKind = enum { none, project, runtimes, services, detect, runtime_item, service_item, service_health, service_env };
 
 pub fn parse(allocator: std.mem.Allocator, input: []const u8) !Config {
     var cfg = Config{};
     var runtimes: std.ArrayList(Config.Entry) = .empty;
     errdefer runtimes.deinit(allocator);
     var services: std.ArrayList(Config.Entry) = .empty;
-    errdefer services.deinit(allocator);
+    errdefer {
+        for (services.items) |svc| {
+            if (svc.depends_on.len > 0) allocator.free(svc.depends_on);
+            if (svc.env.len > 0) allocator.free(svc.env);
+        }
+        services.deinit(allocator);
+    }
     var section: SectionKind = .none;
     var current_item_name: []const u8 = "";
 
@@ -60,16 +103,29 @@ pub fn parse(allocator: std.mem.Allocator, input: []const u8) !Config {
                 section = .runtime_item;
                 current_item_name = name["runtimes.".len..];
             } else if (std.mem.startsWith(u8, name, "services.")) {
-                section = .service_item;
-                current_item_name = name["services.".len..];
-                const dot = std.mem.indexOfScalar(u8, current_item_name, '.');
-                const base = if (dot) |d| current_item_name[0..d] else current_item_name;
-                try services.append(allocator, .{
-                    .key = current_item_name,
-                    .value = "latest",
-                    .service_type = base,
-                    .port = 0,
-                });
+                const sub = name["services.".len..];
+                if (std.mem.endsWith(u8, sub, ".health")) {
+                    // [services.X.health] attaches a readiness policy to an
+                    // already-declared service rather than defining a new one.
+                    section = .service_health;
+                    current_item_name = sub[0 .. sub.len - ".health".len];
+                } else if (std.mem.endsWith(u8, sub, ".env")) {
+                    // [services.X.env] attaches environment variables to an
+                    // already-declared service rather than defining a new one.
+                    section = .service_env;
+                    current_item_name = sub[0 .. sub.len - ".env".len];
+                } else {
+                    section = .service_item;
+                    current_item_name = sub;
+                    const dot = std.mem.indexOfScalar(u8, current_item_name, '.');
+                    const base = if (dot) |d| current_item_name[0..d] else current_item_name;
+                    try services.append(allocator, .{
+                        .key = current_item_name,
+                        .value = "latest",
+                        .service_type = base,
+                        .port = 0,
+                    });
+                }
             } else {
                 return ParseError.InvalidToml;
             }
@@ -118,6 +174,65 @@ pub fn parse(allocator: std.mem.Allocator, input: []const u8) !Config {
                     last.value = stripQuotes(val_raw) orelse return ParseError.InvalidToml;
                 } else if (std.mem.eql(u8, key, "port")) {
                     last.port = std.fmt.parseInt(u16, val_raw, 10) catch return ParseError.InvalidToml;
+                } else if (std.mem.eql(u8, key, "depends_on")) {
+                    // depends_on = ["postgres", "redis"] — start-ordering hints.
+                    if (last.depends_on.len > 0) allocator.free(last.depends_on);
+                    last.depends_on = try parseStringArray(allocator, val_raw);
+                }
+            },
+            .service_health => {
+                // [services.X.health]: type/timeout/path/port. Locate the
+                // matching service by key (it must be declared above).
+                var target: ?*Config.Entry = null;
+                for (services.items) |*svc| {
+                    if (std.mem.eql(u8, svc.key, current_item_name)) {
+                        target = svc;
+                        break;
+                    }
+                }
+                if (target) |t| {
+                    if (std.mem.eql(u8, key, "type") or std.mem.eql(u8, key, "kind")) {
+                        const v = stripQuotes(val_raw) orelse val_raw;
+                        if (std.mem.eql(u8, v, "tcp")) {
+                            t.health.kind = .tcp;
+                        } else if (std.mem.eql(u8, v, "http")) {
+                            t.health.kind = .http;
+                        } else if (std.mem.eql(u8, v, "none")) {
+                            t.health.kind = .none;
+                        } else if (std.mem.eql(u8, v, "auto")) {
+                            t.health.kind = .auto;
+                        } else {
+                            return ParseError.InvalidToml;
+                        }
+                    } else if (std.mem.eql(u8, key, "timeout")) {
+                        t.health.timeout_secs = std.fmt.parseInt(u32, val_raw, 10) catch return ParseError.InvalidToml;
+                    } else if (std.mem.eql(u8, key, "path")) {
+                        t.health.path = stripQuotes(val_raw) orelse return ParseError.InvalidToml;
+                    } else if (std.mem.eql(u8, key, "port")) {
+                        t.health.port = std.fmt.parseInt(u16, val_raw, 10) catch return ParseError.InvalidToml;
+                    }
+                }
+            },
+            .service_env => {
+                // [services.X.env]: KEY = "value". Append to the matching
+                // service (which must be declared above). Grows the env slice
+                // by one per entry — env tables are small, so the cost is
+                // negligible and ownership stays simple.
+                var target: ?*Config.Entry = null;
+                for (services.items) |*svc| {
+                    if (std.mem.eql(u8, svc.key, current_item_name)) {
+                        target = svc;
+                        break;
+                    }
+                }
+                if (target) |t| {
+                    const value = stripQuotes(val_raw) orelse val_raw;
+                    const old = t.env;
+                    const grown = try allocator.alloc(Config.EnvVar, old.len + 1);
+                    @memcpy(grown[0..old.len], old);
+                    grown[old.len] = .{ .name = key, .value = value };
+                    if (old.len > 0) allocator.free(old);
+                    t.env = grown;
                 }
             },
             .detect => {
@@ -137,6 +252,33 @@ pub fn parse(allocator: std.mem.Allocator, input: []const u8) !Config {
 fn stripQuotes(s: []const u8) ?[]const u8 {
     if (s.len >= 2 and s[0] == '"' and s[s.len - 1] == '"') return s[1 .. s.len - 1];
     return null;
+}
+
+/// Parse a TOML inline array of quoted strings, e.g. `["postgres", "redis"]`.
+/// Returns an owned slice whose elements borrow from `raw` (no copies). An
+/// empty array yields a non-owned empty slice. Caller frees the slice when
+/// non-empty (see `deinit`).
+fn parseStringArray(allocator: std.mem.Allocator, raw: []const u8) ![]const []const u8 {
+    const open = std.mem.indexOfScalar(u8, raw, '[') orelse return ParseError.InvalidToml;
+    const close = std.mem.lastIndexOfScalar(u8, raw, ']') orelse return ParseError.InvalidToml;
+    if (close < open) return ParseError.InvalidToml;
+
+    var items: std.ArrayList([]const u8) = .empty;
+    errdefer items.deinit(allocator);
+
+    var it = std.mem.splitScalar(u8, raw[open + 1 .. close], ',');
+    while (it.next()) |part| {
+        const trimmed = std.mem.trim(u8, part, &std.ascii.whitespace);
+        if (trimmed.len == 0) continue;
+        const val = stripQuotes(trimmed) orelse return ParseError.InvalidToml;
+        try items.append(allocator, val);
+    }
+
+    if (items.items.len == 0) {
+        items.deinit(allocator);
+        return &.{};
+    }
+    return items.toOwnedSlice(allocator);
 }
 
 pub fn generate(allocator: std.mem.Allocator, project_name: []const u8, runtimes: []const Config.Entry, services: []const Config.Entry) ![]const u8 {
@@ -190,6 +332,10 @@ pub fn generate(allocator: std.mem.Allocator, project_name: []const u8, runtimes
 }
 
 pub fn deinit(allocator: std.mem.Allocator, cfg: *Config) void {
+    for (cfg.services) |svc| {
+        if (svc.depends_on.len > 0) allocator.free(svc.depends_on);
+        if (svc.env.len > 0) allocator.free(svc.env);
+    }
     allocator.free(cfg.runtimes);
     allocator.free(cfg.services);
     cfg.* = .{};

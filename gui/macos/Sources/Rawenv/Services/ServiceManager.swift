@@ -4,54 +4,44 @@ import Combine
 @MainActor
 public final class ServiceManager: ObservableObject, @unchecked Sendable {
     @Published public var services: [Service] = []
-    private let cli: RawenvCLI
+    private let backend: ServiceBackend
 
     public convenience init() {
         self.init(repository: DataStore(), cli: RawenvCLI())
     }
 
-    public init(repository: DataRepository, cli: RawenvCLI = RawenvCLI()) {
-        self.cli = cli
+    public init(repository: DataRepository, cli: RawenvCLI = RawenvCLI(),
+                backend: ServiceBackend? = nil) {
+        self.backend = backend ?? LaunchctlServiceBackend(cli: cli)
         Task { await loadInitial(repository: repository) }
     }
 
-    private func loadInitial(repository: DataRepository) async {
-        // Try CLI first, fall back to repository
-        struct CLIService: Decodable {
-            let name: String; let version: String; let status: String; let port: Int
-        }
+    func loadInitial(repository: DataRepository) async {
+        // Prefer live CLI data; fall back to the repository (cache) only when
+        // the CLI is unavailable.
         do {
-            let result: [CLIService] = try await cli.runJSON(
-                ["services", "ls"], as: [CLIService].self)
-            services = result.map {
-                Service(name: $0.name, port: $0.port, version: $0.version,
-                        pid: nil, cpu: nil, mem: nil, uptime: nil,
-                        status: $0.status, icon: iconFor($0.name))
-            }
+            services = try await backend.list()
         } catch {
             services = await repository.fetchServices()
         }
     }
 
     public func startService(name: String) {
-        Task {
-            _ = try? await shell("launchctl", ["start", "com.rawenv.\(name.lowercased())"])
-            await refresh()
-        }
+        Task { await performStart(name: name) }
     }
 
     public func stopService(name: String) {
-        Task {
-            _ = try? await shell("launchctl", ["stop", "com.rawenv.\(name.lowercased())"])
-            await refresh()
-        }
+        Task { await performStop(name: name) }
     }
 
     public func restartService(name: String) {
-        stopService(name: name)
+        // Stop, then start. The two launchctl calls are sequenced by awaiting
+        // each one — awaiting `stop` guarantees it has fully returned before
+        // `start` runs, so no artificial settle delay is needed.
         Task {
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            startService(name: name)
+            await backend.stop(name)
+            await backend.start(name)
+            await refresh()
         }
     }
 
@@ -67,43 +57,38 @@ public final class ServiceManager: ObservableObject, @unchecked Sendable {
         }
     }
 
-    private func refresh() async {
-        struct CLIService: Decodable {
-            let name: String; let version: String; let status: String; let port: Int
+    // MARK: - Async operations
+
+    // These perform the real launchctl side effect and then re-read the
+    // authoritative state from the CLI. They are also used directly by tests
+    // (via @testable) so start/stop behaviour can be asserted deterministically.
+    func performStart(name: String) async {
+        await backend.start(name)
+        await refresh()
+    }
+
+    func performStop(name: String) async {
+        await backend.stop(name)
+        await refresh()
+    }
+
+    func performStartAll() async {
+        for s in services where s.status != "running" {
+            await performStart(name: s.name)
         }
-        do {
-            let result: [CLIService] = try await cli.runJSON(
-                ["services", "ls"], as: [CLIService].self)
-            services = result.map {
-                Service(name: $0.name, port: $0.port, version: $0.version,
-                        pid: nil, cpu: nil, mem: nil, uptime: nil,
-                        status: $0.status, icon: iconFor($0.name))
-            }
-        } catch {}
     }
 
-    private func shell(_ cmd: String, _ args: [String]) async throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/\(cmd)")
-        process.arguments = args
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        try process.run()
-        process.waitUntilExit()
-        return String(
-            data: pipe.fileHandleForReading.readDataToEndOfFile(),
-            encoding: .utf8) ?? ""
+    func performStopAll() async {
+        for s in services where s.status == "running" {
+            await performStop(name: s.name)
+        }
     }
 
-    private func iconFor(_ name: String) -> String {
-        switch name.lowercased() {
-        case "postgres", "postgresql": return "🐘"
-        case "redis": return "🔴"
-        case "meilisearch": return "🔍"
-        case "node", "node.js": return "💚"
-        case "sql server": return "🗄️"
-        default: return "📦"
+    func refresh() async {
+        // Reflect the authoritative state reported by the CLI. If the CLI is
+        // unavailable, keep the last known state rather than blanking it out.
+        if let list = try? await backend.list() {
+            services = list
         }
     }
 }

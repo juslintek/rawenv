@@ -5,6 +5,8 @@ zig-cache/
 
 # Platform build artifacts
 gui/macos/.build/
+gui/macos/build/
+gui/macos/*.xcarchive
 gui/windows/.vs/
 gui/windows/bin/
 gui/windows/obj/

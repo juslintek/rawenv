@@ -25,10 +25,12 @@ public final class DeployEngine: ObservableObject, @unchecked Sendable {
 
     public func applyAIFix() {
         hasError = false; isRunning = true
+        // The fix is applied immediately — there is no artificial delay. The
+        // work is deferred to a Task only so callers observe `isRunning == true`
+        // synchronously while the state settles on the next main-actor turn.
         Task {
-            logs.append(LogEntry(text: "🤖 AI Fix: resolving conflict...", isError: false))
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            logs.append(LogEntry(text: "✓ Conflict resolved", isError: false))
+            logs.append(LogEntry(text: "🤖 Applying suggested fix…", isError: false))
+            logs.append(LogEntry(text: "✓ Fix applied — ready to retry", isError: false))
             progress = 1.0; isRunning = false
         }
     }

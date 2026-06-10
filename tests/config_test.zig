@@ -240,3 +240,61 @@ test "generate round-trips port and instance names" {
     try testing.expectEqualStrings("redis.queue", cfg.services[1].key);
     try testing.expectEqual(6390, cfg.services[1].port);
 }
+
+test "parse depends_on array under a service" {
+    const input =
+        \\name = "deps-app"
+        \\
+        \\[services.postgres]
+        \\version = "16"
+        \\
+        \\[services.redis]
+        \\version = "7"
+        \\
+        \\[services.app]
+        \\version = "22"
+        \\depends_on = ["postgres", "redis"]
+    ;
+    var cfg = try config.parse(testing.allocator, input);
+    defer config.deinit(testing.allocator, &cfg);
+
+    try testing.expectEqual(3, cfg.services.len);
+    try testing.expectEqualStrings("app", cfg.services[2].key);
+    try testing.expectEqual(2, cfg.services[2].depends_on.len);
+    try testing.expectEqualStrings("postgres", cfg.services[2].depends_on[0]);
+    try testing.expectEqualStrings("redis", cfg.services[2].depends_on[1]);
+    // Services without depends_on default to an empty list.
+    try testing.expectEqual(0, cfg.services[0].depends_on.len);
+    try testing.expectEqual(0, cfg.services[1].depends_on.len);
+}
+
+test "parse depends_on with single dependency and whitespace" {
+    const input =
+        \\name = "x"
+        \\
+        \\[services.db]
+        \\version = "16"
+        \\
+        \\[services.web]
+        \\version = "1"
+        \\depends_on = [ "db" ]
+    ;
+    var cfg = try config.parse(testing.allocator, input);
+    defer config.deinit(testing.allocator, &cfg);
+
+    try testing.expectEqual(1, cfg.services[1].depends_on.len);
+    try testing.expectEqualStrings("db", cfg.services[1].depends_on[0]);
+}
+
+test "parse empty depends_on array" {
+    const input =
+        \\name = "x"
+        \\
+        \\[services.web]
+        \\version = "1"
+        \\depends_on = []
+    ;
+    var cfg = try config.parse(testing.allocator, input);
+    defer config.deinit(testing.allocator, &cfg);
+    try testing.expectEqual(0, cfg.services[0].depends_on.len);
+}

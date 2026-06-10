@@ -2,6 +2,7 @@ const std = @import("std");
 const testing = std.testing;
 const dns = @import("dns");
 const proxy = @import("proxy");
+const tls = @import("tls");
 const connections = @import("connections");
 const tunnel = @import("tunnel");
 
@@ -277,6 +278,85 @@ test "proxy - generateCaddyfile with TLS" {
     try testing.expect(std.mem.indexOf(u8, config, "tls internal") != null);
     try testing.expect(std.mem.indexOf(u8, config, "pg.myapp.test {") != null);
     try testing.expect(std.mem.indexOf(u8, config, "reverse_proxy localhost:5432") != null);
+}
+
+test "proxy - generateCaddyfile emits explicit cert/key paths" {
+    const routes = [_]proxy.ProxyRoute{
+        .{
+            .domain = "myapp.test",
+            .target_port = 3000,
+            .tls = true,
+            .cert_path = "/home/dev/.rawenv/certs/myapp/myapp.test.crt",
+            .key_path = "/home/dev/.rawenv/certs/myapp/myapp.test.key",
+        },
+    };
+    const config = try proxy.generateCaddyfile(testing.allocator, &routes);
+    defer testing.allocator.free(config);
+
+    try testing.expect(std.mem.indexOf(u8, config, "tls /home/dev/.rawenv/certs/myapp/myapp.test.crt /home/dev/.rawenv/certs/myapp/myapp.test.key") != null);
+    // Explicit cert/key takes precedence over "tls internal".
+    try testing.expect(std.mem.indexOf(u8, config, "tls internal") == null);
+}
+
+test "proxy - buildProjectRoutes maps services to subdomains + apex" {
+    const services = [_]proxy.ServiceEndpoint{
+        .{ .name = "web", .port = 3000 },
+        .{ .name = "postgres", .port = 5432 },
+    };
+    const routes = try proxy.buildProjectRoutes(testing.allocator, "myapp", &services, null, null);
+    defer proxy.freeRoutes(testing.allocator, routes);
+
+    // Apex + one route per service.
+    try testing.expectEqual(@as(usize, 3), routes.len);
+    // Apex points at the first service's port.
+    try testing.expectEqualStrings("myapp.test", routes[0].domain);
+    try testing.expectEqual(@as(u16, 3000), routes[0].target_port);
+    try testing.expect(routes[0].tls);
+    try testing.expectEqualStrings("web.myapp.test", routes[1].domain);
+    try testing.expectEqual(@as(u16, 3000), routes[1].target_port);
+    try testing.expectEqualStrings("postgres.myapp.test", routes[2].domain);
+    try testing.expectEqual(@as(u16, 5432), routes[2].target_port);
+}
+
+test "proxy - buildProjectRoutes wires cert/key into every route" {
+    const services = [_]proxy.ServiceEndpoint{.{ .name = "web", .port = 8080 }};
+    const routes = try proxy.buildProjectRoutes(testing.allocator, "site", &services, "/c/site.crt", "/c/site.key");
+    defer proxy.freeRoutes(testing.allocator, routes);
+
+    const caddy = try proxy.generateCaddyfile(testing.allocator, routes);
+    defer testing.allocator.free(caddy);
+    try testing.expect(std.mem.indexOf(u8, caddy, "site.test {") != null);
+    try testing.expect(std.mem.indexOf(u8, caddy, "web.site.test {") != null);
+    try testing.expect(std.mem.indexOf(u8, caddy, "tls /c/site.crt /c/site.key") != null);
+}
+
+test "proxy - buildProjectRoutes with no services yields no routes" {
+    const routes = try proxy.buildProjectRoutes(testing.allocator, "empty", &.{}, null, null);
+    defer proxy.freeRoutes(testing.allocator, routes);
+    try testing.expectEqual(@as(usize, 0), routes.len);
+}
+
+// ============================================================
+// TLS certificate provisioning tests
+// ============================================================
+
+test "tls - certPaths derives cert and key file paths" {
+    const p = try tls.certPaths(testing.allocator, "/tmp/certs", "myapp.test");
+    defer testing.allocator.free(p.cert);
+    defer testing.allocator.free(p.key);
+    try testing.expectEqualStrings("/tmp/certs/myapp.test.crt", p.cert);
+    try testing.expectEqualStrings("/tmp/certs/myapp.test.key", p.key);
+}
+
+test "tls - certDir is under ~/.rawenv/certs/<project>" {
+    const d = try tls.certDir(testing.allocator, "/home/dev", "myapp");
+    defer testing.allocator.free(d);
+    try testing.expectEqualStrings("/home/dev/.rawenv/certs/myapp", d);
+}
+
+test "tls - preferredMethod returns a known strategy" {
+    const m = tls.preferredMethod();
+    try testing.expect(m == .mkcert or m == .self_signed);
 }
 
 // ============================================================

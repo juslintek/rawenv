@@ -70,20 +70,26 @@ public final class InstallFlowVM: ObservableObject {
     }
 
     private func runInstallSteps(name: String) async {
-        let simulateError = (name == "SQL Server")
+        // NOTE: This drives the GUI's per-runtime install walkthrough, including
+        // a demonstrated port-conflict path for "SQL Server". A real per-runtime
+        // install backend is not yet wired into the desktop app, so the sleeps
+        // below pace the step-by-step progress animation the user sees. They are
+        // intentional UI pacing for this walkthrough, not a stand-in for hidden
+        // work.
+        let triggersPortConflict = (name == "SQL Server")
         let failAtStep = 2
         for i in steps.indices {
-            if simulateError && i == failAtStep {
-                try? await Task.sleep(nanoseconds: 400_000_000)
+            if triggersPortConflict && i == failAtStep {
+                try? await Task.sleep(nanoseconds: 400_000_000) // step animation pacing
                 error = "Port 1433 is occupied by another process (PID 4521)."
                 isInstalling = false
                 return
             }
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            try? await Task.sleep(nanoseconds: 400_000_000) // step animation pacing
             steps[i].1 = true
             progress = Double(i + 1) / Double(steps.count)
         }
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        try? await Task.sleep(nanoseconds: 300_000_000) // final step animation pacing
         installedRuntimes.insert(name)
         isComplete = true
         isInstalling = false

@@ -5,12 +5,25 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Version string, injectable from the release pipeline via `-Dversion=1.2.3`.
+    // Falls back to the build.zig.zon version when not provided.
+    const cli_version = b.option([]const u8, "version", "Override the rawenv version string") orelse "0.2.0";
+    const version_options = b.addOptions();
+    version_options.addOption([]const u8, "version", cli_version);
+
     const config_mod = b.createModule(.{
         .root_source_file = b.path("src/core/config.zig"),
         .target = target,
         .optimize = optimize,
     });
     config_mod.link_libc = true;
+
+    const compose_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/compose.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    compose_mod.link_libc = true;
 
     const detector_mod = b.createModule(.{
         .root_source_file = b.path("src/core/detector.zig"),
@@ -102,6 +115,15 @@ pub fn build(b: *std.Build) void {
             .{ .name = "exec", .module = exec_mod },
         },
     });
+    const tls_mod = b.createModule(.{
+        .root_source_file = b.path("src/network/tls.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "exec", .module = exec_mod },
+        },
+    });
+    tls_mod.link_libc = true;
     const tunnel_mod = b.createModule(.{
         .root_source_file = b.path("src/network/tunnel.zig"),
         .target = target,
@@ -266,14 +288,17 @@ pub fn build(b: *std.Build) void {
             .{ .name = "ai", .module = ai_mod },
             .{ .name = "dns", .module = dns_mod },
             .{ .name = "proxy", .module = proxy_mod },
+            .{ .name = "tls", .module = tls_mod },
             .{ .name = "tunnel", .module = tunnel_mod },
             .{ .name = "connections", .module = connections_mod },
             .{ .name = "cell", .module = cell_mod },
             .{ .name = "discover", .module = discover_mod },
             .{ .name = "macos", .module = macos_mod },
+            .{ .name = "compose", .module = compose_mod },
         },
     });
     exe_mod.link_libc = true;
+    exe_mod.addOptions("build_info", version_options);
     const exe = b.addExecutable(.{ .name = "rawenv", .root_module = exe_mod });
     b.installArtifact(exe);
 
@@ -313,14 +338,17 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "ai", .module = ai_mod },
                 .{ .name = "dns", .module = dns_mod },
                 .{ .name = "proxy", .module = proxy_mod },
+                .{ .name = "tls", .module = tls_mod },
                 .{ .name = "tunnel", .module = tunnel_mod },
                 .{ .name = "connections", .module = connections_mod },
                 .{ .name = "cell", .module = cell_mod },
                 .{ .name = "discover", .module = discover_mod },
                 .{ .name = "macos", .module = macos_mod },
+                .{ .name = "compose", .module = compose_mod },
             },
         }),
     });
+    main_tests.root_module.addOptions("build_info", version_options);
 
     const tui_tests = b.addTest(.{
         .root_module = b.createModule(.{
@@ -348,6 +376,20 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(tui_tests).step);
     test_step.dependOn(&b.addRunArtifact(snapshot_tests).step);
 
+    const compose_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/compose_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "compose", .module = compose_mod },
+                .{ .name = "config", .module = config_mod },
+            },
+        }),
+    });
+    compose_tests.root_module.link_libc = true;
+    test_step.dependOn(&b.addRunArtifact(compose_tests).step);
+
     const cells_tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("tests/cells_test.zig"),
@@ -370,6 +412,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{
                 .{ .name = "dns", .module = dns_mod },
                 .{ .name = "proxy", .module = proxy_mod },
+                .{ .name = "tls", .module = tls_mod },
                 .{ .name = "tunnel", .module = tunnel_mod },
                 .{ .name = "connections", .module = connections_mod },
             },
@@ -504,6 +547,18 @@ pub fn build(b: *std.Build) void {
     integration_step.dependOn(&run_help_test.step);
     integration_step.dependOn(&run_services_test.step);
 
+    const integration_detect = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/detect_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_detect.root_module.link_libc = true;
+    const run_detect_test = b.addRunArtifact(integration_detect);
+    run_detect_test.step.dependOn(&exe.step);
+    integration_step.dependOn(&run_detect_test.step);
+
     const integration_add = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("tests/integration/add_test.zig"),
@@ -515,6 +570,76 @@ pub fn build(b: *std.Build) void {
     const run_add_test = b.addRunArtifact(integration_add);
     run_add_test.step.dependOn(&exe.step);
     integration_step.dependOn(&run_add_test.step);
+
+    const integration_status = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/status_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_status.root_module.link_libc = true;
+    const run_status_test = b.addRunArtifact(integration_status);
+    run_status_test.step.dependOn(b.getInstallStep());
+    run_status_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_status_test.step);
+
+    // Per-stack full lifecycle E2E (node, php, python, rust, go, ruby).
+    const integration_e2e = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/e2e_lifecycle_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_e2e.root_module.link_libc = true;
+    const run_e2e_test = b.addRunArtifact(integration_e2e);
+    // Build + install the binary, then point the test at the freshly-built artifact.
+    run_e2e_test.step.dependOn(b.getInstallStep());
+    run_e2e_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_e2e_test.step);
+
+    // Network features E2E (connections, dns, proxy, tunnel, deploy generate).
+    const integration_network = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/network_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_network.root_module.link_libc = true;
+    const run_network_test = b.addRunArtifact(integration_network);
+    run_network_test.step.dependOn(b.getInstallStep());
+    run_network_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_network_test.step);
+
+    // Service combinations + multi-instance + port-conflict E2E.
+    const integration_combos = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/e2e_combos_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_combos.root_module.link_libc = true;
+    const run_combos_test = b.addRunArtifact(integration_combos);
+    run_combos_test.step.dependOn(b.getInstallStep());
+    run_combos_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_combos_test.step);
+
+    // Service migration E2E (docker-compose import → services ls --json).
+    const integration_migration = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/migration_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_migration.root_module.link_libc = true;
+    const run_migration_test = b.addRunArtifact(integration_migration);
+    run_migration_test.step.dependOn(b.getInstallStep());
+    run_migration_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_migration_test.step);
 
     // Cross-compilation targets
     const cross_targets: []const struct { []const u8, std.Target.Cpu.Arch, std.Target.Os.Tag } = &.{
@@ -681,6 +806,7 @@ pub fn build(b: *std.Build) void {
             },
         });
         cross_mod.link_libc = true;
+        cross_mod.addOptions("build_info", version_options);
         const cross_exe = b.addExecutable(.{ .name = "rawenv", .root_module = cross_mod });
         const install = b.addInstallArtifact(cross_exe, .{
             .dest_dir = .{ .override = .{ .custom = ct[0] } },

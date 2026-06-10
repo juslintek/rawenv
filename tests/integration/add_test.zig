@@ -16,7 +16,8 @@ test "rawenv add unknown package returns error" {
     defer testing.allocator.free(result.stdout);
     defer testing.allocator.free(result.stderr);
 
-    try testing.expect(std.mem.containsAtLeast(u8, result.stdout, 1, "Error: unknown package"));
+    try testing.expect(std.mem.containsAtLeast(u8, result.stdout, 1, "Unknown package:"));
+    try testing.expect(result.term.exited == 1);
 }
 
 test "rawenv add unknown version returns error" {
@@ -29,5 +30,6 @@ test "rawenv add unknown version returns error" {
     defer testing.allocator.free(result.stdout);
     defer testing.allocator.free(result.stderr);
 
-    try testing.expect(std.mem.containsAtLeast(u8, result.stdout, 1, "Error: unknown version"));
+    try testing.expect(std.mem.containsAtLeast(u8, result.stdout, 1, "Unknown version"));
+    try testing.expect(result.term.exited == 1);
 }

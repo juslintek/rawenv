@@ -53,6 +53,7 @@
 		CFB0DFF1C67EDDEBCB51921A /* ProjectCreator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31CBAF749731FA5411402A68 /* ProjectCreator.swift */; };
 		D0C16EAEE0FBA671665B4668 /* TunnelVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03868AFF6B9DA6590F85075A /* TunnelVM.swift */; };
 		DFA2EBBE8FC4C1DE889ECFE1 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C6F7839579FEFB25BF9863D /* ThemeManager.swift */; };
+		ECED8CC8A9AB8FF2CD616026 /* ServiceBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBC76AE16093210D77FE6EE0 /* ServiceBackend.swift */; };
 		ED78E6F9B585B6C95D8D1A4A /* ProjectSetupVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 732FF04D8952B7A92F534169 /* ProjectSetupVM.swift */; };
 		F22C09E50717B9A5C99FCAEA /* ScannerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28ACA19D0ADED5907D93442F /* ScannerEngine.swift */; };
 		F7E76E798BED6EB298779CF9 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6712843116970386A8600215 /* MenuBarView.swift */; };
@@ -130,6 +131,7 @@
 		A4F35174CBBB8383C2B5BD5B /* RawenvApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RawenvApp.swift; sourceTree = "<group>"; };
 		B36BC2EEFB92025E32E259F6 /* ConnectionsVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionsVM.swift; sourceTree = "<group>"; };
 		B93748021630B1906E8FA2E7 /* ProjectsVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectsVM.swift; sourceTree = "<group>"; };
+		BBC76AE16093210D77FE6EE0 /* ServiceBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceBackend.swift; sourceTree = "<group>"; };
 		BE5DA0DAC48A0A03B64CBCFF /* ConnectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionsView.swift; sourceTree = "<group>"; };
 		BEB9AA63D1E05589EC42DBCF /* InstallerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallerView.swift; sourceTree = "<group>"; };
 		C2BA4F646810FDEFD8E736FB /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -371,6 +373,7 @@
 				22AEB4BDA7F389989F7C90E0 /* RawenvCLI.swift */,
 				6F42812FF9A3BF1AC76C0B74 /* RecipeLibrary.swift */,
 				28ACA19D0ADED5907D93442F /* ScannerEngine.swift */,
+				BBC76AE16093210D77FE6EE0 /* ServiceBackend.swift */,
 				EB5BBE5B9EAA0D9389BD056D /* ServiceManager.swift */,
 				6C6F7839579FEFB25BF9863D /* ThemeManager.swift */,
 				A15FC21B3327E927FB753A4F /* TypeAliases.swift */,
@@ -524,6 +527,7 @@
 				3F335CE60F268687FB04252A /* RecipeLibrary.swift in Sources */,
 				F22C09E50717B9A5C99FCAEA /* ScannerEngine.swift in Sources */,
 				7097F6C3F797CD02600A2D20 /* Service.swift in Sources */,
+				ECED8CC8A9AB8FF2CD616026 /* ServiceBackend.swift in Sources */,
 				746E4A047C9A7720001CBDE8 /* ServiceManager.swift in Sources */,
 				FADA7A0B88249EAD9507816E /* Settings.swift in Sources */,
 				95DEF5A30122CD3E29A029D5 /* SettingsVM.swift in Sources */,

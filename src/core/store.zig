@@ -6,6 +6,7 @@ pub const StoreError = error{
     Sha256Mismatch,
     DownloadFailed,
     ExtractionFailed,
+    PermissionDenied,
     HomeNotSet,
 };
 
@@ -39,6 +40,26 @@ fn accessPath(allocator: std.mem.Allocator, path: []const u8) bool {
     const z = std.fmt.allocPrintSentinel(allocator, "{s}", .{path}, 0) catch return false;
     defer allocator.free(z);
     return std.c.access(z, 0) == 0;
+}
+
+/// Returns true if `path` exists and is writable by the current user (W_OK).
+fn isWritable(allocator: std.mem.Allocator, path: []const u8) bool {
+    if (comptime builtin.os.tag == .windows) return true;
+    const z = std.fmt.allocPrintSentinel(allocator, "{s}", .{path}, 0) catch return false;
+    defer allocator.free(z);
+    // POSIX W_OK == 2
+    return std.c.access(z, 2) == 0;
+}
+
+/// Ensure the store base directory (~/.rawenv/store) exists and is writable.
+/// Returns StoreError.PermissionDenied with a distinct signal (separate from a
+/// failed download) so callers can suggest the right fix.
+pub fn ensureStoreWritable(allocator: std.mem.Allocator) StoreError!void {
+    if (comptime builtin.os.tag == .windows) return;
+    const base = getStoreBasePath(allocator) catch return StoreError.HomeNotSet;
+    defer allocator.free(base);
+    mkdirP(allocator, base);
+    if (!isWritable(allocator, base)) return StoreError.PermissionDenied;
 }
 
 /// Run a command using fork/exec, wait for completion. Returns exit code.
@@ -108,6 +129,47 @@ pub fn extractTarGz(allocator: std.mem.Allocator, archive_path: []const u8, dest
     if (exit_code != 0) return StoreError.ExtractionFailed;
 }
 
+/// Extract a .tar.xz archive to dest_dir with --strip-components=1
+pub fn extractTarXz(allocator: std.mem.Allocator, archive_path: []const u8, dest_dir: []const u8) !void {
+    const exit_code = try runCommand(allocator, &.{ "tar", "-xJf", archive_path, "-C", dest_dir, "--strip-components=1" });
+    if (exit_code != 0) return StoreError.ExtractionFailed;
+}
+
+/// Extract a .zip archive into dest_dir.
+pub fn extractZip(allocator: std.mem.Allocator, archive_path: []const u8, dest_dir: []const u8) !void {
+    const exit_code = try runCommand(allocator, &.{ "unzip", "-q", "-o", archive_path, "-d", dest_dir });
+    if (exit_code != 0) return StoreError.ExtractionFailed;
+}
+
+/// Install a single executable: place it at dest_dir/bin/{name} with 0755.
+pub fn installBinary(allocator: std.mem.Allocator, archive_path: []const u8, dest_dir: []const u8, name: []const u8) !void {
+    const bin_dir = try std.fs.path.join(allocator, &.{ dest_dir, "bin" });
+    defer allocator.free(bin_dir);
+    mkdirP(allocator, bin_dir);
+
+    const dest = try std.fs.path.join(allocator, &.{ bin_dir, name });
+    defer allocator.free(dest);
+
+    const mv_exit = try runCommand(allocator, &.{ "mv", archive_path, dest });
+    if (mv_exit != 0) return StoreError.ExtractionFailed;
+
+    if (comptime builtin.os.tag != .windows) {
+        const dz = std.fmt.allocPrintSentinel(allocator, "{s}", .{dest}, 0) catch return;
+        defer allocator.free(dz);
+        _ = std.c.chmod(dz, 0o755);
+    }
+}
+
+/// Extract a downloaded artifact into dest_dir according to its archive type.
+fn extractArtifact(allocator: std.mem.Allocator, pkg: resolver.ResolvedPackage, archive_path: []const u8, dest_dir: []const u8) !void {
+    switch (pkg.archive_type) {
+        .tar_gz => try extractTarGz(allocator, archive_path, dest_dir),
+        .tar_xz => try extractTarXz(allocator, archive_path, dest_dir),
+        .zip => try extractZip(allocator, archive_path, dest_dir),
+        .binary => try installBinary(allocator, archive_path, dest_dir, pkg.name),
+    }
+}
+
 /// Install a resolved package: create store dir, download, extract, create marker.
 pub fn installPackage(allocator: std.mem.Allocator, pkg: resolver.ResolvedPackage, stdout: anytype) !void {
     if (try isInstalled(allocator, pkg.name, pkg.version)) {
@@ -120,6 +182,11 @@ pub fn installPackage(allocator: std.mem.Allocator, pkg: resolver.ResolvedPackag
 
     const install_path = try getStorePath(allocator, pkg.name, pkg.version);
     defer allocator.free(install_path);
+
+    // Fail fast with a clear permission error before attempting a download, so
+    // a non-writable ~/.rawenv/ isn't misreported as a network failure.
+    try ensureStoreWritable(allocator);
+
     mkdirP(allocator, install_path);
 
     // Download archive to temp path
@@ -134,12 +201,26 @@ pub fn installPackage(allocator: std.mem.Allocator, pkg: resolver.ResolvedPackag
 
     try downloadPackage(allocator, pkg.url, tmp_path);
 
-    // TODO: Verify SHA256 hash before extraction
-    // const actual_hash = try sha256File(allocator, tmp_path);
-    // if (!std.mem.eql(u8, actual_hash, pkg.sha256)) return StoreError.Sha256Mismatch;
+    // Verify SHA256 before extraction when upstream publishes a checksum.
+    // Artifacts without a published checksum use the compute-on-download
+    // sentinel (resolver.COMPUTE_ON_DOWNLOAD) and skip strict verification.
+    if (!std.mem.eql(u8, pkg.sha256, resolver.COMPUTE_ON_DOWNLOAD)) {
+        const actual_hash = try sha256File(allocator, tmp_path);
+        defer allocator.free(actual_hash);
+        if (!std.mem.eql(u8, actual_hash, pkg.sha256)) {
+            if (comptime builtin.os.tag != .windows) {
+                const tz = std.fmt.allocPrintSentinel(allocator, "{s}", .{tmp_path}, 0) catch null;
+                if (tz) |z| {
+                    _ = std.c.unlink(z);
+                    allocator.free(z);
+                }
+            }
+            return StoreError.Sha256Mismatch;
+        }
+    }
 
     try stdout.writeAll("Extracting...\n");
-    try extractTarGz(allocator, tmp_path, install_path);
+    try extractArtifact(allocator, pkg, tmp_path, install_path);
 
     // Remove archive
     if (comptime builtin.os.tag != .windows) {

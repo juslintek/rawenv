@@ -2,46 +2,137 @@
 
 **Native dev environments. Zero dependencies. One binary.**
 
+[![CI](https://github.com/juslintek/rawenv/actions/workflows/ci.yml/badge.svg)](https://github.com/juslintek/rawenv/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/juslintek/rawenv?sort=semver)](https://github.com/juslintek/rawenv/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 rawenv detects your project stack, downloads verified runtimes, and manages everything through OS-level isolation — no Docker, no VMs, no overhead.
 
-Built with Zig 0.15. Cross-compiles to macOS, Linux, and Windows.
+Built with Zig 0.16. Cross-compiles to macOS, Linux, and Windows.
 
 ## Install
 
+Download the latest release binary for your platform into `~/.rawenv/bin`.
+
+**macOS** (auto-detects Apple Silicon vs Intel):
+
 ```bash
-curl -fsSL rawenv.sh/install | sh
+mkdir -p "$HOME/.rawenv/bin"
+case "$(uname -m)" in arm64|aarch64) A=arm64 ;; *) A=x64 ;; esac
+curl -fsSL "https://github.com/juslintek/rawenv/releases/latest/download/rawenv-darwin-${A}" \
+  -o "$HOME/.rawenv/bin/rawenv"
+chmod +x "$HOME/.rawenv/bin/rawenv"
+```
+
+**Linux** (auto-detects arm64 vs x86_64):
+
+```bash
+mkdir -p "$HOME/.rawenv/bin"
+case "$(uname -m)" in arm64|aarch64) A=arm64 ;; *) A=x64 ;; esac
+curl -fsSL "https://github.com/juslintek/rawenv/releases/latest/download/rawenv-linux-${A}" \
+  -o "$HOME/.rawenv/bin/rawenv"
+chmod +x "$HOME/.rawenv/bin/rawenv"
+```
+
+Prefer a one-liner? `curl -fsSL https://raw.githubusercontent.com/juslintek/rawenv/main/install.sh | sh`
+detects your OS and architecture automatically.
+
+For **Windows**, download `rawenv-windows-x64.exe` from the
+[releases page](https://github.com/juslintek/rawenv/releases/latest) and rename it to `rawenv.exe`.
+
+Add the binary to your `PATH` (add this line to `~/.zshrc` or `~/.bashrc` to make it permanent):
+
+```bash
+export PATH="$HOME/.rawenv/bin:$PATH"
+```
+
+Verify the install:
+
+```console
+$ rawenv --version
+0.2.0
 ```
 
 ## Quick Start
 
+Run `rawenv init` inside any project. It scans your manifests (`package.json`,
+`composer.json`, `.env`, `docker-compose.yml`), detects runtimes and services,
+and writes a `rawenv.toml`:
+
+```console
+$ rawenv init
+Created rawenv.toml
+Detected runtimes:
+  node 22
+Detected services:
+  postgresql 16
+```
+
+Check project health at any time with `rawenv status`:
+
+```console
+$ rawenv status
+Project: my-app
+Config:  rawenv.toml (valid)
+
+Runtimes:
+  node          22         installed
+
+Services:
+  NAME            VERSION    PORT   STATUS
+  postgresql    16.9.0     5432   stopped
+
+Warnings:
+  ⚠ postgresql: binary not installed — run `rawenv add postgresql@16.9.0`
+```
+
+List configured runtimes and services with `rawenv services ls`:
+
+```console
+$ rawenv services ls
+NAME            VERSION    STATUS
+──────────────  ─────────  ──────────────
+node            22         installed
+postgresql      16         stopped
+```
+
+Then install what's missing, activate, and drop into an isolated shell:
+
 ```bash
-cd my-project
-rawenv init          # detect project, generate rawenv.toml
-rawenv add node@22   # download, verify SHA256, extract to store
-rawenv up            # activate runtimes via symlinks
-rawenv shell         # enter shell with modified PATH + env vars
+rawenv add postgresql@16   # download, verify SHA256, extract to the store
+rawenv up                  # activate runtimes via symlinks
+rawenv shell               # enter a shell with modified PATH + env vars
 ```
 
 ## Command Reference
 
 | Command | Description |
 |---------|-------------|
-| `rawenv init` | Detect project stack and generate `rawenv.toml` |
-| `rawenv add <pkg>@<ver>` | Download, verify SHA256, and extract a runtime to the store |
-| `rawenv up` | Activate all configured runtimes via symlinks in `~/.rawenv/bin/` |
-| `rawenv services ls` | Show configured runtimes/services with status |
-| `rawenv shell` | Enter a shell with modified PATH and environment variables |
-| `rawenv dns` | Generate `/etc/hosts` entries for project services |
-| `rawenv proxy` | Generate Caddyfile reverse proxy configuration |
-| `rawenv tunnel <port>` | Generate SSH tunnel command for a local port |
-| `rawenv connections` | Show service dependency map from `rawenv.toml` |
-| `rawenv cell info` | Show available OS isolation backends for this platform |
-| `rawenv discover` | Scan the machine for projects and their stacks |
-| `rawenv tui` | Launch terminal dashboard with live data |
-| `rawenv gui` | Launch native GUI window (stub — requires raylib) |
-| `rawenv ai "question"` | Ask the AI assistant with provider cascade |
-| `rawenv deploy generate` | Generate Terraform, Ansible, and Containerfile from config |
+| `rawenv init` | Detect project and generate `rawenv.toml` |
+| `rawenv import <file>` | Import a `docker-compose.yml` into `rawenv.toml` |
+| `rawenv detect` | Detect runtimes/services (`--json`); writes no files |
+| `rawenv add <pkg>@<ver>` | Install a package (e.g. `rawenv add node@22`) |
+| `rawenv up` | Activate all configured runtimes |
+| `rawenv down` | Stop all services (reverse dependency order) |
+| `rawenv services ls` | List configured runtimes/services with status |
+| `rawenv status` | Quick project health check (`--json`) |
+| `rawenv shell` | Enter rawenv shell with modified PATH |
+| `rawenv dns` | Generate `/etc/hosts` entries for the project |
+| `rawenv proxy` | Generate Caddy reverse proxy config |
+| `rawenv tunnel <port>` | Print a tunnel command (cloudflared/bore/ngrok) |
+| `rawenv connections` | Show service dependency map |
+| `rawenv cell info` | Show available isolation backends |
+| `rawenv discover` | Scan for projects on this machine |
+| `rawenv destroy` | Remove this project's isolated data dirs (`--force` to skip prompt) |
+| `rawenv uninstall` | Remove rawenv from this machine |
+| `rawenv tui` | Launch the TUI dashboard |
+| `rawenv gui` | Launch the GUI window (requires a raylib build — see below) |
+| `rawenv menubar` | Launch the macOS menu bar status item |
+| `rawenv ai "question"` | Ask the AI assistant (one-shot) |
+| `rawenv deploy generate` | Generate IaC files (Terraform, Ansible, Containerfile) |
 | `rawenv deploy apply` | Run deployment (dry-run by default) |
+
+Run `rawenv --help` for the full list, or `rawenv <command> --json` where supported.
 
 ## How It Works
 
@@ -52,24 +143,25 @@ rawenv stores runtimes in `~/.rawenv/store/{name}-{version}/` and activates them
 ├── bin/              # symlinks to active runtimes (add to PATH)
 └── store/
     ├── node-22/      # extracted runtime
-    ├── postgres-16/
+    ├── postgresql-16/
     └── redis-7/
 ```
 
 Project configuration lives in `rawenv.toml`:
 
 ```toml
+[project]
 name = "my-app"
-version = "1"
 
-[services.node]
-version = "22"
+[runtimes]
+node = "22"
 
-[services.postgres]
-version = "16"
+[services]
+postgresql = "16"
+redis = "7"
 
-[services.redis]
-version = "7"
+[detect]
+auto = true
 ```
 
 ## Architecture
@@ -82,7 +174,7 @@ rawenv (single binary, written in Zig)
 ├── deploy/     Terraform, Ansible, OCI container images
 ├── ai/         LLM provider cascade, context builder, chat
 ├── tui/        Terminal dashboard
-└── gui/        Native desktop app (stub)
+└── gui/        Native desktop app (raylib, opt-in)
 ```
 
 Isolation backends by platform:
@@ -93,15 +185,30 @@ Isolation backends by platform:
 | macOS | Seatbelt (sandbox-exec) |
 | Windows | Job Objects |
 
+`rawenv cell info` reports the backends available on the current machine:
+
+```console
+$ rawenv cell info
+Isolation backends available on this OS:
+  seatbelt (sandbox-exec) — macOS App Sandbox
+```
+
 ## Build from Source
 
-Requires [Zig 0.15.2+](https://ziglang.org/download/):
+Requires [Zig 0.16.0+](https://ziglang.org/download/):
 
 ```bash
 git clone https://github.com/juslintek/rawenv
 cd rawenv
 zig build
 ./zig-out/bin/rawenv --help
+```
+
+The GUI window links raylib, which is compiled from source and is opt-in:
+
+```bash
+zig build -Dgui=true
+./zig-out/bin/rawenv gui
 ```
 
 Cross-compile:

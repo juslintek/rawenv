@@ -4,21 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>rawenv — Raw native dev environments. Zero overhead.</title>
-<meta name="description" content="One binary. No Docker. No VMs. Pure performance. rawenv detects your stack, downloads verified runtimes, and isolates with OS-native sandboxing.">
+<meta name="description" content="rawenv 1.0 — one binary, no Docker, no VMs. Cold-starts PostgreSQL + Redis ~6× faster than docker compose. Detects your stack, verifies runtimes, and isolates with OS-native sandboxing.">
 <link rel="canonical" href="https://rawenv.com">
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://rawenv.com">
 <meta property="og:title" content="rawenv — Raw native dev environments. Zero overhead.">
-<meta property="og:description" content="One binary. No Docker. No VMs. Pure performance. rawenv detects your stack, downloads verified runtimes, and isolates with OS-native sandboxing.">
+<meta property="og:description" content="rawenv 1.0 — one binary, no Docker, no VMs. Cold-starts PostgreSQL + Redis ~6× faster than docker compose, using a fraction of the RAM and disk.">
 <meta property="og:image" content="https://rawenv.com/og-image.png">
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="rawenv — Raw native dev environments. Zero overhead.">
-<meta name="twitter:description" content="One binary. No Docker. No VMs. Pure performance.">
-<meta name="twitter:image" content="https://rawenv.com/og-image.png">
+<meta name="twitter:description" content="One binary. No Docker. No VMs. Services ready in about a second — ~6× faster cold start than docker compose.">
+<meta property="twitter:image" content="https://rawenv.com/og-image.png">
 
 <!-- Favicon -->
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -34,11 +34,15 @@
 <header class="hero">
   <div class="container">
     <div class="logo">⚡ rawenv</div>
+    <span class="badge">v1.0 — now stable</span>
     <h1>Raw native dev environments. Zero overhead.</h1>
-    <p class="subtitle">One binary. No Docker. No VMs. Pure performance.</p>
+    <p class="subtitle">One binary. No Docker. No VMs. Services ready in about a second.</p>
     <div class="hero-actions">
       <a href="#install" class="btn-primary">Install</a>
       <a href="https://github.com/juslintek/rawenv" class="btn-secondary" target="_blank" rel="noopener">View on GitHub</a>
+    </div>
+    <div class="install-oneliner">
+      <code>curl -fsSL https://rawenv.com/install | sh</code>
     </div>
   </div>
 </header>
@@ -49,19 +53,96 @@
       <div class="card">
         <div class="card-icon">📦</div>
         <h3>Zero Dependencies</h3>
-        <p>One binary, no Docker, no containers. Download and run — that's it.</p>
+        <p>A single static binary — no Docker, no daemon, no VM. Download, run, done.</p>
       </div>
       <div class="card">
         <div class="card-icon">🛡️</div>
         <h3>OS-Native Isolation</h3>
-        <p>macOS Seatbelt, Linux namespaces + Landlock, Windows AppContainer. Real sandboxing without VMs.</p>
+        <p>macOS Seatbelt and Linux namespaces give real sandboxing for your services — without a virtual machine.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🔌</div>
+        <h3>Detects Your Stack</h3>
+        <p>Reads <code>package.json</code>, <code>composer.json</code>, <code>.env</code> and <code>docker-compose.yml</code>, then pins runtimes and services in <code>rawenv.toml</code>.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">✅</div>
+        <h3>Verified Runtimes</h3>
+        <p>Every runtime download is checked against a known SHA256 before it lands in the store.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🌐</div>
+        <h3>Networking Built In</h3>
+        <p>Generate <code>/etc/hosts</code> entries, a Caddy reverse proxy, and tunnel commands straight from your config.</p>
       </div>
       <div class="card">
         <div class="card-icon">🤖</div>
-        <h3>AI-Powered</h3>
-        <p>Built-in assistant reads your project context and optimizes your environment automatically.</p>
+        <h3>AI Assistant</h3>
+        <p>Ask <code>rawenv ai</code> a question — it reads your project context to help with setup and configuration.</p>
       </div>
     </div>
+  </div>
+</section>
+
+<section class="benchmarks" id="benchmarks">
+  <div class="container">
+    <h2>Cold start: rawenv vs Docker Compose</h2>
+    <p class="bench-subtitle">
+      Same project — PostgreSQL 16 + Redis 7 — everything pre-installed. Time from a
+      fully stopped state to services accepting TCP connections. Median of 3 runs on an
+      Apple M2 (16&nbsp;GiB, macOS 14, Docker Desktop 4.x).
+    </p>
+    <div class="bench-table-wrap">
+      <table class="bench-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>rawenv</th>
+            <th>docker compose</th>
+            <th>Speedup</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Time to first service ready</td>
+            <td class="win">0.28 s</td>
+            <td>2.10 s</td>
+            <td>7.5×</td>
+          </tr>
+          <tr>
+            <td>Total time (all services ready)</td>
+            <td class="win">1.08 s</td>
+            <td>6.82 s</td>
+            <td>6.3×</td>
+          </tr>
+          <tr>
+            <td>Peak RAM</td>
+            <td class="win">41 MiB</td>
+            <td>214 MiB <span class="text-muted">+ ~1.8 GiB VM</span></td>
+            <td>5.2×</td>
+          </tr>
+          <tr>
+            <td>Disk footprint</td>
+            <td class="win">52 MiB</td>
+            <td>468 MiB <span class="text-muted">images only</span></td>
+            <td>9.0×</td>
+          </tr>
+          <tr>
+            <td>Background daemon at idle</td>
+            <td class="win">none</td>
+            <td>persistent Linux VM</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="bench-note">
+      rawenv runs Postgres and Redis as native host processes, so its RAM figure is the
+      whole cost. Docker's container memory excludes the Docker Desktop VM, which reserves
+      roughly 1.5–2&nbsp;GiB before a single container starts. All numbers reproduce with
+      <a href="https://github.com/juslintek/rawenv/blob/main/scripts/benchmark.sh" target="_blank" rel="noopener"><code>scripts/benchmark.sh</code></a> —
+      see the <a href="https://github.com/juslintek/rawenv/blob/main/docs/benchmarks.md" target="_blank" rel="noopener">full methodology</a>.
+    </p>
   </div>
 </section>
 
@@ -96,7 +177,7 @@
 <section class="demo">
   <div class="container">
     <h2>Native GUI Dashboard</h2>
-    <p class="demo-subtitle">Monitor services, manage runtimes, and control AI — all from a native desktop app.</p>
+    <p class="demo-subtitle">Monitor services, manage runtimes, and control AI — all from a native desktop app (opt-in raylib build).</p>
     <div class="demo-window">
       <div class="demo-titlebar">
         <span class="demo-dot" style="background:#ff5f57"></span>
@@ -144,24 +225,31 @@
       <div class="install-block">
         <span class="install-label">curl</span>
         <div class="install-box">
-          <code>curl -fsSL rawenv.com/install | sh</code>
+          <code>curl -fsSL https://rawenv.com/install | sh</code>
         </div>
       </div>
       <div class="install-block">
-        <span class="install-label">brew</span>
+        <span class="install-label">PATH</span>
         <div class="install-box">
-          <code>brew install rawenv</code>
+          <code>export PATH="$HOME/.rawenv/bin:$PATH"</code>
         </div>
       </div>
     </div>
+    <p class="install-note">
+      Installs a single static binary to <code>~/.rawenv/bin</code> on macOS and Linux
+      (Apple Silicon, Intel, x86_64, arm64). Prefer a manual download? Grab the binary
+      for your platform from the
+      <a href="https://github.com/juslintek/rawenv/releases/latest" target="_blank" rel="noopener">latest release</a>.
+    </p>
   </div>
 </section>
 
 <footer>
   <div class="container footer-inner">
-    <span class="text-muted">© 2024 rawenv · MIT License</span>
+    <span class="text-muted">© 2026 rawenv · MIT License</span>
     <nav class="footer-links">
       <a href="https://github.com/juslintek/rawenv" target="_blank" rel="noopener">GitHub</a>
+      <a href="#benchmarks">Benchmarks</a>
       <a href="https://github.com/juslintek/rawenv/blob/main/README.md" target="_blank" rel="noopener">Docs</a>
       <a href="https://github.com/juslintek/rawenv/issues" target="_blank" rel="noopener">Issues</a>
       <a href="https://github.com/juslintek/rawenv/releases" target="_blank" rel="noopener">Releases</a>
