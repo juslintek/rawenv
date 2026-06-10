@@ -42,6 +42,7 @@ const help =
     \\  up               Activate all configured runtimes
     \\  down             Stop all services (reverse dependency order)
     \\  services ls      List configured runtimes/services with status
+    \\  status           Quick project health check (use --json)
     \\  shell            Enter rawenv shell with modified PATH
     \\  dns              Generate /etc/hosts entries for project
     \\  proxy            Generate Caddy reverse proxy config
@@ -149,6 +150,9 @@ fn run(init: std.process.Init) !u8 {
         }
         if (std.mem.eql(u8, arg, "shell")) {
             return try commands.runShell(allocator, stdout);
+        }
+        if (std.mem.eql(u8, arg, "status")) {
+            return try commands.runStatus(allocator, stdout, json_mode);
         }
         if (std.mem.eql(u8, arg, "dns")) {
             return try commands.runDns(allocator, stdout);

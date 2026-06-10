@@ -421,6 +421,57 @@ pub fn getServiceStatusMacOS(allocator: std.mem.Allocator, name: []const u8) !Se
     return .running;
 }
 
+/// Get service status on Linux by querying `systemctl --user is-active`.
+pub fn getServiceStatusLinux(allocator: std.mem.Allocator, name: []const u8) !ServiceStatus {
+    const svc_name = try std.fmt.allocPrint(allocator, "rawenv-{s}", .{name});
+    defer allocator.free(svc_name);
+    const exit_code = runCommand(allocator, &.{ "systemctl", "--user", "is-active", "--quiet", svc_name }) catch return .stopped;
+    return if (exit_code == 0) .running else .stopped;
+}
+
+/// Best-effort, cross-platform service status. Dispatches to the OS service
+/// manager (launchd on macOS, systemd --user on Linux). Returns `.stopped` on
+/// unsupported platforms or when the service is not registered.
+pub fn getServiceStatus(allocator: std.mem.Allocator, name: []const u8) ServiceStatus {
+    if (comptime builtin.os.tag == .macos) {
+        return getServiceStatusMacOS(allocator, name) catch .stopped;
+    } else if (comptime builtin.os.tag == .linux) {
+        return getServiceStatusLinux(allocator, name) catch .stopped;
+    }
+    return .stopped;
+}
+
+/// Returns true if the entry at `idx` shares its (non-zero) port with any other
+/// entry in `infos`. Used by `rawenv status` to flag port conflicts between
+/// configured services. O(n^2) — service counts are tiny.
+pub fn portConflictsWith(infos: []const ServiceInfo, idx: usize) bool {
+    const target = infos[idx].port;
+    if (target == 0) return false;
+    for (infos, 0..) |other, i| {
+        if (i == idx) continue;
+        if (other.port == target) return true;
+    }
+    return false;
+}
+
+/// Returns true if any two entries in `infos` share the same non-zero port.
+pub fn anyPortConflict(infos: []const ServiceInfo) bool {
+    for (0..infos.len) |i| {
+        if (portConflictsWith(infos, i)) return true;
+    }
+    return false;
+}
+
+/// A stale PID is a service the OS service manager still reports as running
+/// while nothing is actually listening on its port — i.e. the process died or
+/// hung without de-registering. Returns false when the port is 0 (nothing to
+/// probe) or the service is not running.
+pub fn isStale(status: ServiceStatus, port: u16) bool {
+    if (status != .running) return false;
+    if (port == 0) return false;
+    return !tcpProbe(port);
+}
+
 /// Start a service on Linux using systemd --user. `data_dir` is the per-project,
 /// per-instance data directory (created if missing).
 fn startServiceLinux(allocator: std.mem.Allocator, name: []const u8, binary_path: []const u8, data_dir: []const u8) !void {
@@ -907,7 +958,7 @@ pub fn down(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !
 }
 
 /// Base service type for an instance key ("redis.cache" -> "redis").
-fn baseTypeOf(name: []const u8) []const u8 {
+pub fn baseTypeOf(name: []const u8) []const u8 {
     const dot = std.mem.indexOfScalar(u8, name, '.');
     return if (dot) |d| name[0..d] else name;
 }

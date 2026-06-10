@@ -536,6 +536,19 @@ pub fn build(b: *std.Build) void {
     run_add_test.step.dependOn(&exe.step);
     integration_step.dependOn(&run_add_test.step);
 
+    const integration_status = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/status_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_status.root_module.link_libc = true;
+    const run_status_test = b.addRunArtifact(integration_status);
+    run_status_test.step.dependOn(b.getInstallStep());
+    run_status_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_status_test.step);
+
     // Per-stack full lifecycle E2E (node, php, python, rust, go, ruby).
     const integration_e2e = b.addTest(.{
         .root_module = b.createModule(.{

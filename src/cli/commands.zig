@@ -349,6 +349,181 @@ pub fn runServicesList(allocator: std.mem.Allocator, stdout: anytype, json_mode:
     return ExitCode.ok;
 }
 
+/// Resolve the store package name + full version for a runtime/service entry,
+/// then check whether its binary is installed in ~/.rawenv/store. Service
+/// instances (e.g. "postgres.primary") map to their base package ("postgres").
+fn isEntryInstalled(allocator: std.mem.Allocator, name: []const u8, version: []const u8) bool {
+    const base = service.baseTypeOf(name);
+    const full = resolver.resolveVersion(base, version);
+    return store.isInstalled(allocator, base, full) catch false;
+}
+
+/// `rawenv status` — one-command project health check. Prints the project name,
+/// config file status, and each service with its status/port. Surfaces warnings
+/// for missing binaries, port conflicts, and stale PIDs. With `--json`, emits a
+/// structured report. Works without rawenv.toml (prints a hint, exits 0).
+pub fn runStatus(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !u8 {
+    const toml = readFileSimple(allocator, "rawenv.toml") orelse {
+        if (json_mode) {
+            try stdout.writeAll("{\"config_found\":false,\"message\":\"No rawenv.toml found. Run rawenv init.\"}\n");
+        } else {
+            try stdout.writeAll("No rawenv.toml found. Run rawenv init.\n");
+        }
+        return ExitCode.ok;
+    };
+    defer allocator.free(toml);
+
+    var cfg = config.parse(allocator, toml) catch {
+        if (json_mode) {
+            try stdout.writeAll("{\"config_found\":true,\"config_valid\":false,\"message\":\"Failed to parse rawenv.toml. Check the file for syntax errors.\"}\n");
+        } else {
+            try stdout.writeAll("Project: (unknown)\n");
+            try stdout.writeAll("Config:  rawenv.toml (invalid — check for syntax errors)\n");
+        }
+        return ExitCode.user;
+    };
+    defer config.deinit(allocator, &cfg);
+
+    const services = try service.listServices(allocator, cfg);
+    defer service.freeServices(allocator, services);
+
+    // Resolve live status for each service once (avoids duplicate probes).
+    const statuses = try allocator.alloc(service.ServiceStatus, services.len);
+    defer allocator.free(statuses);
+    for (services, 0..) |svc, idx| statuses[idx] = service.getServiceStatus(allocator, svc.name);
+
+    if (json_mode) {
+        try stdout.print("{{\"config_found\":true,\"config_valid\":true,\"project\":\"{s}\",\"runtimes\":[", .{cfg.project_name});
+        for (cfg.runtimes, 0..) |rt, idx| {
+            if (idx > 0) try stdout.writeAll(",");
+            const installed = isEntryInstalled(allocator, rt.key, rt.value);
+            try stdout.print("{{\"name\":\"{s}\",\"version\":\"{s}\",\"installed\":{s}}}", .{ rt.key, rt.value, if (installed) "true" else "false" });
+        }
+        try stdout.writeAll("],\"services\":[");
+        for (services, 0..) |svc, idx| {
+            if (idx > 0) try stdout.writeAll(",");
+            const installed = isEntryInstalled(allocator, svc.name, svc.version);
+            const conflict = service.portConflictsWith(services, idx);
+            const stale = service.isStale(statuses[idx], svc.port);
+            try stdout.print(
+                "{{\"name\":\"{s}\",\"version\":\"{s}\",\"port\":{d},\"status\":\"{s}\",\"installed\":{s},\"port_conflict\":{s},\"stale_pid\":{s}}}",
+                .{ svc.name, svc.version, svc.port, @tagName(statuses[idx]), if (installed) "true" else "false", if (conflict) "true" else "false", if (stale) "true" else "false" },
+            );
+        }
+        try stdout.writeAll("],\"warnings\":[");
+        var warn_idx: usize = 0;
+        for (cfg.runtimes) |rt| {
+            if (!isEntryInstalled(allocator, rt.key, rt.value)) {
+                if (warn_idx > 0) try stdout.writeAll(",");
+                try stdout.print("\"{s}: binary not installed\"", .{rt.key});
+                warn_idx += 1;
+            }
+        }
+        for (services, 0..) |svc, idx| {
+            if (!isEntryInstalled(allocator, svc.name, svc.version)) {
+                if (warn_idx > 0) try stdout.writeAll(",");
+                try stdout.print("\"{s}: binary not installed\"", .{svc.name});
+                warn_idx += 1;
+            }
+            if (service.portConflictsWith(services, idx)) {
+                if (warn_idx > 0) try stdout.writeAll(",");
+                try stdout.print("\"{s}: port {d} conflict\"", .{ svc.name, svc.port });
+                warn_idx += 1;
+            }
+            if (service.isStale(statuses[idx], svc.port)) {
+                if (warn_idx > 0) try stdout.writeAll(",");
+                try stdout.print("\"{s}: stale PID (running but port {d} not responding)\"", .{ svc.name, svc.port });
+                warn_idx += 1;
+            }
+        }
+        try stdout.writeAll("]}\n");
+        return ExitCode.ok;
+    }
+
+    // Human-readable report.
+    try stdout.print("Project: {s}\n", .{if (cfg.project_name.len > 0) cfg.project_name else "(unnamed)"});
+    try stdout.writeAll("Config:  rawenv.toml (valid)\n");
+
+    if (cfg.runtimes.len > 0) {
+        try stdout.writeAll("\nRuntimes:\n");
+        for (cfg.runtimes) |rt| {
+            const installed = isEntryInstalled(allocator, rt.key, rt.value);
+            try stdout.print("  {s}", .{rt.key});
+            var pad: usize = if (rt.key.len < 14) 14 - rt.key.len else 2;
+            for (0..pad) |_| try stdout.writeAll(" ");
+            try stdout.print("{s}", .{rt.value});
+            pad = if (rt.value.len < 11) 11 - rt.value.len else 2;
+            for (0..pad) |_| try stdout.writeAll(" ");
+            try stdout.writeAll(if (installed) "installed" else "not installed");
+            try stdout.writeAll("\n");
+        }
+    }
+
+    if (services.len > 0) {
+        try stdout.writeAll("\nServices:\n");
+        try stdout.writeAll("  NAME            VERSION    PORT   STATUS\n");
+        for (services, 0..) |svc, idx| {
+            try stdout.print("  {s}", .{svc.name});
+            var pad: usize = if (svc.name.len < 14) 14 - svc.name.len else 2;
+            for (0..pad) |_| try stdout.writeAll(" ");
+            try stdout.print("{s}", .{svc.version});
+            pad = if (svc.version.len < 11) 11 - svc.version.len else 2;
+            for (0..pad) |_| try stdout.writeAll(" ");
+            var port_buf: [8]u8 = undefined;
+            const port_str = std.fmt.bufPrint(&port_buf, "{d}", .{svc.port}) catch "0";
+            try stdout.writeAll(port_str);
+            pad = if (port_str.len < 7) 7 - port_str.len else 2;
+            for (0..pad) |_| try stdout.writeAll(" ");
+            try stdout.writeAll(@tagName(statuses[idx]));
+            try stdout.writeAll("\n");
+        }
+    }
+
+    if (services.len == 0 and cfg.runtimes.len == 0) {
+        try stdout.writeAll("\nNo runtimes or services configured.\n");
+    }
+
+    // Collect and print warnings.
+    var any_warning = false;
+    for (cfg.runtimes) |rt| {
+        if (!isEntryInstalled(allocator, rt.key, rt.value)) {
+            if (!any_warning) {
+                try stdout.writeAll("\nWarnings:\n");
+                any_warning = true;
+            }
+            try stdout.print("  \u{26A0} {s}: binary not installed — run `rawenv add {s}@{s}`\n", .{ rt.key, rt.key, rt.value });
+        }
+    }
+    for (services, 0..) |svc, idx| {
+        if (!isEntryInstalled(allocator, svc.name, svc.version)) {
+            if (!any_warning) {
+                try stdout.writeAll("\nWarnings:\n");
+                any_warning = true;
+            }
+            try stdout.print("  \u{26A0} {s}: binary not installed — run `rawenv add {s}@{s}`\n", .{ svc.name, service.baseTypeOf(svc.name), svc.version });
+        }
+        if (service.portConflictsWith(services, idx)) {
+            if (!any_warning) {
+                try stdout.writeAll("\nWarnings:\n");
+                any_warning = true;
+            }
+            try stdout.print("  \u{26A0} {s}: port {d} conflicts with another service\n", .{ svc.name, svc.port });
+        }
+        if (service.isStale(statuses[idx], svc.port)) {
+            if (!any_warning) {
+                try stdout.writeAll("\nWarnings:\n");
+                any_warning = true;
+            }
+            try stdout.print("  \u{26A0} {s}: stale PID — reported running but port {d} is not responding\n", .{ svc.name, svc.port });
+        }
+    }
+    if (!any_warning) {
+        try stdout.writeAll("\nNo issues detected.\n");
+    }
+
+    return ExitCode.ok;
+}
+
 pub fn runShell(allocator: std.mem.Allocator, stdout: anytype) !u8 {
     var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
     defer allocator.free(result.toml);
