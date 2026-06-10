@@ -766,6 +766,25 @@ pub fn build(b: *std.Build) void {
     run_add_install_test.step.dependOn(b.getInstallStep());
     run_add_install_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
     integration_step.dependOn(&run_add_install_test.step);
+
+    // Full lifecycle E2E (E2E-101): a realistic fixture (package.json node@22 +
+    // docker-compose.yml postgres/redis) driven through the entire value loop —
+    // detect → init → add → up → status → down → destroy — against an isolated
+    // $HOME. Asserts destroy removes the project's data root while the shared
+    // store is left intact, and that no service is left running afterwards.
+    const integration_full_lifecycle = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/full_lifecycle_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_full_lifecycle.root_module.link_libc = true;
+    const run_full_lifecycle_test = b.addRunArtifact(integration_full_lifecycle);
+    run_full_lifecycle_test.step.dependOn(b.getInstallStep());
+    run_full_lifecycle_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_full_lifecycle_test.step);
+
    // Uninstall E2E (E2E-109): `rawenv uninstall --force` wipes ~/.rawenv,
    // bin symlinks, data dirs, and rawenv-prefixed launchd/systemd units —
    // leaving unrelated units intact and no rawenv process running.
