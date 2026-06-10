@@ -8,6 +8,14 @@ pub const StoreError = error{
     ExtractionFailed,
     PermissionDenied,
     HomeNotSet,
+    /// The command's executable could not be located in $PATH.
+    CommandNotFound,
+    /// `curl` is not installed / not on $PATH (needed for downloads).
+    CurlNotFound,
+    /// `tar` is not installed / not on $PATH (needed for extraction).
+    TarNotFound,
+    /// `unzip` is not installed / not on $PATH (needed for .zip archives).
+    UnzipNotFound,
 };
 
 pub const InstalledPackage = struct {
@@ -62,14 +70,62 @@ pub fn ensureStoreWritable(allocator: std.mem.Allocator) StoreError!void {
     if (!isWritable(allocator, base)) return StoreError.PermissionDenied;
 }
 
+/// True if `path` exists and is executable by the current user (X_OK == 1).
+fn isExecutable(allocator: std.mem.Allocator, path: []const u8) bool {
+    if (comptime builtin.os.tag == .windows) return false;
+    const z = std.fmt.allocPrintSentinel(allocator, "{s}", .{path}, 0) catch return false;
+    defer allocator.free(z);
+    return std.c.access(z, 1) == 0;
+}
+
+/// Resolve a bare command name (e.g. "curl") to an absolute path by searching
+/// $PATH — replicating the lookup that execvp(3) does but execve(2) does NOT.
+/// If `name` already contains a '/', it is treated as a path and returned
+/// (duplicated) when executable. Returns null when nothing is found.
+/// Caller owns the returned slice.
+fn findExecutable(allocator: std.mem.Allocator, name: []const u8) ?[]const u8 {
+    if (comptime builtin.os.tag == .windows) return null;
+
+    // Already a path: use as-is if it's executable.
+    if (std.mem.indexOfScalar(u8, name, '/') != null) {
+        if (isExecutable(allocator, name)) return allocator.dupe(u8, name) catch null;
+        return null;
+    }
+
+    const path_env = if (std.c.getenv("PATH")) |p|
+        std.mem.sliceTo(p, 0)
+    else
+        "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+
+    var it = std.mem.splitScalar(u8, path_env, ':');
+    while (it.next()) |dir| {
+        if (dir.len == 0) continue;
+        const candidate = std.fs.path.join(allocator, &.{ dir, name }) catch continue;
+        if (isExecutable(allocator, candidate)) return candidate;
+        allocator.free(candidate);
+    }
+    return null;
+}
+
 /// Run a command using fork/exec, wait for completion. Returns exit code.
+///
+/// argv[0] is resolved against $PATH first because execve(2) performs no PATH
+/// search of its own; passing a bare name like "curl" would otherwise have the
+/// child die with ENOENT and _exit(127). Returns StoreError.CommandNotFound
+/// when the executable cannot be located.
 fn runCommand(allocator: std.mem.Allocator, argv: []const []const u8) !u8 {
     if (comptime builtin.os.tag == .windows) return 1;
+    if (argv.len == 0) return StoreError.CommandNotFound;
 
-    // Build null-terminated argv
+    // execve(2) does NOT search $PATH — resolve argv[0] to an absolute path.
+    const resolved = findExecutable(allocator, argv[0]) orelse return StoreError.CommandNotFound;
+    defer allocator.free(resolved);
+
+    // Build null-terminated argv with argv[0] replaced by the resolved path.
     const argv_z = try allocator.alloc(?[*:0]const u8, argv.len + 1);
     defer allocator.free(argv_z);
-    for (argv, 0..) |arg, idx| {
+    argv_z[0] = (try allocator.dupeZ(u8, resolved)).ptr;
+    for (argv[1..], 1..) |arg, idx| {
         argv_z[idx] = (try allocator.dupeZ(u8, arg)).ptr;
     }
     argv_z[argv.len] = null;
@@ -82,7 +138,7 @@ fn runCommand(allocator: std.mem.Allocator, argv: []const []const u8) !u8 {
     const pid = std.c.fork();
     if (pid < 0) return StoreError.DownloadFailed;
     if (pid == 0) {
-        // Child: exec
+        // Child: exec the resolved absolute path.
         _ = std.c.execve(argv_z[0].?, argv_sentinel, std.c.environ);
         std.c._exit(127);
     }
@@ -119,25 +175,37 @@ pub fn isInstalled(allocator: std.mem.Allocator, name: []const u8, version: []co
 
 /// Download a file using curl.
 pub fn downloadPackage(allocator: std.mem.Allocator, url: []const u8, dest_path: []const u8) !void {
-    const exit_code = try runCommand(allocator, &.{ "curl", "-fsSL", url, "-o", dest_path });
+    const exit_code = runCommand(allocator, &.{ "curl", "-fsSL", url, "-o", dest_path }) catch |err| switch (err) {
+        StoreError.CommandNotFound => return StoreError.CurlNotFound,
+        else => return err,
+    };
     if (exit_code != 0) return StoreError.DownloadFailed;
 }
 
 /// Extract a .tar.gz archive to dest_dir with --strip-components=1
 pub fn extractTarGz(allocator: std.mem.Allocator, archive_path: []const u8, dest_dir: []const u8) !void {
-    const exit_code = try runCommand(allocator, &.{ "tar", "-xzf", archive_path, "-C", dest_dir, "--strip-components=1" });
+    const exit_code = runCommand(allocator, &.{ "tar", "-xzf", archive_path, "-C", dest_dir, "--strip-components=1" }) catch |err| switch (err) {
+        StoreError.CommandNotFound => return StoreError.TarNotFound,
+        else => return err,
+    };
     if (exit_code != 0) return StoreError.ExtractionFailed;
 }
 
 /// Extract a .tar.xz archive to dest_dir with --strip-components=1
 pub fn extractTarXz(allocator: std.mem.Allocator, archive_path: []const u8, dest_dir: []const u8) !void {
-    const exit_code = try runCommand(allocator, &.{ "tar", "-xJf", archive_path, "-C", dest_dir, "--strip-components=1" });
+    const exit_code = runCommand(allocator, &.{ "tar", "-xJf", archive_path, "-C", dest_dir, "--strip-components=1" }) catch |err| switch (err) {
+        StoreError.CommandNotFound => return StoreError.TarNotFound,
+        else => return err,
+    };
     if (exit_code != 0) return StoreError.ExtractionFailed;
 }
 
 /// Extract a .zip archive into dest_dir.
 pub fn extractZip(allocator: std.mem.Allocator, archive_path: []const u8, dest_dir: []const u8) !void {
-    const exit_code = try runCommand(allocator, &.{ "unzip", "-q", "-o", archive_path, "-d", dest_dir });
+    const exit_code = runCommand(allocator, &.{ "unzip", "-q", "-o", archive_path, "-d", dest_dir }) catch |err| switch (err) {
+        StoreError.CommandNotFound => return StoreError.UnzipNotFound,
+        else => return err,
+    };
     if (exit_code != 0) return StoreError.ExtractionFailed;
 }
 

@@ -84,6 +84,48 @@ test "resolve unknown package returns error" {
     try std.testing.expectError(error.UnknownPackage, result);
 }
 
+test "downloadPackage fetches a file:// URL (exercises PATH-resolved curl)" {
+    if (@import("builtin").os.tag == .windows) return;
+    const a = std.testing.allocator;
+
+    const src = "/tmp/rawenv-store-dl-src.txt";
+    const dst = "/tmp/rawenv-store-dl-dst.txt";
+    const content = "rawenv download path works\n";
+
+    // Write the source file.
+    {
+        const fd = try std.posix.openat(
+            std.posix.AT.FDCWD,
+            src,
+            .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true },
+            0o644,
+        );
+        defer _ = std.c.close(fd);
+        _ = std.c.write(fd, content.ptr, content.len);
+    }
+    defer _ = std.c.unlink(src);
+    defer _ = std.c.unlink(dst);
+
+    const url = try std.fmt.allocPrint(a, "file://{s}", .{src});
+    defer a.free(url);
+
+    // Before the QF-001 fix, runCommand passed bare "curl" to execve (no PATH
+    // search), so the child died with _exit(127) and this always failed.
+    store.downloadPackage(a, url, dst) catch |err| switch (err) {
+        // A machine without curl is a valid environment; just don't fail the
+        // suite. The important regression (bare-name execve) would surface as
+        // DownloadFailed, which we still treat as a failure below.
+        error.CurlNotFound => return,
+        else => return err,
+    };
+
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, dst, .{}, 0);
+    defer _ = std.c.close(fd);
+    var buf: [256]u8 = undefined;
+    const n = try std.posix.read(fd, &buf);
+    try std.testing.expectEqualStrings(content, buf[0..n]);
+}
+
 test "sha256 known data" {
     const io = std.testing.io;
     var tmp_dir = std.testing.tmpDir(.{});

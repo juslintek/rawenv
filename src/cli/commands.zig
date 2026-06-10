@@ -284,6 +284,15 @@ pub fn runAdd(allocator: std.mem.Allocator, stdout: anytype, package_spec: []con
                 "Download failed: could not download {s}@{s}. Check your connection and try again.\n",
                 .{ pkg.name, pkg.version },
             ),
+            error.CurlNotFound => try stdout.writeAll(
+                "curl not found in PATH. Install curl to continue.\n",
+            ),
+            error.TarNotFound => try stdout.writeAll(
+                "tar not found in PATH. Install tar to continue.\n",
+            ),
+            error.UnzipNotFound => try stdout.writeAll(
+                "unzip not found in PATH. Install unzip to continue.\n",
+            ),
             error.Sha256Mismatch => try stdout.writeAll(
                 "Download failed: checksum verification failed (the file may be corrupted or incomplete). Try again.\n",
             ),
