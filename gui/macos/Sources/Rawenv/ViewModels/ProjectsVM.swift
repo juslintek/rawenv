@@ -18,7 +18,8 @@ public final class ProjectsViewModel: ObservableObject {
 
     public func discover() async {
         isScanning = true
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        // The real work is the `rawenv discover` scan performed by the
+        // repository; awaiting it provides the genuine settle time.
         projects = await repository.fetchProjects()
         isScanning = false
     }

@@ -39,6 +39,35 @@ final class TestDataRepository: DataRepository, @unchecked Sendable {
     }
 }
 
+/// In-memory ``ServiceBackend`` for deterministic unit tests. Simulates the
+/// real launchctl/CLI surface: starting a service marks it running with a pid,
+/// stopping it marks it stopped with no pid, and `list()` returns current state.
+final class FakeServiceBackend: ServiceBackend, @unchecked Sendable {
+    private var services: [Service]
+
+    init(_ initial: [Service]) { self.services = initial }
+
+    func list() async throws -> [Service] {
+        services
+    }
+
+    func start(_ name: String) async {
+        guard let i = services.firstIndex(where: { $0.name == name }) else { return }
+        let s = services[i]
+        services[i] = Service(name: s.name, port: s.port, version: s.version,
+                              pid: 4242, cpu: s.cpu, mem: s.mem, uptime: s.uptime,
+                              status: "running", icon: s.icon)
+    }
+
+    func stop(_ name: String) async {
+        guard let i = services.firstIndex(where: { $0.name == name }) else { return }
+        let s = services[i]
+        services[i] = Service(name: s.name, port: s.port, version: s.version,
+                              pid: nil, cpu: s.cpu, mem: s.mem, uptime: s.uptime,
+                              status: "stopped", icon: s.icon)
+    }
+}
+
 /// Deterministic AI provider for unit tests — returns canned responses.
 final class TestAIProvider: AIProvider, @unchecked Sendable {
     var autonomyLevel: AIAutonomyLevel = .suggestOnly

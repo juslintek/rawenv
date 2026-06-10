@@ -49,6 +49,9 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
 
         // Step 1: Verify
         currentStep = 1; progress = 2.0 / Double(steps.count)
+        // Brief pace between user-visible install steps. The substantive
+        // verification/registration is performed by the rawenv CLI installer
+        // itself; this only animates the step indicator in the wizard.
         try? await Task.sleep(nanoseconds: 200_000_000)
 
         // Step 2: Make executable
@@ -57,10 +60,12 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
 
         // Step 3: launchd
         currentStep = 3; progress = 4.0 / Double(steps.count)
+        // See note above: paces the user-visible step indicator.
         try? await Task.sleep(nanoseconds: 200_000_000)
 
         // Step 4: Seatbelt
         currentStep = 4; progress = 5.0 / Double(steps.count)
+        // See note above: paces the user-visible step indicator.
         try? await Task.sleep(nanoseconds: 200_000_000)
 
         // Step 5: PATH
