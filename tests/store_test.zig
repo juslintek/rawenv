@@ -67,14 +67,16 @@ test "resolve postgresql@18" {
     const pkg = try resolver.resolve(std.testing.allocator, "postgresql", "18");
     defer std.testing.allocator.free(pkg.url);
     try std.testing.expectEqualStrings("postgresql", pkg.name);
-    try std.testing.expectEqualStrings("18.2", pkg.version);
+    try std.testing.expectEqualStrings("18.4.0", pkg.version);
+    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "postgresql-binaries") != null);
 }
 
 test "resolve redis@7" {
     const pkg = try resolver.resolve(std.testing.allocator, "redis", "7");
     defer std.testing.allocator.free(pkg.url);
     try std.testing.expectEqualStrings("redis", pkg.name);
-    try std.testing.expectEqualStrings("7.4", pkg.version);
+    try std.testing.expectEqualStrings("7.4.0", pkg.version);
+    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "packages.redis.io") != null);
 }
 
 test "resolve unknown package returns error" {
