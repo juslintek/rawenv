@@ -734,6 +734,22 @@ pub fn build(b: *std.Build) void {
    run_errors_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
    integration_step.dependOn(&run_errors_test.step);
 
+    // Add download + install-path E2E (E2E-100): `rawenv add node@22` and
+    // `rawenv add meilisearch@1.12` against an isolated $HOME — verifies the
+    // extracted binary really lands in the store (network-gated), plus exit
+    // codes and error messages for unknown package/version and no-network.
+    const integration_add_install = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/add_install_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_add_install.root_module.link_libc = true;
+    const run_add_install_test = b.addRunArtifact(integration_add_install);
+    run_add_install_test.step.dependOn(b.getInstallStep());
+    run_add_install_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_add_install_test.step);
    // Uninstall E2E (E2E-109): `rawenv uninstall --force` wipes ~/.rawenv,
    // bin symlinks, data dirs, and rawenv-prefixed launchd/systemd units —
    // leaving unrelated units intact and no rawenv process running.
