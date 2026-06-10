@@ -142,9 +142,33 @@ pub const PortAllocator = struct {
     }
 };
 
-/// Build a per-instance data dir: ~/.rawenv/data/{project}/{instance}
+/// Compute a filesystem-safe, collision-resistant key for a project's data dir.
+/// Format: {sanitized-name}-{hash} so dirs stay human-readable while remaining
+/// unique per project. Two projects with different names hash to different keys,
+/// preventing cross-contamination of service data. Caller owns the returned slice.
+pub fn projectKey(allocator: std.mem.Allocator, project: []const u8) ![]const u8 {
+    const h = std.hash.Wyhash.hash(0, project);
+    var name_buf: std.ArrayList(u8) = .empty;
+    defer name_buf.deinit(allocator);
+    for (project) |c| {
+        const safe = std.ascii.isAlphanumeric(c) or c == '-' or c == '_';
+        try name_buf.append(allocator, if (safe) c else '-');
+    }
+    return std.fmt.allocPrint(allocator, "{s}-{x}", .{ name_buf.items, h });
+}
+
+/// Build the per-project data root: ~/.rawenv/data/{project-name-hash}
+pub fn buildProjectDataRoot(allocator: std.mem.Allocator, home: []const u8, project: []const u8) ![]const u8 {
+    const key = try projectKey(allocator, project);
+    defer allocator.free(key);
+    return std.fs.path.join(allocator, &.{ home, ".rawenv", "data", key });
+}
+
+/// Build a per-instance data dir: ~/.rawenv/data/{project-name-hash}/{instance}
 pub fn buildDataDir(allocator: std.mem.Allocator, home: []const u8, project: []const u8, instance: []const u8) ![]const u8 {
-    return std.fs.path.join(allocator, &.{ home, ".rawenv", "data", project, instance });
+    const key = try projectKey(allocator, project);
+    defer allocator.free(key);
+    return std.fs.path.join(allocator, &.{ home, ".rawenv", "data", key, instance });
 }
 
 /// Generate a launchd plist XML string for a service
@@ -206,11 +230,9 @@ pub fn writePlist(allocator: std.mem.Allocator, name: []const u8, plist_content:
     return plist_path;
 }
 
-/// Start a service on macOS using launchd
-pub fn startServiceMacOS(allocator: std.mem.Allocator, name: []const u8, binary_path: []const u8) !void {
-    const home = getHome() orelse return;
-    const data_dir = try std.fs.path.join(allocator, &.{ home, ".rawenv", "data", name });
-    defer allocator.free(data_dir);
+/// Start a service on macOS using launchd. `data_dir` is the per-project,
+/// per-instance data directory (created if missing).
+pub fn startServiceMacOS(allocator: std.mem.Allocator, name: []const u8, binary_path: []const u8, data_dir: []const u8) !void {
     mkdirP(allocator, data_dir);
 
     const plist = try generateLaunchdPlist(allocator, name, binary_path, &.{}, data_dir);
@@ -247,11 +269,10 @@ pub fn getServiceStatusMacOS(allocator: std.mem.Allocator, name: []const u8) !Se
     return .running;
 }
 
-/// Start a service on Linux using systemd --user
-fn startServiceLinux(allocator: std.mem.Allocator, name: []const u8, binary_path: []const u8) !void {
+/// Start a service on Linux using systemd --user. `data_dir` is the per-project,
+/// per-instance data directory (created if missing).
+fn startServiceLinux(allocator: std.mem.Allocator, name: []const u8, binary_path: []const u8, data_dir: []const u8) !void {
     const home = getHome() orelse return;
-    const data_dir = try std.fs.path.join(allocator, &.{ home, ".rawenv", "data", name });
-    defer allocator.free(data_dir);
     mkdirP(allocator, data_dir);
 
     const unit_name = try std.fmt.allocPrint(allocator, "rawenv-{s}.service", .{name});
@@ -280,8 +301,9 @@ fn startServiceLinux(allocator: std.mem.Allocator, name: []const u8, binary_path
     _ = runCommand(allocator, &.{ "systemctl", "--user", "start", svc_name }) catch {};
 }
 
-/// Start a service (platform-dispatched)
-pub fn startService(allocator: std.mem.Allocator, name: []const u8, version: []const u8, stdout: anytype) !void {
+/// Start a service (platform-dispatched). Data is stored in an isolated,
+/// per-project directory: ~/.rawenv/data/{project-name-hash}/{name}
+pub fn startService(allocator: std.mem.Allocator, project: []const u8, name: []const u8, version: []const u8, stdout: anytype) !void {
     const home = getHome() orelse {
         try stdout.writeAll("Error: HOME not set\n");
         return;
@@ -292,15 +314,18 @@ pub fn startService(allocator: std.mem.Allocator, name: []const u8, version: []c
     const binary_path = try std.fs.path.join(allocator, &.{ store_path, "bin", name });
     defer allocator.free(binary_path);
 
+    const data_dir = try buildDataDir(allocator, home, project, name);
+    defer allocator.free(data_dir);
+
     if (comptime builtin.os.tag == .macos) {
-        startServiceMacOS(allocator, name, binary_path) catch {
+        startServiceMacOS(allocator, name, binary_path, data_dir) catch {
             try stdout.writeAll("  ✗ ");
             try stdout.writeAll(name);
             try stdout.writeAll(" failed to start\n");
             return;
         };
     } else if (comptime builtin.os.tag == .linux) {
-        startServiceLinux(allocator, name, binary_path) catch {
+        startServiceLinux(allocator, name, binary_path, data_dir) catch {
             try stdout.writeAll("  ✗ ");
             try stdout.writeAll(name);
             try stdout.writeAll(" failed to start\n");
@@ -384,6 +409,20 @@ pub fn freeServices(allocator: std.mem.Allocator, services: []ServiceInfo) void 
     allocator.free(services);
 }
 
+/// Recursively remove a project's isolated data root
+/// (~/.rawenv/data/{project-name-hash}). Best-effort; returns false on Windows
+/// or when HOME is unset. Stops dependent services first on supported platforms.
+pub fn removeProjectData(allocator: std.mem.Allocator, project: []const u8) !bool {
+    if (comptime builtin.os.tag == .windows) return false;
+    const home = getHome() orelse return false;
+    const root = try buildProjectDataRoot(allocator, home, project);
+    defer allocator.free(root);
+    if (!accessPath(allocator, root)) return false;
+    // Absolute path: runCommand uses execve which does not search PATH.
+    const exit_code = runCommand(allocator, &.{ "/bin/rm", "-rf", root }) catch return false;
+    return exit_code == 0 and !accessPath(allocator, root);
+}
+
 /// Activate all configured runtimes by creating symlinks in ~/.rawenv/bin/
 pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !void {
     const home = getHome() orelse {
@@ -435,7 +474,7 @@ pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !vo
     // Start services
     for (cfg.services) |svc| {
         const full_version = resolver.resolveVersion(svc.key, svc.value);
-        try startService(allocator, svc.key, full_version, stdout);
+        try startService(allocator, cfg.project_name, svc.key, full_version, stdout);
     }
 }
 
@@ -507,4 +546,48 @@ test "generateLaunchdPlist" {
     try std.testing.expect(std.mem.indexOf(u8, plist, "com.rawenv.redis") != null);
     try std.testing.expect(std.mem.indexOf(u8, plist, "/usr/local/bin/redis-server") != null);
     try std.testing.expect(std.mem.indexOf(u8, plist, "<true/>") != null);
+}
+
+test "projectKey is deterministic and name-distinct" {
+    const a1 = try projectKey(std.testing.allocator, "alpha");
+    defer std.testing.allocator.free(a1);
+    const a2 = try projectKey(std.testing.allocator, "alpha");
+    defer std.testing.allocator.free(a2);
+    const b = try projectKey(std.testing.allocator, "beta");
+    defer std.testing.allocator.free(b);
+
+    // Same name -> same key (stable across runs).
+    try std.testing.expectEqualStrings(a1, a2);
+    // Different name -> different key (no cross-contamination).
+    try std.testing.expect(!std.mem.eql(u8, a1, b));
+    // Human-readable: key retains the sanitized project name.
+    try std.testing.expect(std.mem.startsWith(u8, a1, "alpha-"));
+}
+
+test "projectKey sanitizes unsafe characters" {
+    const key = try projectKey(std.testing.allocator, "my/weird name");
+    defer std.testing.allocator.free(key);
+    // No path separators or spaces leak into the data dir key.
+    try std.testing.expect(std.mem.indexOfScalar(u8, key, '/') == null);
+    try std.testing.expect(std.mem.indexOfScalar(u8, key, ' ') == null);
+}
+
+test "buildDataDir isolates two projects using the same service" {
+    const home = "/home/user";
+    const dir_a = try buildDataDir(std.testing.allocator, home, "project-a", "postgres");
+    defer std.testing.allocator.free(dir_a);
+    const dir_b = try buildDataDir(std.testing.allocator, home, "project-b", "postgres");
+    defer std.testing.allocator.free(dir_b);
+
+    // Both end with the service instance, but their parent dirs differ.
+    try std.testing.expect(std.mem.endsWith(u8, dir_a, "/postgres"));
+    try std.testing.expect(std.mem.endsWith(u8, dir_b, "/postgres"));
+    try std.testing.expect(!std.mem.eql(u8, dir_a, dir_b));
+    try std.testing.expect(std.mem.startsWith(u8, dir_a, "/home/user/.rawenv/data/"));
+}
+
+test "buildProjectDataRoot points at the per-project data root" {
+    const root = try buildProjectDataRoot(std.testing.allocator, "/home/user", "myapp");
+    defer std.testing.allocator.free(root);
+    try std.testing.expect(std.mem.startsWith(u8, root, "/home/user/.rawenv/data/myapp-"));
 }

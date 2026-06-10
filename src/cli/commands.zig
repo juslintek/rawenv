@@ -413,6 +413,60 @@ pub fn runDiscover(allocator: std.mem.Allocator, stdout: anytype, json_mode: boo
     }
 }
 
+/// Wipe a project's isolated data directories (~/.rawenv/data/{project-name-hash}).
+/// Prompts for confirmation unless `force` is set.
+pub fn runDestroy(allocator: std.mem.Allocator, stdout: anytype, force: bool) !void {
+    var result = (try loadConfig(allocator, stdout)) orelse return;
+    defer allocator.free(result.toml);
+    defer config.deinit(allocator, &result.cfg);
+
+    const project = result.cfg.project_name;
+
+    const home = if (comptime builtin.os.tag == .windows) null else if (std.c.getenv("HOME")) |s| std.mem.sliceTo(s, 0) else null;
+    if (home == null) {
+        try stdout.writeAll("Error: HOME not set\n");
+        return;
+    }
+
+    const root = try service.buildProjectDataRoot(allocator, home.?, project);
+    defer allocator.free(root);
+
+    if (!force) {
+        try stdout.writeAll("rawenv destroy will permanently remove data for project '");
+        try stdout.writeAll(project);
+        try stdout.writeAll("':\n  ");
+        try stdout.writeAll(root);
+        try stdout.writeAll("\n\nProceed? [y/N] ");
+
+        var buf: [16]u8 = undefined;
+        const n_raw = if (comptime builtin.os.tag == .windows) @as(isize, 0) else std.c.read(0, &buf, buf.len);
+        const n: usize = if (n_raw > 0) @intCast(n_raw) else 0;
+        if (n == 0) {
+            try stdout.writeAll("Aborted.\n");
+            return;
+        }
+        const answer = std.mem.trimEnd(u8, buf[0..n], "\r\n");
+        if (!std.mem.eql(u8, answer, "y") and !std.mem.eql(u8, answer, "Y")) {
+            try stdout.writeAll("Aborted.\n");
+            return;
+        }
+    }
+
+    // Stop any running services before wiping their data.
+    for (result.cfg.services) |svc| {
+        service.stopService(allocator, svc.key, stdout) catch {};
+    }
+
+    const removed = service.removeProjectData(allocator, project) catch false;
+    if (removed) {
+        try stdout.writeAll("Destroyed data for project '");
+        try stdout.writeAll(project);
+        try stdout.writeAll("'\n");
+    } else {
+        try stdout.writeAll("Nothing to remove (no data dirs found) or removal unsupported on this platform.\n");
+    }
+}
+
 pub fn runUninstall(_: std.mem.Allocator, stdout: anytype) !void {
     const home = if (comptime builtin.os.tag == .windows) blk: {
         break :blk if (std.c.getenv("USERPROFILE")) |s| std.mem.sliceTo(s, 0) else null orelse {

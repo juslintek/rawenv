@@ -48,6 +48,7 @@ const help =
     \\  connections      Show service dependency map
     \\  cell info        Show available isolation backends
     \\  discover         Scan for projects on this machine
+    \\  destroy          Remove this project's isolated data dirs (--force to skip prompt)
     \\  uninstall        Remove rawenv from this machine
     \\  tui              Launch TUI dashboard
     \\  gui              Launch GUI window
@@ -81,13 +82,16 @@ pub fn main(init: std.process.Init) !void {
 
     var i: usize = 1;
     var json_mode = false;
+    var force_mode = false;
     // Pre-scan for --json flag
     for (args[1..]) |a| {
-        if (std.mem.eql(u8, a, "--json")) { json_mode = true; break; }
+        if (std.mem.eql(u8, a, "--json")) { json_mode = true; }
+        if (std.mem.eql(u8, a, "--force") or std.mem.eql(u8, a, "-f")) { force_mode = true; }
     }
     while (i < args.len) : (i += 1) {
         const arg = args[i];
         if (std.mem.eql(u8, arg, "--json")) continue;
+        if (std.mem.eql(u8, arg, "--force") or std.mem.eql(u8, arg, "-f")) continue;
         if (std.mem.eql(u8, arg, "--version")) {
             if (json_mode) {
                 try stdout.writeAll("{\"version\":\"" ++ version ++ "\"}\n");
@@ -187,6 +191,12 @@ pub fn main(init: std.process.Init) !void {
         if (std.mem.eql(u8, arg, "discover")) {
             commands.runDiscover(allocator, stdout, json_mode) catch {
                 try stdout.writeAll("Error: discover failed\n");
+            };
+            return;
+        }
+        if (std.mem.eql(u8, arg, "destroy")) {
+            commands.runDestroy(allocator, stdout, force_mode) catch {
+                try stdout.writeAll("Error: destroy failed\n");
             };
             return;
         }
