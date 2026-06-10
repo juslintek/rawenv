@@ -564,6 +564,20 @@ pub fn build(b: *std.Build) void {
     run_e2e_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
     integration_step.dependOn(&run_e2e_test.step);
 
+    // Network features E2E (connections, dns, proxy, tunnel, deploy generate).
+    const integration_network = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/network_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_network.root_module.link_libc = true;
+    const run_network_test = b.addRunArtifact(integration_network);
+    run_network_test.step.dependOn(b.getInstallStep());
+    run_network_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_network_test.step);
+
     // Cross-compilation targets
     const cross_targets: []const struct { []const u8, std.Target.Cpu.Arch, std.Target.Os.Tag } = &.{
         .{ "aarch64-macos", .aarch64, .macos },

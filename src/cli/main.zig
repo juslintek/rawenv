@@ -46,7 +46,7 @@ const help =
     \\  shell            Enter rawenv shell with modified PATH
     \\  dns              Generate /etc/hosts entries for project
     \\  proxy            Generate Caddy reverse proxy config
-    \\  tunnel <port>    Generate SSH tunnel command for a local port
+    \\  tunnel <port>    Print a tunnel command (cloudflared/bore/ngrok) or install prompt
     \\  connections      Show service dependency map
     \\  cell info        Show available isolation backends
     \\  discover         Scan for projects on this machine

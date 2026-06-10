@@ -621,7 +621,31 @@ pub fn runProxySetup(allocator: std.mem.Allocator, stdout: anytype) !void {
     try stdout.writeAll("Done. Caddy has been reloaded with the new configuration.\n");
 }
 
-pub fn runTunnel(allocator: std.mem.Allocator, stdout: anytype, port_str: []const u8) !u8 {
+/// Tunnel providers in preference order, with the command to install each.
+const tunnel_providers = [_]struct { name: []const u8, install: []const u8 }{
+    .{ .name = "cloudflared", .install = "brew install cloudflared  (or https://github.com/cloudflare/cloudflared)" },
+    .{ .name = "bore", .install = "cargo install bore-cli  (https://github.com/ekzhang/bore)" },
+    .{ .name = "ngrok", .install = "brew install ngrok  (or https://ngrok.com/download)" },
+};
+
+/// True when an executable named `name` is found on PATH. Scans each PATH
+/// directory and checks for an executable file (X_OK). No subprocess is
+/// spawned, so this is deterministic and works with a cleared environment.
+fn binaryOnPath(name: []const u8) bool {
+    if (comptime builtin.os.tag == .windows) return false;
+    const path_env = std.c.getenv("PATH") orelse return false;
+    const path = std.mem.sliceTo(path_env, 0);
+    var it = std.mem.splitScalar(u8, path, ':');
+    var buf: [std.fs.max_path_bytes]u8 = undefined;
+    while (it.next()) |dir| {
+        if (dir.len == 0) continue;
+        const full = std.fmt.bufPrintZ(&buf, "{s}/{s}", .{ dir, name }) catch continue;
+        if (std.c.access(full, 1) == 0) return true; // X_OK
+    }
+    return false;
+}
+
+pub fn runTunnel(_: std.mem.Allocator, stdout: anytype, port_str: []const u8) !u8 {
     const port = std.fmt.parseInt(u16, port_str, 10) catch {
         try stdout.print("Error: invalid port '{s}'. Expected a number between 1 and 65535.\n", .{port_str});
         return ExitCode.user;
@@ -630,15 +654,35 @@ pub fn runTunnel(allocator: std.mem.Allocator, stdout: anytype, port_str: []cons
         try stdout.writeAll("Error: invalid port '0'. Expected a number between 1 and 65535.\n");
         return ExitCode.user;
     }
-    const cfg = tunnel.TunnelConfig{
-        .local_port = port,
-        .ssh_host = "tunnel.example.com",
-        .ssh_user = "rawenv",
-    };
-    const cmd = try cfg.generateSshCommand(allocator);
-    defer allocator.free(cmd);
-    try stdout.writeAll(cmd);
-    try stdout.writeAll("\n");
+
+    // Pick the first tunnel provider available on PATH.
+    var provider: ?[]const u8 = null;
+    for (tunnel_providers) |p| {
+        if (binaryOnPath(p.name)) {
+            provider = p.name;
+            break;
+        }
+    }
+
+    // No provider installed: print an actionable install prompt instead of an
+    // unusable command. Exit code is `user` (1) — the user must act.
+    if (provider == null) {
+        try stdout.print("No tunnel provider found on PATH. Install one to expose local port {d}:\n", .{port});
+        for (tunnel_providers) |p| {
+            try stdout.print("  {s}: {s}\n", .{ p.name, p.install });
+        }
+        return ExitCode.user;
+    }
+
+    // A provider is available: print the command that exposes the local port.
+    const name = provider.?;
+    if (std.mem.eql(u8, name, "cloudflared")) {
+        try stdout.print("cloudflared tunnel --url http://localhost:{d}\n", .{port});
+    } else if (std.mem.eql(u8, name, "bore")) {
+        try stdout.print("bore local {d} --to bore.pub\n", .{port});
+    } else {
+        try stdout.print("ngrok http {d}\n", .{port});
+    }
     return ExitCode.ok;
 }
 
