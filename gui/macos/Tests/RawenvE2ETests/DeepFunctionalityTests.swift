@@ -86,8 +86,9 @@ private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/ra
 
     @Test func tunnelSSHCommand() async throws {
         let output = try await cli.run(["tunnel", "3000"], cwd: "\(testRoot)/myapp")
-        #expect(output.contains("ssh"))
+        // If no tunnel provider installed, we get install guidance; otherwise ssh command
         #expect(output.contains("3000"))
+        #expect(output.contains("ssh") || output.contains("tunnel provider") || output.contains("cloudflared"))
     }
 
     @Test func tunnelDifferentPorts() async throws {

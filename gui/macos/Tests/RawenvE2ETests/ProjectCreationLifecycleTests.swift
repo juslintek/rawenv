@@ -231,7 +231,7 @@ private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/ra
         let proxy = try await cli.run(["proxy"], cwd: "\(testRoot)/my-nextjs-app")
         #expect(!proxy.isEmpty)
         let tunnel = try await cli.run(["tunnel", "3000"], cwd: "\(testRoot)/my-nextjs-app")
-        #expect(tunnel.contains("ssh"))
+        #expect(tunnel.contains("ssh") || tunnel.contains("tunnel provider") || tunnel.contains("cloudflared"))
     }
 
     // MARK: - Connections from .env
