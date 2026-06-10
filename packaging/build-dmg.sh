@@ -1,58 +1,98 @@
 #!/usr/bin/env bash
+# Build a distributable macOS DMG for rawenv.
+#
+# Produces a code-signed, notarized (when credentials are available) Rawenv.app
+# inside a drag-to-install DMG. The .app embeds the rawenv CLI binary so it is
+# fully self-contained.
+#
+# Usage: packaging/build-dmg.sh [version]
+#
+# Signing / notarization are driven by environment variables (see
+# gui/macos/scripts/build-app.sh and notarize.sh). With no credentials the DMG
+# is still produced with an ad-hoc-signed app for local testing.
 set -euo pipefail
 
 VERSION="${1:-0.2.0}"
 ARCH="$(uname -m)"
 DMG_NAME="rawenv-${VERSION}-${ARCH}"
-BUILD_DIR="/tmp/rawenv-dmg-build"
 
-cd "$(dirname "$0")/.."
-echo "Building rawenv ${VERSION} DMG for ${ARCH}..."
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+MACOS_DIR="${REPO_ROOT}/gui/macos"
+STAGE_DIR="/tmp/rawenv-dmg-build"
+DMG_PATH="${REPO_ROOT}/packaging/${DMG_NAME}.dmg"
 
-# 1. Build release binary
-zig build -Doptimize=ReleaseSafe -Dgui=true
-echo "  Binary: $(ls -lh zig-out/bin/rawenv | awk '{print $5}')"
+log() { printf '\033[0;32m==>\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*"; }
 
-# 2. Build installer .app and GUI .app
-bash packaging/installer/build.sh
-bash packaging/gui/build.sh
+cd "$REPO_ROOT"
+log "Building rawenv ${VERSION} DMG for ${ARCH}…"
 
-# 3. Prepare DMG contents
-rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR"
+# ---------------------------------------------------------------------------
+# 1. Build the release CLI binary (embedded in the app + shipped standalone).
+# ---------------------------------------------------------------------------
+log "Building release CLI…"
+zig build -Doptimize=ReleaseSafe -Dversion="$VERSION"
+CLI_BINARY="${REPO_ROOT}/zig-out/bin/rawenv"
+[ -x "$CLI_BINARY" ] || { echo "error: CLI build failed ($CLI_BINARY)" >&2; exit 1; }
+echo "  CLI: $(ls -lh "$CLI_BINARY" | awk '{print $5}')"
 
-# Copy installer app (primary way to install)
-cp -R "zig-out/bin/rawenv Installer.app" "$BUILD_DIR/"
+# ---------------------------------------------------------------------------
+# 2. Build, embed-CLI-into, and sign Rawenv.app (Developer ID, hardened runtime).
+# ---------------------------------------------------------------------------
+log "Building & signing Rawenv.app…"
+APP_PATH="$(APP_VERSION="$VERSION" CLI_BINARY="$CLI_BINARY" \
+  bash "${MACOS_DIR}/scripts/build-app.sh" | tail -1)"
+[ -d "$APP_PATH" ] || { echo "error: build-app.sh did not produce an .app ($APP_PATH)" >&2; exit 1; }
 
-# Embed rawenv binary in the installer's Resources
-cp zig-out/bin/rawenv "$BUILD_DIR/rawenv Installer.app/Contents/Resources/rawenv"
+# ---------------------------------------------------------------------------
+# 3. Stage DMG contents: Rawenv.app + /Applications symlink + standalone CLI.
+# ---------------------------------------------------------------------------
+rm -rf "$STAGE_DIR"
+mkdir -p "$STAGE_DIR"
+cp -R "$APP_PATH" "$STAGE_DIR/Rawenv.app"
+ln -s /Applications "$STAGE_DIR/Applications"
 
-# Copy GUI app
-cp -R "zig-out/bin/rawenv.app" "$BUILD_DIR/"
+mkdir -p "$STAGE_DIR/rawenv (CLI only)"
+cp "$CLI_BINARY" "$STAGE_DIR/rawenv (CLI only)/rawenv"
+chmod +x "$STAGE_DIR/rawenv (CLI only)/rawenv"
+cat > "$STAGE_DIR/rawenv (CLI only)/README.txt" << 'README'
+Rawenv.app already bundles this CLI — just drag Rawenv.app to Applications.
 
-# Also include standalone binary for manual install
-mkdir -p "$BUILD_DIR/rawenv"
-cp zig-out/bin/rawenv "$BUILD_DIR/rawenv/rawenv"
-chmod +x "$BUILD_DIR/rawenv/rawenv"
-
-cat > "$BUILD_DIR/rawenv/README.txt" << 'README'
-Manual install: cp rawenv ~/.rawenv/bin/ && export PATH="$HOME/.rawenv/bin:$PATH"
-Or use the "rawenv Installer" app.
+To install ONLY the command-line tool:
+  mkdir -p ~/.rawenv/bin
+  cp rawenv ~/.rawenv/bin/
+  echo 'export PATH="$HOME/.rawenv/bin:$PATH"' >> ~/.zshrc
 README
 
-# 4. Create DMG
-DMG_PATH="packaging/${DMG_NAME}.dmg"
-mkdir -p packaging
+# ---------------------------------------------------------------------------
+# 4. Create the compressed DMG.
+# ---------------------------------------------------------------------------
+mkdir -p "${REPO_ROOT}/packaging"
 rm -f "$DMG_PATH"
-
+log "Creating DMG…"
 hdiutil create \
   -volname "rawenv ${VERSION}" \
-  -srcfolder "$BUILD_DIR" \
+  -srcfolder "$STAGE_DIR" \
   -ov -format UDZO \
   "$DMG_PATH"
+rm -rf "$STAGE_DIR"
 
-rm -rf "$BUILD_DIR"
+# ---------------------------------------------------------------------------
+# 5. Sign the DMG itself (Developer ID), then notarize + staple.
+# ---------------------------------------------------------------------------
+SIGN_ID="${DEVELOPER_ID_APP:-}"
+[ -z "$SIGN_ID" ] && SIGN_ID="$(security find-identity -v -p codesigning 2>/dev/null \
+  | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
+if [ -n "$SIGN_ID" ]; then
+  log "Signing DMG with $SIGN_ID…"
+  codesign --force --timestamp --sign "$SIGN_ID" "$DMG_PATH"
+else
+  warn "No Developer ID identity — DMG left unsigned (local build)."
+fi
+
+log "Notarizing DMG…"
+bash "${MACOS_DIR}/scripts/notarize.sh" "$DMG_PATH" || warn "notarization step did not complete"
 
 echo ""
-echo "✓ DMG created: $DMG_PATH"
+log "DMG ready: $DMG_PATH"
 echo "  Size: $(ls -lh "$DMG_PATH" | awk '{print $5}')"
