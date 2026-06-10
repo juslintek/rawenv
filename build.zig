@@ -631,6 +631,22 @@ pub fn build(b: *std.Build) void {
    run_network_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
    integration_step.dependOn(&run_network_test.step);
 
+   // DNS/proxy/TLS setup + teardown E2E (E2E-110): `up` generates the
+   // Caddyfile + self-signed TLS cert, `down` keeps them for re-use, and
+   // `destroy --force` removes the Caddyfile + cert dir with no stale files.
+   const integration_dns_proxy_tls = b.addTest(.{
+       .root_module = b.createModule(.{
+           .root_source_file = b.path("tests/integration/dns_proxy_tls_e2e_test.zig"),
+           .target = target,
+           .optimize = optimize,
+       }),
+   });
+   integration_dns_proxy_tls.root_module.link_libc = true;
+   const run_dns_proxy_tls_test = b.addRunArtifact(integration_dns_proxy_tls);
+   run_dns_proxy_tls_test.step.dependOn(b.getInstallStep());
+   run_dns_proxy_tls_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+   integration_step.dependOn(&run_dns_proxy_tls_test.step);
+
    // Service combinations + multi-instance + port-conflict E2E.
    const integration_combos = b.addTest(.{
        .root_module = b.createModule(.{
