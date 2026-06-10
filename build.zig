@@ -578,6 +578,20 @@ pub fn build(b: *std.Build) void {
     run_network_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
     integration_step.dependOn(&run_network_test.step);
 
+    // Service combinations + multi-instance + port-conflict E2E.
+    const integration_combos = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/e2e_combos_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_combos.root_module.link_libc = true;
+    const run_combos_test = b.addRunArtifact(integration_combos);
+    run_combos_test.step.dependOn(b.getInstallStep());
+    run_combos_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_combos_test.step);
+
     // Cross-compilation targets
     const cross_targets: []const struct { []const u8, std.Target.Cpu.Arch, std.Target.Os.Tag } = &.{
         .{ "aarch64-macos", .aarch64, .macos },
