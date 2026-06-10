@@ -312,6 +312,8 @@ pub fn generateLaunchdPlist(allocator: std.mem.Allocator, name: []const u8, bina
         \\  <true/>
         \\  <key>KeepAlive</key>
         \\  <true/>
+        \\  <key>ExitTimeOut</key>
+        \\  <integer>10</integer>
         \\  <key>StandardOutPath</key>
         \\  <string>{s}/stdout.log</string>
         \\  <key>StandardErrorPath</key>
@@ -320,6 +322,25 @@ pub fn generateLaunchdPlist(allocator: std.mem.Allocator, name: []const u8, bina
         \\</plist>
         \\
     , .{ name, prog_args.items, data_dir, data_dir, data_dir });
+}
+
+/// Generate a systemd --user unit file for a service. `args` are appended to
+/// ExecStart so the service points at its rawenv-managed data dir / config.
+/// `TimeoutStopSec=10` makes systemd escalate from SIGTERM to SIGKILL 10s after
+/// a stop request, giving services a bounded graceful-shutdown window.
+pub fn generateSystemdUnit(allocator: std.mem.Allocator, name: []const u8, binary_path: []const u8, args: []const []const u8, data_dir: []const u8) ![]const u8 {
+    var exec_extra: std.ArrayList(u8) = .empty;
+    defer exec_extra.deinit(allocator);
+    for (args) |a| {
+        try exec_extra.append(allocator, ' ');
+        try exec_extra.appendSlice(allocator, a);
+    }
+
+    return std.fmt.allocPrint(
+        allocator,
+        "[Unit]\nDescription=rawenv {s}\n\n[Service]\nExecStart={s}{s}\nWorkingDirectory={s}\nRestart=always\nKillSignal=SIGTERM\nTimeoutStopSec=10\n\n[Install]\nWantedBy=default.target\n",
+        .{ name, binary_path, exec_extra.items, data_dir },
+    );
 }
 
 /// Build the extra CLI arguments a service binary needs so it uses its
@@ -478,26 +499,18 @@ fn startServiceLinux(allocator: std.mem.Allocator, name: []const u8, binary_path
     const home = getHome() orelse return;
     mkdirP(allocator, data_dir);
 
-    const unit_name = try std.fmt.allocPrint(allocator, "rawenv-{s}.service", .{name});
-    defer allocator.free(unit_name);
     const unit_dir = try std.fs.path.join(allocator, &.{ home, ".config", "systemd", "user" });
     defer allocator.free(unit_dir);
     mkdirP(allocator, unit_dir);
-    const unit_path = try std.fs.path.join(allocator, &.{ unit_dir, unit_name });
+    const unit_path = try getSystemdUnitPath(allocator, home, name);
     defer allocator.free(unit_path);
 
     // Point the service at its rawenv-managed data dir / generated config.
     const base = baseTypeOf(name);
     const args = try serviceStartArgs(allocator, base, data_dir);
     defer freeServiceArgs(allocator, args);
-    var exec_extra: std.ArrayList(u8) = .empty;
-    defer exec_extra.deinit(allocator);
-    for (args) |a| {
-        try exec_extra.append(allocator, ' ');
-        try exec_extra.appendSlice(allocator, a);
-    }
 
-    const content = try std.fmt.allocPrint(allocator, "[Unit]\nDescription=rawenv {s}\n\n[Service]\nExecStart={s}{s}\nWorkingDirectory={s}\nRestart=always\n\n[Install]\nWantedBy=default.target\n", .{ name, binary_path, exec_extra.items, data_dir });
+    const content = try generateSystemdUnit(allocator, name, binary_path, args, data_dir);
     defer allocator.free(content);
 
     if (comptime builtin.os.tag != .windows) {
@@ -513,6 +526,40 @@ fn startServiceLinux(allocator: std.mem.Allocator, name: []const u8, binary_path
     const svc_name = try std.fmt.allocPrint(allocator, "rawenv-{s}", .{name});
     defer allocator.free(svc_name);
     _ = runCommand(allocator, &.{ "systemctl", "--user", "start", svc_name }) catch {};
+}
+
+/// Get the systemd --user unit path:
+/// ~/.config/systemd/user/rawenv-{name}.service
+fn getSystemdUnitPath(allocator: std.mem.Allocator, home: []const u8, name: []const u8) ![]const u8 {
+    const filename = try std.fmt.allocPrint(allocator, "rawenv-{s}.service", .{name});
+    defer allocator.free(filename);
+    return std.fs.path.join(allocator, &.{ home, ".config", "systemd", "user", filename });
+}
+
+/// Stop a service on Linux via systemd --user, then remove its unit file so it
+/// won't auto-restart on the next `daemon-reload`/login. Mirrors macOS, where
+/// `stopServiceMacOS` unloads and unlinks the launchd plist. `systemctl stop`
+/// sends SIGTERM and (per the unit's TimeoutStopSec=10) escalates to SIGKILL
+/// after 10s.
+pub fn stopServiceLinux(allocator: std.mem.Allocator, name: []const u8) !void {
+    const svc_name = try std.fmt.allocPrint(allocator, "rawenv-{s}", .{name});
+    defer allocator.free(svc_name);
+
+    _ = runCommand(allocator, &.{ "systemctl", "--user", "stop", svc_name }) catch {};
+    // Disable so it is not pulled in by default.target on next login.
+    _ = runCommand(allocator, &.{ "systemctl", "--user", "disable", svc_name }) catch {};
+
+    // Remove the unit file so the service definition no longer exists.
+    const home = getHome() orelse return;
+    const unit_path = try getSystemdUnitPath(allocator, home, name);
+    defer allocator.free(unit_path);
+    if (comptime builtin.os.tag != .windows) {
+        const uz = try std.fmt.allocPrintSentinel(allocator, "{s}", .{unit_path}, 0);
+        defer allocator.free(uz);
+        _ = std.c.unlink(uz);
+    }
+
+    _ = runCommand(allocator, &.{ "systemctl", "--user", "daemon-reload" }) catch {};
 }
 
 /// Start a service (platform-dispatched). Data is stored in an isolated,
@@ -559,14 +606,15 @@ pub fn startService(allocator: std.mem.Allocator, project: []const u8, name: []c
     try stdout.writeAll(" started\n");
 }
 
-/// Stop a service (platform-dispatched)
+/// Stop a service (platform-dispatched). On both platforms the OS service
+/// manager is asked to terminate the process (SIGTERM) and the rawenv-managed
+/// unit (launchd plist / systemd unit) is removed so the service will not
+/// auto-restart. Per-service status is reported on stdout.
 pub fn stopService(allocator: std.mem.Allocator, name: []const u8, stdout: anytype) !void {
     if (comptime builtin.os.tag == .macos) {
         try stopServiceMacOS(allocator, name);
     } else if (comptime builtin.os.tag == .linux) {
-        const svc_name = try std.fmt.allocPrint(allocator, "rawenv-{s}", .{name});
-        defer allocator.free(svc_name);
-        _ = runCommand(allocator, &.{ "systemctl", "--user", "stop", svc_name }) catch {};
+        try stopServiceLinux(allocator, name);
     }
     try stdout.writeAll("  ■ ");
     try stdout.writeAll(name);
@@ -948,13 +996,22 @@ pub fn down(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !
         return;
     }
 
+    try stdout.writeAll("Stopping services...\n");
+
     // Reverse of start order: stop a service before its dependencies go down.
+    var stopped: usize = 0;
     var i: usize = order.len;
     while (i > 0) {
         i -= 1;
         const svc = cfg.services[order[i]];
-        stopService(allocator, svc.key, stdout) catch {};
+        stopService(allocator, svc.key, stdout) catch {
+            try stdout.print("  \u{2717} {s} failed to stop\n", .{svc.key});
+            continue;
+        };
+        stopped += 1;
     }
+
+    try stdout.print("Stopped {d} of {d} service(s).\n", .{ stopped, cfg.services.len });
 }
 
 /// Base service type for an instance key ("redis.cache" -> "redis").

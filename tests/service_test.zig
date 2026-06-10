@@ -519,3 +519,71 @@ test "startOrder on empty services returns empty order" {
     defer testing.allocator.free(order);
     try testing.expectEqual(0, order.len);
 }
+
+test "generateLaunchdPlist sets ExitTimeOut to 10 (SIGKILL after SIGTERM)" {
+    const args = [_][]const u8{};
+    const plist = try service.generateLaunchdPlist(testing.allocator, "redis", "/store/bin/redis-server", &args, "/tmp/redis");
+    defer testing.allocator.free(plist);
+    try testing.expect(std.mem.indexOf(u8, plist, "<key>ExitTimeOut</key>") != null);
+    try testing.expect(std.mem.indexOf(u8, plist, "<integer>10</integer>") != null);
+}
+
+test "generateSystemdUnit sets a bounded graceful stop window" {
+    const args = [_][]const u8{ "-D", "/tmp/pg" };
+    const unit = try service.generateSystemdUnit(testing.allocator, "postgres", "/store/bin/postgres", &args, "/tmp/pg");
+    defer testing.allocator.free(unit);
+    // SIGTERM first, then SIGKILL after 10s.
+    try testing.expect(std.mem.indexOf(u8, unit, "KillSignal=SIGTERM") != null);
+    try testing.expect(std.mem.indexOf(u8, unit, "TimeoutStopSec=10") != null);
+    // Extra args are appended to ExecStart.
+    try testing.expect(std.mem.indexOf(u8, unit, "ExecStart=/store/bin/postgres -D /tmp/pg") != null);
+    try testing.expect(std.mem.indexOf(u8, unit, "Description=rawenv postgres") != null);
+    try testing.expect(std.mem.indexOf(u8, unit, "WantedBy=default.target") != null);
+}
+
+test "generateSystemdUnit without extra args has a clean ExecStart" {
+    const args = [_][]const u8{};
+    const unit = try service.generateSystemdUnit(testing.allocator, "node", "/store/bin/node", &args, "/tmp/node");
+    defer testing.allocator.free(unit);
+    try testing.expect(std.mem.indexOf(u8, unit, "ExecStart=/store/bin/node\n") != null);
+}
+
+test "down on empty services reports nothing to stop" {
+    const config = @import("config");
+    var cfg = config.Config{
+        .project_name = "test",
+        .runtimes = &.{},
+        .services = &.{},
+    };
+    _ = &cfg;
+
+    var buf: std.ArrayList(u8) = .empty;
+    defer buf.deinit(testing.allocator);
+    var aw: std.Io.Writer.Allocating = .fromArrayList(testing.allocator, &buf);
+    try service.down(testing.allocator, cfg, &aw.writer);
+    buf = aw.toArrayList();
+    try testing.expect(std.mem.indexOf(u8, buf.items, "No services configured.") != null);
+}
+
+test "down on circular dependency surfaces the error" {
+    const config = @import("config");
+    var services = [_]config.Config.Entry{
+        .{ .key = "a", .value = "1", .service_type = "a", .depends_on = &.{"b"} },
+        .{ .key = "b", .value = "1", .service_type = "b", .depends_on = &.{"a"} },
+    };
+    var cfg = config.Config{
+        .project_name = "test",
+        .runtimes = &.{},
+        .services = &services,
+    };
+    _ = &cfg;
+
+    var buf: std.ArrayList(u8) = .empty;
+    defer buf.deinit(testing.allocator);
+    var aw: std.Io.Writer.Allocating = .fromArrayList(testing.allocator, &buf);
+    try testing.expectError(
+        service.DependencyError.CircularDependency,
+        service.down(testing.allocator, cfg, &aw.writer),
+    );
+    buf = aw.toArrayList();
+}
