@@ -1,0 +1,43 @@
+# Real-world docker-compose fixture used by E2E-023.
+# A typical web-app stack: a custom-built app container plus three managed
+# datastores (Postgres, Redis, Meilisearch). The custom build has no rawenv
+# equivalent and must be skipped with a warning; networks and volumes are
+# unsupported and must also warn — without failing the import.
+version: "3.8"
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://db:5432/app
+    depends_on:
+      - db
+      - cache
+  db:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  cache:
+    image: redis:7
+    ports:
+      - "6379:6379"
+  search:
+    image: getmeili/meilisearch:1.6
+    ports:
+      - "7700:7700"
+    environment:
+      MEILI_MASTER_KEY: masterkey
+    depends_on:
+      - db
+networks:
+  default:
+    driver: bridge
+volumes:
+  pgdata:
