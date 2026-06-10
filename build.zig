@@ -528,6 +528,21 @@ pub fn build(b: *std.Build) void {
     run_add_test.step.dependOn(&exe.step);
     integration_step.dependOn(&run_add_test.step);
 
+    // Per-stack full lifecycle E2E (node, php, python, rust, go, ruby).
+    const integration_e2e = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/e2e_lifecycle_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_e2e.root_module.link_libc = true;
+    const run_e2e_test = b.addRunArtifact(integration_e2e);
+    // Build + install the binary, then point the test at the freshly-built artifact.
+    run_e2e_test.step.dependOn(b.getInstallStep());
+    run_e2e_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_e2e_test.step);
+
     // Cross-compilation targets
     const cross_targets: []const struct { []const u8, std.Target.Cpu.Arch, std.Target.Os.Tag } = &.{
         .{ "aarch64-macos", .aarch64, .macos },

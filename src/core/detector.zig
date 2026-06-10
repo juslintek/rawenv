@@ -55,6 +55,11 @@ pub fn detect(allocator: std.mem.Allocator, dir: std.Io.Dir) !DetectionResult {
         try runtimes.append(allocator, .{ .key = "python", .value = "3.12" });
     }
 
+    if (readFile(allocator, dir, "Gemfile")) |data| {
+        defer allocator.free(data);
+        try runtimes.append(allocator, .{ .key = "ruby", .value = "3.3" });
+    }
+
     if (readFile(allocator, dir, "docker-compose.yml")) |data| {
         defer allocator.free(data);
         parseDockerComposeServices(allocator, data, &services) catch {};
