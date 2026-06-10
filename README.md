@@ -18,23 +18,27 @@ Download the latest release binary for your platform into `~/.rawenv/bin`.
 
 ```bash
 mkdir -p "$HOME/.rawenv/bin"
-case "$(uname -m)" in arm64|aarch64) A=aarch64 ;; *) A=x86_64 ;; esac
-curl -fsSL "https://github.com/juslintek/rawenv/releases/latest/download/rawenv-${A}-macos.tar.gz" \
-  | tar -xz -C "$HOME/.rawenv/bin"
+case "$(uname -m)" in arm64|aarch64) A=arm64 ;; *) A=x64 ;; esac
+curl -fsSL "https://github.com/juslintek/rawenv/releases/latest/download/rawenv-darwin-${A}" \
+  -o "$HOME/.rawenv/bin/rawenv"
+chmod +x "$HOME/.rawenv/bin/rawenv"
 ```
 
 **Linux** (auto-detects arm64 vs x86_64):
 
 ```bash
 mkdir -p "$HOME/.rawenv/bin"
-case "$(uname -m)" in arm64|aarch64) A=aarch64 ;; *) A=x86_64 ;; esac
-curl -fsSL "https://github.com/juslintek/rawenv/releases/latest/download/rawenv-${A}-linux.tar.gz" \
-  | tar -xz -C "$HOME/.rawenv/bin"
+case "$(uname -m)" in arm64|aarch64) A=arm64 ;; *) A=x64 ;; esac
+curl -fsSL "https://github.com/juslintek/rawenv/releases/latest/download/rawenv-linux-${A}" \
+  -o "$HOME/.rawenv/bin/rawenv"
+chmod +x "$HOME/.rawenv/bin/rawenv"
 ```
 
-For **Windows**, download `rawenv-x86_64-windows.zip` from the
-[releases page](https://github.com/juslintek/rawenv/releases/latest) and extract `rawenv.exe`.
-macOS users who prefer a packaged app can grab `rawenv-macos.dmg` from the same page.
+Prefer a one-liner? `curl -fsSL https://raw.githubusercontent.com/juslintek/rawenv/main/install.sh | sh`
+detects your OS and architecture automatically.
+
+For **Windows**, download `rawenv-windows-x64.exe` from the
+[releases page](https://github.com/juslintek/rawenv/releases/latest) and rename it to `rawenv.exe`.
 
 Add the binary to your `PATH` (add this line to `~/.zshrc` or `~/.bashrc` to make it permanent):
 
