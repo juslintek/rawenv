@@ -67,7 +67,115 @@ pub const ServiceInfo = struct {
     pid: ?u32,
     status: ServiceStatus,
     data_dir: []const u8,
+    health: config.Config.HealthCheck = .{},
 };
+/// Outcome of a readiness probe for a single service.
+pub const HealthResult = enum {
+    /// Service accepted a connection (TCP) or returned HTTP 200 within timeout.
+    ready,
+    /// Service did not become ready before the configured timeout elapsed.
+    timeout,
+    /// Probe could not run (e.g. no port to probe).
+    failed,
+    /// Health checking was explicitly disabled for the service.
+    skipped,
+};
+
+/// Sleep for `ms` milliseconds using poll(2) with no descriptors. Avoids
+/// depending on the reworked std time/Io APIs while staying POSIX-portable.
+fn sleepMs(ms: c_int) void {
+    if (comptime builtin.os.tag == .windows) return;
+    var fds: [0]std.c.pollfd = .{};
+    _ = std.c.poll(&fds, 0, ms);
+}
+
+/// Attempt a single blocking TCP connect to 127.0.0.1:port.
+/// Returns true if a connection is accepted (i.e. something is listening).
+pub fn tcpProbe(port: u16) bool {
+    if (port == 0) return false;
+    if (comptime builtin.os.tag == .windows) return false;
+    const fd = std.c.socket(std.c.AF.INET, std.c.SOCK.STREAM, 0);
+    if (fd < 0) return false;
+    defer _ = std.c.close(fd);
+    var sa: std.c.sockaddr.in = .{
+        .family = std.c.AF.INET,
+        .port = std.mem.nativeToBig(u16, port),
+        .addr = std.mem.nativeToBig(u32, 0x7f00_0001), // 127.0.0.1
+    };
+    return std.c.connect(fd, @ptrCast(&sa), @sizeOf(std.c.sockaddr.in)) == 0;
+}
+
+/// Attempt a single HTTP GET against 127.0.0.1:port and report whether the
+/// response status line indicates 200. Uses a blocking connect/send/recv cycle.
+pub fn httpProbe(allocator: std.mem.Allocator, port: u16, path: []const u8) bool {
+    if (port == 0) return false;
+    if (comptime builtin.os.tag == .windows) return false;
+    const fd = std.c.socket(std.c.AF.INET, std.c.SOCK.STREAM, 0);
+    if (fd < 0) return false;
+    defer _ = std.c.close(fd);
+    var sa: std.c.sockaddr.in = .{
+        .family = std.c.AF.INET,
+        .port = std.mem.nativeToBig(u16, port),
+        .addr = std.mem.nativeToBig(u32, 0x7f00_0001),
+    };
+    if (std.c.connect(fd, @ptrCast(&sa), @sizeOf(std.c.sockaddr.in)) != 0) return false;
+
+    const req = std.fmt.allocPrint(allocator, "GET {s} HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", .{path}) catch return false;
+    defer allocator.free(req);
+
+    var sent: usize = 0;
+    while (sent < req.len) {
+        const n = std.c.send(fd, @ptrCast(req.ptr + sent), req.len - sent, 0);
+        if (n <= 0) return false;
+        sent += @intCast(n);
+    }
+
+    var buf: [512]u8 = undefined;
+    const got = std.c.recv(fd, &buf, buf.len, 0);
+    if (got <= 0) return false;
+    const resp = buf[0..@intCast(got)];
+    // Status line looks like "HTTP/1.1 200 OK"; a leading " 200" is sufficient.
+    return std.mem.indexOf(u8, resp, " 200") != null;
+}
+
+/// Pick a default probe strategy for a service that did not set one explicitly.
+/// Web servers get HTTP probes; everything else (datastores, queues) gets TCP.
+pub fn defaultHealthKind(base: []const u8) config.Config.HealthCheck.Kind {
+    const http_services = [_][]const u8{ "node", "nginx", "caddy", "apache", "httpd", "php", "php-fpm", "web", "http", "deno", "bun" };
+    for (http_services) |h| {
+        if (std.mem.eql(u8, base, h)) return .http;
+    }
+    return .tcp;
+}
+
+/// Poll a service until it becomes ready or `timeout_secs` elapses.
+/// `kind` should already be resolved from `.auto` by the caller, but `.auto`
+/// is treated as TCP defensively. Polls every 200ms.
+pub fn waitForReady(
+    allocator: std.mem.Allocator,
+    kind: config.Config.HealthCheck.Kind,
+    port: u16,
+    path: []const u8,
+    timeout_secs: u32,
+) HealthResult {
+    if (kind == .none) return .skipped;
+    if (port == 0) return .failed;
+
+    const poll_ms: u32 = 200;
+    var attempts: u32 = (timeout_secs * 1000) / poll_ms;
+    if (attempts == 0) attempts = 1;
+
+    var i: u32 = 0;
+    while (i < attempts) : (i += 1) {
+        const ok = switch (kind) {
+            .http => httpProbe(allocator, port, path),
+            else => tcpProbe(port), // tcp and auto
+        };
+        if (ok) return .ready;
+        sleepMs(@intCast(poll_ms));
+    }
+    return .timeout;
+}
 
 /// Get HOME directory path
 pub fn getHome() ?[]const u8 {
@@ -398,6 +506,7 @@ pub fn listServices(allocator: std.mem.Allocator, cfg: config.Config) ![]Service
             .pid = null,
             .status = .stopped,
             .data_dir = data_dir,
+            .health = svc.health,
         });
     }
     return list_arr.toOwnedSlice(allocator);
@@ -471,10 +580,55 @@ pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !vo
         try stdout.writeAll(" activated\n");
     }
 
-    // Start services
-    for (cfg.services) |svc| {
-        const full_version = resolver.resolveVersion(svc.key, svc.value);
-        try startService(allocator, cfg.project_name, svc.key, full_version, stdout);
+    // Start services, then gate on readiness. Using listServices gives us the
+    // resolved (non-conflicting) port and per-service health policy.
+    const services = try listServices(allocator, cfg);
+    defer freeServices(allocator, services);
+    for (services) |svc| {
+        // Skip services whose runtime isn't installed yet — mirrors the runtime
+        // behavior above and avoids blocking on a readiness gate that can never
+        // pass.
+        const base = baseTypeOf(svc.name);
+        const store_path = try buildStorePath(allocator, home, base, svc.version);
+        defer allocator.free(store_path);
+        if (!accessPath(allocator, store_path)) {
+            try stdout.print("  {s}@{s} — not installed, skipping\n", .{ svc.name, svc.version });
+            continue;
+        }
+
+        try startService(allocator, cfg.project_name, svc.name, svc.version, stdout);
+        try gateReadiness(allocator, svc, stdout);
+    }
+}
+
+/// Base service type for an instance key ("redis.cache" -> "redis").
+fn baseTypeOf(name: []const u8) []const u8 {
+    const dot = std.mem.indexOfScalar(u8, name, '.');
+    return if (dot) |d| name[0..d] else name;
+}
+
+/// Resolve a service's probe strategy, poll until ready, print a clear status
+/// line, and stop the service if it never became ready (so nothing dangles).
+fn gateReadiness(allocator: std.mem.Allocator, svc: ServiceInfo, stdout: anytype) !void {
+    var kind = svc.health.kind;
+    const base = baseTypeOf(svc.name);
+    if (kind == .auto) kind = defaultHealthKind(base);
+    if (kind == .none) return; // readiness gating disabled for this service
+
+    const probe_port = if (svc.health.port != 0) svc.health.port else svc.port;
+    const timeout = svc.health.timeout_secs;
+    const result = waitForReady(allocator, kind, probe_port, svc.health.path, timeout);
+
+    switch (result) {
+        .ready => try stdout.print("    \u{2713} {s} (port {d}) ready\n", .{ svc.name, probe_port }),
+        .timeout => try stdout.print("    \u{2717} {s} (port {d}) failed: not ready after {d}s ({s} probe)\n", .{ svc.name, probe_port, timeout, @tagName(kind) }),
+        .failed => try stdout.print("    \u{2717} {s} failed: no port to probe for readiness\n", .{svc.name}),
+        .skipped => {},
+    }
+
+    if (result != .ready) {
+        // Surface failure and tear down so we don't leave a half-started service.
+        try stopService(allocator, svc.name, stdout);
     }
 }
 
