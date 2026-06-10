@@ -628,6 +628,21 @@ pub fn build(b: *std.Build) void {
     run_combos_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
     integration_step.dependOn(&run_combos_test.step);
 
+    // Multi-project isolation E2E (two postgres projects don't share data;
+    // each destroys independently; shared store binaries are never removed).
+    const integration_isolation = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/multi_project_isolation_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_isolation.root_module.link_libc = true;
+    const run_isolation_test = b.addRunArtifact(integration_isolation);
+    run_isolation_test.step.dependOn(b.getInstallStep());
+    run_isolation_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_isolation_test.step);
+
     // Service migration E2E (docker-compose import → services ls --json).
     const integration_migration = b.addTest(.{
         .root_module = b.createModule(.{
