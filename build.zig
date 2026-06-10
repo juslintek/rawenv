@@ -628,6 +628,22 @@ pub fn build(b: *std.Build) void {
     run_combos_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
     integration_step.dependOn(&run_combos_test.step);
 
+    // Per-service install→start→verify→stop→cleanup lifecycle E2E (E2E-107):
+    // node, redis, meilisearch, postgres, bun, php, mariadb, python — each
+    // exercised individually with no-side-effect teardown invariants.
+    const integration_svc_lifecycle = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/service_lifecycle_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_svc_lifecycle.root_module.link_libc = true;
+    const run_svc_lifecycle_test = b.addRunArtifact(integration_svc_lifecycle);
+    run_svc_lifecycle_test.step.dependOn(b.getInstallStep());
+    run_svc_lifecycle_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_svc_lifecycle_test.step);
+
     // Service migration E2E (docker-compose import → services ls --json).
     const integration_migration = b.addTest(.{
         .root_module = b.createModule(.{
