@@ -356,3 +356,53 @@ test "writeRedisConf writes an idempotent config into a temp data dir" {
     const dz = std.fmt.bufPrintZ(&pathz, "{s}", .{data_dir}) catch return;
     _ = std.c.rmdir(dz.ptr);
 }
+
+// --- rawenv status helpers (CLI-019) ---------------------------------------
+
+test "portConflictsWith detects duplicate ports" {
+    const infos = [_]service.ServiceInfo{
+        .{ .name = "a", .version = "1", .port = 5432, .pid = null, .status = .stopped, .data_dir = "" },
+        .{ .name = "b", .version = "1", .port = 5432, .pid = null, .status = .stopped, .data_dir = "" },
+        .{ .name = "c", .version = "1", .port = 6379, .pid = null, .status = .stopped, .data_dir = "" },
+    };
+    try testing.expect(service.portConflictsWith(&infos, 0));
+    try testing.expect(service.portConflictsWith(&infos, 1));
+    try testing.expect(!service.portConflictsWith(&infos, 2));
+    try testing.expect(service.anyPortConflict(&infos));
+}
+
+test "anyPortConflict false when all ports distinct" {
+    const infos = [_]service.ServiceInfo{
+        .{ .name = "a", .version = "1", .port = 5432, .pid = null, .status = .stopped, .data_dir = "" },
+        .{ .name = "b", .version = "1", .port = 6379, .pid = null, .status = .stopped, .data_dir = "" },
+    };
+    try testing.expect(!service.anyPortConflict(&infos));
+}
+
+test "port 0 never counts as a conflict" {
+    const infos = [_]service.ServiceInfo{
+        .{ .name = "a", .version = "1", .port = 0, .pid = null, .status = .stopped, .data_dir = "" },
+        .{ .name = "b", .version = "1", .port = 0, .pid = null, .status = .stopped, .data_dir = "" },
+    };
+    try testing.expect(!service.portConflictsWith(&infos, 0));
+    try testing.expect(!service.anyPortConflict(&infos));
+}
+
+test "isStale false for stopped services and zero ports" {
+    try testing.expect(!service.isStale(.stopped, 5432));
+    try testing.expect(!service.isStale(.running, 0));
+    // A running service with nothing listening on a (very likely free) high
+    // port is considered stale.
+    try testing.expect(service.isStale(.running, 49251));
+}
+
+test "getServiceStatus returns stopped for unknown service" {
+    // Nothing named this is registered with launchd/systemd, so status is stopped.
+    const st = service.getServiceStatus(testing.allocator, "rawenv-status-test-nonexistent");
+    try testing.expect(st == .stopped);
+}
+
+test "baseTypeOf strips instance suffix" {
+    try testing.expectEqualStrings("postgres", service.baseTypeOf("postgres.primary"));
+    try testing.expectEqualStrings("redis", service.baseTypeOf("redis"));
+}
