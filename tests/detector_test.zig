@@ -66,6 +66,52 @@ test "detect .env with DATABASE_URL postgres" {
     try testing.expectEqualStrings("redis", result.services[1].key);
 }
 
+test "detect falls back to .env.example when .env missing" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, ".env");
+    defer cleanFile(dir, ".env.example");
+
+    // Ensure no real .env from a prior run leaks into this test.
+    cleanFile(dir, ".env");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = ".env.example",
+        .data = "DATABASE_URL=mysql://user:pass@localhost:3306/db\nREDIS_HOST=localhost\n",
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(2, result.services.len);
+    try testing.expectEqualStrings("mysql", result.services[0].key);
+    try testing.expectEqualStrings("redis", result.services[1].key);
+}
+
+test "detect prefers .env over .env.example when both exist" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, ".env");
+    defer cleanFile(dir, ".env.example");
+
+    // .env points at postgres; .env.example points at mysql. The real .env
+    // must win, so we expect postgresql and no mysql in the results.
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = ".env",
+        .data = "DATABASE_URL=postgres://user:pass@localhost:5432/db\n",
+    });
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = ".env.example",
+        .data = "DATABASE_URL=mysql://user:pass@localhost:3306/db\n",
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.services.len);
+    try testing.expectEqualStrings("postgresql", result.services[0].key);
+}
+
 test "detect docker-compose.yml images" {
     var dir = try makeTmpDir();
     defer dir.close(std.testing.io);

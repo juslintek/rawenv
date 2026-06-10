@@ -35,7 +35,12 @@ pub fn detect(allocator: std.mem.Allocator, dir: std.Io.Dir) !DetectionResult {
         });
     }
 
+    // Prefer .env, but fall back to .env.example when it's absent. Most
+    // projects commit .env.example while .gitignore-ing the real .env.
     if (readFile(allocator, dir, ".env")) |data| {
+        defer allocator.free(data);
+        parseEnvServices(allocator, data, &services) catch {};
+    } else if (readFile(allocator, dir, ".env.example")) |data| {
         defer allocator.free(data);
         parseEnvServices(allocator, data, &services) catch {};
     }
