@@ -274,6 +274,52 @@ fn runAiOneShot(allocator: std.mem.Allocator, stdout: anytype, question: []const
     return commands.ExitCode.ok;
 }
 
+/// Create a directory (relative to CWD) if it does not already exist.
+/// Returns true when the directory exists afterwards, false on a real failure.
+fn ensureDir(path: [*:0]const u8) bool {
+    if (comptime @import("builtin").os.tag == .windows) return false;
+    const rc = std.c.mkdir(path, 0o755);
+    if (rc == 0) return true;
+    // Tolerate "already exists"; reject any other error.
+    return std.posix.errno(rc) == .EXIST;
+}
+
+/// Write `content` to `path` (relative to CWD), truncating any existing file.
+/// The TRUNC flag guarantees a clean overwrite on re-runs — generated files
+/// never accumulate duplicate content.
+fn writeProjectFile(path: []const u8, content: []const u8) bool {
+    if (comptime @import("builtin").os.tag == .windows) return false;
+    const fd = std.posix.openat(
+        std.posix.AT.FDCWD,
+        path,
+        .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true },
+        0o644,
+    ) catch return false;
+    defer _ = std.c.close(fd);
+    var written: usize = 0;
+    while (written < content.len) {
+        const n = std.c.write(fd, content.ptr + written, content.len - written);
+        if (n < 0) return false;
+        written += @intCast(n);
+    }
+    return true;
+}
+
+/// Best-effort probe for a tool on PATH (used only for advisory warnings).
+/// Scans $PATH directly rather than spawning, so it works with any environment.
+fn toolAvailable(allocator: std.mem.Allocator, name: []const u8) bool {
+    if (comptime @import("builtin").os.tag == .windows) return false;
+    const path_env = std.c.getenv("PATH") orelse return false;
+    const path_slice = std.mem.sliceTo(path_env, 0);
+    var it = std.mem.tokenizeScalar(u8, path_slice, ':');
+    while (it.next()) |dir| {
+        const full = std.fmt.allocPrintSentinel(allocator, "{s}/{s}", .{ dir, name }, 0) catch continue;
+        defer allocator.free(full);
+        if (std.c.access(full, 1) == 0) return true; // X_OK
+    }
+    return false;
+}
+
 fn handleDeployGenerate(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !u8 {
     const toml = blk: {
         if (comptime @import("builtin").os.tag == .windows) {
@@ -319,8 +365,67 @@ fn handleDeployGenerate(allocator: std.mem.Allocator, stdout: anytype, json_mode
     const containerfile = try deploy.image.generateContainerfile(allocator, cfg);
     defer allocator.free(containerfile);
 
-    try stdout.writeAll("Generated deployment files:\n");
-    try stdout.writeAll("  main.tf\n  variables.tf\n  outputs.tf\n  playbook.yml\n  Containerfile\n");
+    // Persist the generated IaC to disk. Terraform goes under terraform/,
+    // the Ansible playbook under ansible/, and the Containerfile lands in the
+    // project root. Each file is written with O_TRUNC so re-running
+    // `deploy generate` overwrites cleanly — no duplicate resources accumulate.
+    if (!json_mode) {
+        if (!ensureDir("terraform")) {
+            try stdout.writeAll("Error: failed to create the terraform/ directory.\n");
+            return commands.ExitCode.system;
+        }
+        if (!ensureDir("ansible")) {
+            try stdout.writeAll("Error: failed to create the ansible/ directory.\n");
+            return commands.ExitCode.system;
+        }
+
+        if (!writeProjectFile("terraform/main.tf", main_tf)) {
+            try stdout.writeAll("Error: failed to write terraform/main.tf.\n");
+            return commands.ExitCode.system;
+        }
+        // variables.tf / outputs.tf are only written when they carry content;
+        // the current generator inlines variables into main.tf, so empty
+        // placeholder files are skipped to keep terraform/ clean.
+        if (vars_tf.len > 0) {
+            if (!writeProjectFile("terraform/variables.tf", vars_tf)) {
+                try stdout.writeAll("Error: failed to write terraform/variables.tf.\n");
+                return commands.ExitCode.system;
+            }
+        }
+        if (outputs_tf.len > 0) {
+            if (!writeProjectFile("terraform/outputs.tf", outputs_tf)) {
+                try stdout.writeAll("Error: failed to write terraform/outputs.tf.\n");
+                return commands.ExitCode.system;
+            }
+        }
+        if (!writeProjectFile("ansible/playbook.yml", playbook)) {
+            try stdout.writeAll("Error: failed to write ansible/playbook.yml.\n");
+            return commands.ExitCode.system;
+        }
+        if (!writeProjectFile("Containerfile", containerfile)) {
+            try stdout.writeAll("Error: failed to write Containerfile.\n");
+            return commands.ExitCode.system;
+        }
+
+        try stdout.writeAll("Generated deployment files:\n");
+        try stdout.writeAll("  terraform/main.tf\n");
+        if (vars_tf.len > 0) try stdout.writeAll("  terraform/variables.tf\n");
+        if (outputs_tf.len > 0) try stdout.writeAll("  terraform/outputs.tf\n");
+        try stdout.writeAll("  ansible/playbook.yml\n");
+        try stdout.writeAll("  Containerfile\n");
+
+        // Advisory warnings: the files are always generated, but flag any tool
+        // that isn't installed so the user knows what they'll need to apply them.
+        if (!toolAvailable(allocator, "terraform")) {
+            try stdout.writeAll("  \u{26A0} terraform not found on PATH — install it to apply terraform/main.tf.\n");
+        }
+        if (!toolAvailable(allocator, "ansible-playbook")) {
+            try stdout.writeAll("  \u{26A0} ansible not found on PATH — install it to run ansible/playbook.yml.\n");
+        }
+        if (!toolAvailable(allocator, "docker") and !toolAvailable(allocator, "podman")) {
+            try stdout.writeAll("  \u{26A0} docker/podman not found on PATH — install one to build the Containerfile.\n");
+        }
+    }
 
     if (json_mode) {
         // Overwrite with JSON (output after human text is fine, GUI reads last line)
