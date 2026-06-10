@@ -70,6 +70,11 @@ const image_table = [_]ImageMap{
     .{ .prefix = "mongo", .pkg = "mongodb", .default_version = "7" },
     .{ .prefix = "mongodb", .pkg = "mongodb", .default_version = "7" },
     .{ .prefix = "meilisearch", .pkg = "meilisearch", .default_version = "1" },
+    // Microsoft SQL Server ships under several image names; Laravel/dev stacks
+    // most often pull the lightweight `azure-sql-edge` build. All map to mssql.
+    .{ .prefix = "azure-sql-edge", .pkg = "mssql", .default_version = "2022" },
+    .{ .prefix = "mssql", .pkg = "mssql", .default_version = "2022" },
+    .{ .prefix = "sqlserver", .pkg = "mssql", .default_version = "2022" },
 };
 
 /// Import a compose document and produce an equivalent rawenv.toml.
@@ -317,6 +322,15 @@ fn mapImage(image: []const u8) ?ImageMap {
             const plen = entry.prefix.len;
             if (short.len == plen or short[plen] == ':') return entry;
         }
+    }
+    // SQL Server is also published as `mcr.microsoft.com/mssql/server`, whose
+    // basename ("server") matches none of the prefixes above. Recognise the
+    // family by inspecting the full image reference.
+    if (std.mem.indexOf(u8, image, "mssql") != null or
+        std.mem.indexOf(u8, image, "sql-server") != null or
+        std.mem.indexOf(u8, image, "azure-sql-edge") != null)
+    {
+        return .{ .prefix = "mssql", .pkg = "mssql", .default_version = "2022" };
     }
     return null;
 }

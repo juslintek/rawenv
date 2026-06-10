@@ -1,0 +1,37 @@
+# Laravel Sail-style docker-compose fixture used by E2E-102.
+# Sail quotes every image value (`image: 'mysql:8.0'`); the importer must strip
+# the quotes and still map all backing datastores. The application container is
+# a custom Sail build (no rawenv equivalent) and must be skipped with a warning
+# without failing the import.
+services:
+    laravel.test:
+        build:
+            context: ./vendor/laravel/sail/runtimes/8.3
+            dockerfile: Dockerfile
+        ports:
+            - '${APP_PORT:-80}:80'
+        depends_on:
+            - mysql
+            - redis
+            - meilisearch
+    mysql:
+        image: 'mysql:8.0'
+        ports:
+            - '3306:3306'
+        environment:
+            MYSQL_ROOT_PASSWORD: 'secret'
+            MYSQL_DATABASE: 'sail'
+    redis:
+        image: 'redis:alpine'
+        ports:
+            - '6379:6379'
+    meilisearch:
+        image: 'getmeili/meilisearch:latest'
+        ports:
+            - '7700:7700'
+networks:
+    sail:
+        driver: bridge
+volumes:
+    sail-mysql:
+        driver: local

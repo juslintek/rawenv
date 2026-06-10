@@ -642,6 +642,21 @@ pub fn build(b: *std.Build) void {
     run_migration_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
     integration_step.dependOn(&run_migration_test.step);
 
+    // Compose import E2E (real-world fixtures: Sail quoted images, azure-sql-edge
+    // → mssql, depends_on → connections, port-mapping host ports).
+    const integration_compose_import = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/compose_import_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_compose_import.root_module.link_libc = true;
+    const run_compose_import_test = b.addRunArtifact(integration_compose_import);
+    run_compose_import_test.step.dependOn(b.getInstallStep());
+    run_compose_import_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_compose_import_test.step);
+
     // Deploy generate E2E (writes terraform/ansible/Containerfile + clean re-run).
     const integration_deploy = b.addTest(.{
         .root_module = b.createModule(.{
