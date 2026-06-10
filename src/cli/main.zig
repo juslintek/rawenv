@@ -37,6 +37,7 @@ const help =
     \\
     \\Commands:
     \\  init             Detect project and generate rawenv.toml
+    \\  import <file>    Import a docker-compose.yml into rawenv.toml
     \\  detect           Detect runtimes/services (use --json); writes no files
     \\  add <pkg>@<ver>  Install a package (e.g. rawenv add node@22)
     \\  up               Activate all configured runtimes
@@ -120,6 +121,14 @@ fn run(init: std.process.Init) !u8 {
         }
         if (std.mem.eql(u8, arg, "init")) {
             return try commands.runInit(allocator, stdout);
+        }
+        if (std.mem.eql(u8, arg, "import")) {
+            if (i + 1 < args.len) {
+                return try commands.runImport(allocator, stdout, args[i + 1]);
+            } else {
+                try stdout.writeAll("Error: missing file. Usage: rawenv import <docker-compose.yml>\n");
+                return commands.ExitCode.user;
+            }
         }
         if (std.mem.eql(u8, arg, "detect")) {
             return try commands.runDetect(allocator, stdout, json_mode);

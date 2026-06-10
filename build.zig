@@ -18,6 +18,13 @@ pub fn build(b: *std.Build) void {
     });
     config_mod.link_libc = true;
 
+    const compose_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/compose.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    compose_mod.link_libc = true;
+
     const detector_mod = b.createModule(.{
         .root_source_file = b.path("src/core/detector.zig"),
         .target = target,
@@ -277,6 +284,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "cell", .module = cell_mod },
             .{ .name = "discover", .module = discover_mod },
             .{ .name = "macos", .module = macos_mod },
+            .{ .name = "compose", .module = compose_mod },
         },
     });
     exe_mod.link_libc = true;
@@ -325,6 +333,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "cell", .module = cell_mod },
                 .{ .name = "discover", .module = discover_mod },
                 .{ .name = "macos", .module = macos_mod },
+                .{ .name = "compose", .module = compose_mod },
             },
         }),
     });
@@ -355,6 +364,20 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(main_tests).step);
     test_step.dependOn(&b.addRunArtifact(tui_tests).step);
     test_step.dependOn(&b.addRunArtifact(snapshot_tests).step);
+
+    const compose_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/compose_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "compose", .module = compose_mod },
+                .{ .name = "config", .module = config_mod },
+            },
+        }),
+    });
+    compose_tests.root_module.link_libc = true;
+    test_step.dependOn(&b.addRunArtifact(compose_tests).step);
 
     const cells_tests = b.addTest(.{
         .root_module = b.createModule(.{

@@ -23,6 +23,14 @@ pub const Config = struct {
         pub const Kind = enum { auto, tcp, http, none };
     };
 
+    /// An environment variable for a service, configured via a
+    /// `[services.X.env]` table in rawenv.toml. Both fields borrow from the
+    /// parsed input; the outer array is owned and freed by `deinit`.
+    pub const EnvVar = struct {
+        name: []const u8,
+        value: []const u8,
+    };
+
     /// A service/runtime entry. For instances like [services.postgres.primary],
     /// `key` is the full instance id ("postgres.primary"), `service_type` is the
     /// base type ("postgres"), and `port` is an explicit override (0 = auto).
@@ -39,6 +47,10 @@ pub const Config = struct {
         /// elements are borrowed from the parsed input; the outer array is
         /// owned and freed by `deinit`.
         depends_on: []const []const u8 = &.{},
+        /// Environment variables for the service, configured via a
+        /// `[services.X.env]` table. The outer array is owned and freed by
+        /// `deinit`; the element strings borrow from the parsed input.
+        env: []const EnvVar = &.{},
 
         /// Base service type: the part before the first '.', or the whole key.
         pub fn baseType(self: Entry) []const u8 {
@@ -54,7 +66,7 @@ pub const ParseError = error{
     MissingProjectName,
 };
 
-const SectionKind = enum { none, project, runtimes, services, detect, runtime_item, service_item, service_health };
+const SectionKind = enum { none, project, runtimes, services, detect, runtime_item, service_item, service_health, service_env };
 
 pub fn parse(allocator: std.mem.Allocator, input: []const u8) !Config {
     var cfg = Config{};
@@ -64,6 +76,7 @@ pub fn parse(allocator: std.mem.Allocator, input: []const u8) !Config {
     errdefer {
         for (services.items) |svc| {
             if (svc.depends_on.len > 0) allocator.free(svc.depends_on);
+            if (svc.env.len > 0) allocator.free(svc.env);
         }
         services.deinit(allocator);
     }
@@ -96,6 +109,11 @@ pub fn parse(allocator: std.mem.Allocator, input: []const u8) !Config {
                     // already-declared service rather than defining a new one.
                     section = .service_health;
                     current_item_name = sub[0 .. sub.len - ".health".len];
+                } else if (std.mem.endsWith(u8, sub, ".env")) {
+                    // [services.X.env] attaches environment variables to an
+                    // already-declared service rather than defining a new one.
+                    section = .service_env;
+                    current_item_name = sub[0 .. sub.len - ".env".len];
                 } else {
                     section = .service_item;
                     current_item_name = sub;
@@ -193,6 +211,28 @@ pub fn parse(allocator: std.mem.Allocator, input: []const u8) !Config {
                     } else if (std.mem.eql(u8, key, "port")) {
                         t.health.port = std.fmt.parseInt(u16, val_raw, 10) catch return ParseError.InvalidToml;
                     }
+                }
+            },
+            .service_env => {
+                // [services.X.env]: KEY = "value". Append to the matching
+                // service (which must be declared above). Grows the env slice
+                // by one per entry — env tables are small, so the cost is
+                // negligible and ownership stays simple.
+                var target: ?*Config.Entry = null;
+                for (services.items) |*svc| {
+                    if (std.mem.eql(u8, svc.key, current_item_name)) {
+                        target = svc;
+                        break;
+                    }
+                }
+                if (target) |t| {
+                    const value = stripQuotes(val_raw) orelse val_raw;
+                    const old = t.env;
+                    const grown = try allocator.alloc(Config.EnvVar, old.len + 1);
+                    @memcpy(grown[0..old.len], old);
+                    grown[old.len] = .{ .name = key, .value = value };
+                    if (old.len > 0) allocator.free(old);
+                    t.env = grown;
                 }
             },
             .detect => {
@@ -294,6 +334,7 @@ pub fn generate(allocator: std.mem.Allocator, project_name: []const u8, runtimes
 pub fn deinit(allocator: std.mem.Allocator, cfg: *Config) void {
     for (cfg.services) |svc| {
         if (svc.depends_on.len > 0) allocator.free(svc.depends_on);
+        if (svc.env.len > 0) allocator.free(svc.env);
     }
     allocator.free(cfg.runtimes);
     allocator.free(cfg.services);
