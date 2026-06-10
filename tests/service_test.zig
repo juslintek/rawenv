@@ -131,7 +131,38 @@ test "listServices honors explicit port override" {
     try testing.expectEqual(12345, services[0].port);
 }
 
-// --- Health check / readiness gate tests (CLI-013) ---
+test "defaultPort maps every known service to its canonical port (never 0)" {
+    try testing.expectEqual(@as(u16, 5432), service.defaultPort("postgres"));
+    try testing.expectEqual(@as(u16, 5432), service.defaultPort("postgresql"));
+    try testing.expectEqual(@as(u16, 6379), service.defaultPort("redis"));
+    try testing.expectEqual(@as(u16, 3306), service.defaultPort("mysql"));
+    try testing.expectEqual(@as(u16, 3306), service.defaultPort("mariadb"));
+    try testing.expectEqual(@as(u16, 27017), service.defaultPort("mongodb"));
+    try testing.expectEqual(@as(u16, 7700), service.defaultPort("meilisearch"));
+    try testing.expectEqual(@as(u16, 1433), service.defaultPort("mssql"));
+    try testing.expectEqual(@as(u16, 3000), service.defaultPort("node"));
+}
+
+test "listServices auto-allocates a non-zero, non-1024 port for a portless service" {
+    const config = @import("config");
+    const input =
+        \\name = "qf020"
+        \\
+        \\[services.mysql]
+        \\version = "8"
+    ;
+    var cfg = try config.parse(testing.allocator, input);
+    defer config.deinit(testing.allocator, &cfg);
+
+    const services = try service.listServices(testing.allocator, cfg);
+    defer service.freeServices(testing.allocator, services);
+
+    try testing.expectEqual(1, services.len);
+    // No explicit/published port → auto-allocated. Must be a real port, never
+    // 0 and never the old 1024 fallback (prefers mysql's canonical 3306).
+    try testing.expect(services[0].port != 0);
+    try testing.expect(services[0].port != 1024);
+}
 
 /// Open an ephemeral, listening TCP socket on 127.0.0.1 and return {fd, port}.
 /// Caller must close the fd. Used to exercise readiness probes deterministically.
