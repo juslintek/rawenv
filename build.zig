@@ -115,6 +115,15 @@ pub fn build(b: *std.Build) void {
             .{ .name = "exec", .module = exec_mod },
         },
     });
+    const tls_mod = b.createModule(.{
+        .root_source_file = b.path("src/network/tls.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "exec", .module = exec_mod },
+        },
+    });
+    tls_mod.link_libc = true;
     const tunnel_mod = b.createModule(.{
         .root_source_file = b.path("src/network/tunnel.zig"),
         .target = target,
@@ -279,6 +288,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "ai", .module = ai_mod },
             .{ .name = "dns", .module = dns_mod },
             .{ .name = "proxy", .module = proxy_mod },
+            .{ .name = "tls", .module = tls_mod },
             .{ .name = "tunnel", .module = tunnel_mod },
             .{ .name = "connections", .module = connections_mod },
             .{ .name = "cell", .module = cell_mod },
@@ -328,6 +338,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "ai", .module = ai_mod },
                 .{ .name = "dns", .module = dns_mod },
                 .{ .name = "proxy", .module = proxy_mod },
+                .{ .name = "tls", .module = tls_mod },
                 .{ .name = "tunnel", .module = tunnel_mod },
                 .{ .name = "connections", .module = connections_mod },
                 .{ .name = "cell", .module = cell_mod },
@@ -401,6 +412,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{
                 .{ .name = "dns", .module = dns_mod },
                 .{ .name = "proxy", .module = proxy_mod },
+                .{ .name = "tls", .module = tls_mod },
                 .{ .name = "tunnel", .module = tunnel_mod },
                 .{ .name = "connections", .module = connections_mod },
             },

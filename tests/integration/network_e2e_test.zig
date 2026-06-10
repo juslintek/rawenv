@@ -209,6 +209,73 @@ test "tunnel — invalid port is rejected" {
 }
 
 // ============================================================
+// up — wires .test domains + TLS (config generation, best-effort)
+// ============================================================
+
+test "up — generates a TLS Caddyfile under ~/.rawenv/proxy for the project" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try writeToml(tmp.dir,
+        \\name = "tlsapp"
+        \\
+        \\[services.web]
+        \\version = "1"
+        \\port = 3000
+        \\
+        \\[services.redis]
+        \\version = "7"
+        \\port = 6390
+    );
+
+    // Point HOME at an isolated temp dir so the generated cert + Caddyfile land
+    // somewhere we can read and assert on, without touching the real home dir.
+    var home_tmp = testing.tmpDir(.{});
+    defer home_tmp.cleanup();
+    // testing.tmpDir creates `<cwd>/.zig-cache/tmp/<sub_path>`; build that
+    // absolute path for HOME (Io.Dir has no realpath in this Zig version).
+    var cwd_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const cwd_ptr = std.c.getcwd(&cwd_buf, cwd_buf.len) orelse return error.NoCwd;
+    const cwd = std.mem.sliceTo(cwd_ptr, 0);
+    const home_path = try std.fmt.allocPrint(testing.allocator, "{s}/.zig-cache/tmp/{s}", .{ cwd, home_tmp.sub_path });
+    defer testing.allocator.free(home_path);
+
+    var env = EnvMap.init(testing.allocator);
+    defer env.deinit();
+    // Preserve PATH so openssl can be found for the self-signed fallback.
+    if (std.c.getenv("PATH")) |p| try env.put("PATH", std.mem.sliceTo(p, 0));
+    try env.put("HOME", home_path);
+
+    const r = try run(&.{ rawenvBin(), "up" }, tmp.dir, &env);
+    defer r.deinit();
+    // `up` is best-effort on networking — it must still exit 0.
+    try testing.expect(r.exitedWith(0));
+    // The network wiring section ran and reported the .test domain.
+    try testing.expect(contains(r.stdout, "Wiring .test domains"));
+    try testing.expect(contains(r.stdout, "tlsapp.test"));
+
+    // The Caddyfile was persisted under the isolated HOME and routes each
+    // service subdomain (with TLS) plus the apex.
+    const caddy = home_tmp.dir.readFileAlloc(
+        io,
+        ".rawenv/proxy/tlsapp.Caddyfile",
+        testing.allocator,
+        Io.Limit.limited(64 * 1024),
+    ) catch |err| {
+        std.debug.print("could not read generated Caddyfile: {}\n", .{err});
+        return err;
+    };
+    defer testing.allocator.free(caddy);
+
+    try testing.expect(contains(caddy, "tlsapp.test {"));
+    try testing.expect(contains(caddy, "web.tlsapp.test {"));
+    try testing.expect(contains(caddy, "redis.tlsapp.test {"));
+    try testing.expect(contains(caddy, "reverse_proxy localhost:3000"));
+    try testing.expect(contains(caddy, "reverse_proxy localhost:6390"));
+    // TLS is enabled on every route (explicit cert/key or internal CA).
+    try testing.expect(contains(caddy, "tls "));
+}
+
+// ============================================================
 // deploy generate
 // ============================================================
 
