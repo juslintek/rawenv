@@ -782,6 +782,23 @@ pub fn build(b: *std.Build) void {
    run_uninstall_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
    integration_step.dependOn(&run_uninstall_test.step);
 
+   // Shell environment isolation + cleanup E2E (E2E-111): `rawenv shell`
+   // prepends ~/.rawenv/bin to PATH, exports auto-generated connection strings
+   // (DATABASE_URL/REDIS_URL), leaves the parent PATH untouched, and spawns no
+   // lingering background process — all verified against an isolated $HOME.
+   const integration_shell = b.addTest(.{
+       .root_module = b.createModule(.{
+           .root_source_file = b.path("tests/integration/shell_isolation_e2e_test.zig"),
+           .target = target,
+           .optimize = optimize,
+       }),
+   });
+   integration_shell.root_module.link_libc = true;
+   const run_shell_test = b.addRunArtifact(integration_shell);
+   run_shell_test.step.dependOn(b.getInstallStep());
+   run_shell_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+   integration_step.dependOn(&run_shell_test.step);
+
    // Cross-compilation targets
    const cross_targets: []const struct { []const u8, std.Target.Cpu.Arch, std.Target.Os.Tag } = &.{
        .{ "aarch64-macos", .aarch64, .macos },
