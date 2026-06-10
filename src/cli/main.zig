@@ -52,7 +52,7 @@ const help =
     \\  cell info        Show available isolation backends
     \\  discover         Scan for projects on this machine
     \\  destroy          Remove this project's isolated data dirs (--force to skip prompt)
-    \\  uninstall        Remove rawenv from this machine
+    \\  uninstall        Remove rawenv from this machine (--force to skip prompt)
     \\  tui              Launch TUI dashboard
     \\  gui              Launch GUI window
     \\  menubar          Launch macOS menu bar status item
@@ -196,7 +196,7 @@ fn run(init: std.process.Init) !u8 {
             return try commands.runDestroy(allocator, stdout, force_mode);
         }
         if (std.mem.eql(u8, arg, "uninstall")) {
-            return try commands.runUninstall(allocator, stdout);
+            return try commands.runUninstall(allocator, stdout, force_mode);
         }
         if (std.mem.eql(u8, arg, "tui")) {
             tui.run() catch {

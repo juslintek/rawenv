@@ -1018,7 +1018,7 @@ pub fn runDestroy(allocator: std.mem.Allocator, stdout: anytype, force: bool) !u
     return ExitCode.ok;
 }
 
-pub fn runUninstall(_: std.mem.Allocator, stdout: anytype) !u8 {
+pub fn runUninstall(allocator: std.mem.Allocator, stdout: anytype, force: bool) !u8 {
     const home = if (comptime builtin.os.tag == .windows) blk: {
         break :blk if (std.c.getenv("USERPROFILE")) |s| std.mem.sliceTo(s, 0) else null orelse {
             try stdout.writeAll("Error: USERPROFILE environment variable is not set.\n");
@@ -1033,35 +1033,38 @@ pub fn runUninstall(_: std.mem.Allocator, stdout: anytype) !u8 {
     try stdout.writeAll("rawenv uninstall will remove:\n");
     try stdout.writeAll("  ");
     try stdout.writeAll(home);
-    try stdout.writeAll("/.rawenv/bin/\n");
-    try stdout.writeAll("  ");
-    try stdout.writeAll(home);
-    try stdout.writeAll("/.rawenv/store/\n");
+    try stdout.writeAll("/.rawenv/ (store, bin symlinks, data dirs)\n");
+    if (comptime builtin.os.tag == .macos) {
+        try stdout.writeAll("  ");
+        try stdout.writeAll(home);
+        try stdout.writeAll("/Library/LaunchAgents/com.rawenv.*.plist\n");
+    } else if (comptime builtin.os.tag == .linux) {
+        try stdout.writeAll("  ");
+        try stdout.writeAll(home);
+        try stdout.writeAll("/.config/systemd/user/rawenv-*.service\n");
+    }
     try stdout.writeAll("  PATH entries from .zshrc, .bashrc, .profile\n");
-    try stdout.writeAll("\nProceed? [y/N] ");
 
-    var buf: [16]u8 = undefined;
-    const n_raw = if (comptime builtin.os.tag == .windows) @as(isize, 0) else std.c.read(0, &buf, buf.len);
-    const n: usize = if (n_raw > 0) @intCast(n_raw) else 0;
-    if (n == 0) {
-        try stdout.writeAll("Aborted.\n");
-        return ExitCode.ok;
-    }
-    const answer = std.mem.trimEnd(u8, buf[0..n], "\r\n");
-    if (!std.mem.eql(u8, answer, "y") and !std.mem.eql(u8, answer, "Y")) {
-        try stdout.writeAll("Aborted.\n");
-        return ExitCode.ok;
+    if (!force) {
+        try stdout.writeAll("\nProceed? [y/N] ");
+
+        var buf: [16]u8 = undefined;
+        const n_raw = if (comptime builtin.os.tag == .windows) @as(isize, 0) else std.c.read(0, &buf, buf.len);
+        const n: usize = if (n_raw > 0) @intCast(n_raw) else 0;
+        if (n == 0) {
+            try stdout.writeAll("Aborted.\n");
+            return ExitCode.ok;
+        }
+        const answer = std.mem.trimEnd(u8, buf[0..n], "\r\n");
+        if (!std.mem.eql(u8, answer, "y") and !std.mem.eql(u8, answer, "Y")) {
+            try stdout.writeAll("Aborted.\n");
+            return ExitCode.ok;
+        }
     }
 
-    // Remove ~/.rawenv/
-    var rawenv_path_buf: [1024]u8 = undefined;
-    // Remove ~/.rawenv/ directory
-    const rm_cmd = std.fmt.bufPrintZ(&rawenv_path_buf, "rm -rf {s}/.rawenv", .{home}) catch {
-        try stdout.writeAll("Error: home path is too long to process.\n");
-        return ExitCode.system;
-    };
-    _ = std.c.unlink(rm_cmd); // Best-effort cleanup; full rm -rf needs Io
-    // Note: full recursive delete requires Io in 0.16.0; manual cleanup may be needed
+    // Stop all rawenv-managed services (launchd / systemd), remove their unit
+    // files, and recursively delete ~/.rawenv (store, bin symlinks, data dirs).
+    _ = service.uninstallAll(allocator, home);
 
     // Clean shell rc files
     const rc_files = [_][]const u8{ ".zshrc", ".bashrc", ".profile" };

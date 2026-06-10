@@ -705,6 +705,52 @@ pub fn removeProjectData(allocator: std.mem.Allocator, project: []const u8) !boo
     return exit_code == 0 and !accessPath(allocator, root);
 }
 
+/// Machine-wide uninstall cleanup (E2E-109). Removes every rawenv artifact:
+///   - Stops and removes all rawenv-managed OS services. On macOS this unloads
+///     and deletes every `~/Library/LaunchAgents/com.rawenv.*.plist`; on Linux
+///     it stops+disables and deletes every `~/.config/systemd/user/rawenv-*.service`
+///     (followed by `daemon-reload`).
+///   - Recursively removes `~/.rawenv` (store, bin symlinks, data dirs).
+///
+/// Best-effort: individual failures are ignored so one stuck service can't
+/// block the rest of the teardown. Returns true when `~/.rawenv` no longer
+/// exists afterwards. No-op (returns false) on Windows or when HOME is unset.
+///
+/// The cleanup runs in a single `/bin/sh` invocation. `home` is passed as a
+/// positional argument (`$1`) rather than interpolated into the script body, so
+/// it is never re-parsed by the shell (no glob/word-splitting/injection issues).
+pub fn uninstallAll(allocator: std.mem.Allocator, home: []const u8) bool {
+    if (comptime builtin.os.tag == .windows) return false;
+
+    const script = if (comptime builtin.os.tag == .macos)
+        \\home="$1"
+        \\for f in "$home"/Library/LaunchAgents/com.rawenv.*.plist; do
+        \\  [ -e "$f" ] || continue
+        \\  launchctl unload "$f" 2>/dev/null || true
+        \\  rm -f "$f"
+        \\done
+        \\rm -rf "$home/.rawenv"
+    else
+        \\home="$1"
+        \\for f in "$home"/.config/systemd/user/rawenv-*.service; do
+        \\  [ -e "$f" ] || continue
+        \\  unit=$(basename "$f")
+        \\  systemctl --user stop "$unit" 2>/dev/null || true
+        \\  systemctl --user disable "$unit" 2>/dev/null || true
+        \\  rm -f "$f"
+        \\done
+        \\systemctl --user daemon-reload 2>/dev/null || true
+        \\rm -rf "$home/.rawenv"
+    ;
+
+    // argv[0]="/bin/sh", then "-c", script, then "sh" ($0) and home ($1).
+    _ = runCommand(allocator, &.{ "/bin/sh", "-c", script, "sh", home }) catch return false;
+
+    const root = std.fs.path.join(allocator, &.{ home, ".rawenv" }) catch return false;
+    defer allocator.free(root);
+    return !accessPath(allocator, root);
+}
+
 /// ---------------------------------------------------------------------------
 /// Service auto-configuration (SVC-070)
 ///
