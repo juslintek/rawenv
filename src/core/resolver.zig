@@ -323,11 +323,21 @@ fn getPythonSha256(p: PlatformKey) ?[]const u8 {
 // Upstream does not publish per-file checksums, so the hash is computed on
 // download. No compilation required.
 // ---------------------------------------------------------------------------
+
+/// Map a PHP version (short "8.3" or full "8.3.31") to a pinned full version
+/// that has a published static-php-cli binary across every supported platform.
+/// Patch levels are pinned to the latest build available on dl.static-php.dev
+/// at the time of writing. Keep in sync with `fullVersion` / `availableVersions`.
+fn phpFullVersion(version: []const u8) ?[]const u8 {
+    if (std.mem.eql(u8, version, "8.1") or std.mem.eql(u8, version, "8.1.34")) return "8.1.34";
+    if (std.mem.eql(u8, version, "8.2") or std.mem.eql(u8, version, "8.2.31")) return "8.2.31";
+    if (std.mem.eql(u8, version, "8.3") or std.mem.eql(u8, version, "8.3.31")) return "8.3.31";
+    if (std.mem.eql(u8, version, "8.4") or std.mem.eql(u8, version, "8.4.11")) return "8.4.11";
+    return null;
+}
+
 fn resolvePhp(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
-    const full_version = if (std.mem.eql(u8, version, "8.4") or std.mem.eql(u8, version, "8.4.11"))
-        "8.4.11"
-    else
-        return ResolveError.UnknownVersion;
+    const full_version = phpFullVersion(version) orelse return ResolveError.UnknownVersion;
 
     const platform = try getPlatform();
     const php_os: []const u8 = if (std.mem.eql(u8, platform.os, "darwin")) "macos" else "linux";
@@ -392,6 +402,9 @@ fn fullVersion(package_name: []const u8, version: []const u8) ?[]const u8 {
     } else if (std.mem.eql(u8, package_name, "python")) {
         if (std.mem.eql(u8, version, "3.12")) return "3.12.11";
     } else if (std.mem.eql(u8, package_name, "php")) {
+        if (std.mem.eql(u8, version, "8.1")) return "8.1.34";
+        if (std.mem.eql(u8, version, "8.2")) return "8.2.31";
+        if (std.mem.eql(u8, version, "8.3")) return "8.3.31";
         if (std.mem.eql(u8, version, "8.4")) return "8.4.11";
     } else if (std.mem.eql(u8, package_name, "meilisearch")) {
         if (std.mem.eql(u8, version, "1.12")) return "1.12.0";
@@ -413,7 +426,7 @@ pub fn availableVersions(package_name: []const u8) []const []const u8 {
     } else if (std.mem.eql(u8, package_name, "python")) {
         return &.{"3.12"};
     } else if (std.mem.eql(u8, package_name, "php")) {
-        return &.{"8.4"};
+        return &.{ "8.1", "8.2", "8.3", "8.4" };
     } else if (std.mem.eql(u8, package_name, "meilisearch")) {
         return &.{"1.12"};
     }
@@ -549,6 +562,29 @@ test "resolve php@8.4 (prebuilt static, compute-on-download)" {
     try std.testing.expectEqualStrings(COMPUTE_ON_DOWNLOAD, pkg.sha256);
 }
 
+test "resolve php@8.1 8.2 8.3 8.4 (prebuilt static binaries)" {
+    const cases = [_]struct { short: []const u8, full: []const u8 }{
+        .{ .short = "8.1", .full = "8.1.34" },
+        .{ .short = "8.2", .full = "8.2.31" },
+        .{ .short = "8.3", .full = "8.3.31" },
+        .{ .short = "8.4", .full = "8.4.11" },
+    };
+    inline for (cases) |c| {
+        // Short alias and explicit full version both resolve to the same artifact.
+        inline for (.{ c.short, c.full }) |v| {
+            const pkg = try resolve(std.testing.allocator, "php", v);
+            defer std.testing.allocator.free(pkg.url);
+            try std.testing.expectEqualStrings("php", pkg.name);
+            try std.testing.expectEqualStrings(c.full, pkg.version);
+            try std.testing.expect(std.mem.indexOf(u8, pkg.url, "dl.static-php.dev") != null);
+            try std.testing.expect(std.mem.indexOf(u8, pkg.url, c.full) != null);
+            try std.testing.expect(std.mem.indexOf(u8, pkg.url, "-cli-") != null);
+            try std.testing.expect(pkg.archive_type == .tar_gz);
+            try std.testing.expectEqualStrings(COMPUTE_ON_DOWNLOAD, pkg.sha256);
+        }
+    }
+}
+
 test "resolve meilisearch@1.12 (github prebuilt binary)" {
     const pkg = try resolve(std.testing.allocator, "meilisearch", "1.12");
     defer std.testing.allocator.free(pkg.url);
@@ -590,6 +626,9 @@ test "resolveVersion maps short to full and is consistent with resolve" {
     try std.testing.expectEqualStrings("7.4.0", resolveVersion("redis", "7.4"));
     try std.testing.expectEqualStrings("3.12.11", resolveVersion("python", "3.12"));
     try std.testing.expectEqualStrings("8.4.11", resolveVersion("php", "8.4"));
+    try std.testing.expectEqualStrings("8.1.34", resolveVersion("php", "8.1"));
+    try std.testing.expectEqualStrings("8.2.31", resolveVersion("php", "8.2"));
+    try std.testing.expectEqualStrings("8.3.31", resolveVersion("php", "8.3"));
     try std.testing.expectEqualStrings("1.12.0", resolveVersion("meilisearch", "1.12"));
     // Unknown stays unchanged.
     try std.testing.expectEqualStrings("9.9", resolveVersion("node", "9.9"));

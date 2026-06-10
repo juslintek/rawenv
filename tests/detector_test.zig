@@ -1,6 +1,7 @@
 const std = @import("std");
 const detector = @import("detector");
 const config = @import("config");
+const resolver = @import("resolver");
 const testing = std.testing;
 
 fn makeTmpDir() !std.Io.Dir {
@@ -530,6 +531,39 @@ test "detect composer.json with php version" {
     try testing.expectEqual(1, result.runtimes.len);
     try testing.expectEqualStrings("php", result.runtimes[0].key);
     try testing.expectEqualStrings("8.2", result.runtimes[0].value);
+}
+
+test "detected php version from composer.json is installable (8.1-8.4)" {
+    // Real-world composer.json `require.php` constraints should each detect a
+    // PHP version that the resolver can turn into a downloadable prebuilt binary.
+    const cases = [_]struct { constraint: []const u8, detected: []const u8, full: []const u8 }{
+        .{ .constraint = "^8.1", .detected = "8.1", .full = "8.1.34" },
+        .{ .constraint = ">=8.2", .detected = "8.2", .full = "8.2.31" },
+        .{ .constraint = "^8.3", .detected = "8.3", .full = "8.3.31" }, // typical Laravel 11
+        .{ .constraint = "~8.4.0", .detected = "8.4", .full = "8.4.11" },
+    };
+
+    inline for (cases) |c| {
+        var dir = try makeTmpDir();
+        defer dir.close(std.testing.io);
+        defer cleanFile(dir, "composer.json");
+
+        const json = "{\"require\":{\"php\":\"" ++ c.constraint ++ "\"}}";
+        try dir.writeFile(std.testing.io, .{ .sub_path = "composer.json", .data = json });
+
+        var result = try detector.detect(testing.allocator, dir);
+        defer result.deinit(testing.allocator);
+
+        try testing.expectEqual(1, result.runtimes.len);
+        try testing.expectEqualStrings("php", result.runtimes[0].key);
+        try testing.expectEqualStrings(c.detected, result.runtimes[0].value);
+
+        // The detected version must be installable via the resolver.
+        const pkg = try resolver.resolve(testing.allocator, "php", result.runtimes[0].value);
+        defer testing.allocator.free(pkg.url);
+        try testing.expectEqualStrings(c.full, pkg.version);
+        try testing.expect(std.mem.indexOf(u8, pkg.url, "dl.static-php.dev") != null);
+    }
 }
 
 test "docker-compose with postgres + redis + mysql" {
