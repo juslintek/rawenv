@@ -34,6 +34,7 @@ pub const ResolveError = error{
 /// Keep in sync with the dispatch in `resolve`.
 pub const available_packages = [_][]const u8{
     "node",
+    "bun",
     "postgres",
     "redis",
     "python",
@@ -86,6 +87,8 @@ pub fn isKnownPackage(name: []const u8) bool {
 pub fn resolve(allocator: std.mem.Allocator, package_name: []const u8, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
     if (std.mem.eql(u8, package_name, "node")) {
         return resolveNode(allocator, version);
+    } else if (std.mem.eql(u8, package_name, "bun")) {
+        return resolveBun(allocator, version);
     } else if (std.mem.eql(u8, package_name, "postgresql") or std.mem.eql(u8, package_name, "postgres")) {
         return resolvePostgresql(allocator, version);
     } else if (std.mem.eql(u8, package_name, "redis")) {
@@ -185,6 +188,50 @@ fn getNodeSha256(full_version: []const u8, os: []const u8, arch: []const u8) ?[]
         if (std.mem.eql(u8, os, "linux") and std.mem.eql(u8, arch, "arm64")) return r.linux_arm64;
         return null;
     }
+    return null;
+}
+
+// ---------------------------------------------------------------------------
+// bun — official prebuilt binaries from GitHub releases (oven-sh/bun). Each
+// release ships per-platform .zip archives, each containing a single ready-to-
+// run `bun` executable. Upstream publishes a SHASUMS256.txt sidecar, but the
+// hash is computed on download to stay platform-agnostic (see CLI-010). No
+// compilation required.
+// ---------------------------------------------------------------------------
+const BUN_VERSION = "1.3.14";
+
+/// Map a bun version request (short major "1", "1.3", or pinned full
+/// "1.3.14") to its pinned full version. Returns null for unsupported.
+fn bunFullVersion(version: []const u8) ?[]const u8 {
+    if (std.mem.eql(u8, version, "1") or
+        std.mem.eql(u8, version, "1.3") or
+        std.mem.eql(u8, version, BUN_VERSION)) return BUN_VERSION;
+    return null;
+}
+
+fn resolveBun(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
+    const full_version = bunFullVersion(version) orelse return ResolveError.UnknownVersion;
+
+    const platform = try getPlatform();
+    const target = bunTarget(platform) orelse return ResolveError.UnsupportedPlatform;
+
+    const url = try std.fmt.allocPrint(
+        allocator,
+        "https://github.com/oven-sh/bun/releases/download/bun-v{s}/bun-{s}.zip",
+        .{ full_version, target },
+    );
+
+    return .{ .name = "bun", .version = full_version, .url = url, .sha256 = COMPUTE_ON_DOWNLOAD, .archive_type = .zip };
+}
+
+/// bun release asset target slug (e.g. "darwin-aarch64"). bun ships glibc
+/// Linux builds and standard (AVX2) x64 builds — the slug omits the baseline
+/// suffix, matching the default binary the upstream install script selects.
+fn bunTarget(p: PlatformKey) ?[]const u8 {
+    if (isPlatform(p, "darwin", "arm64")) return "darwin-aarch64";
+    if (isPlatform(p, "darwin", "x64")) return "darwin-x64";
+    if (isPlatform(p, "linux", "x64")) return "linux-x64";
+    if (isPlatform(p, "linux", "arm64")) return "linux-aarch64";
     return null;
 }
 
@@ -449,6 +496,8 @@ pub fn resolveVersion(package_name: []const u8, version: []const u8) []const u8 
 fn fullVersion(package_name: []const u8, version: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, package_name, "node")) {
         return nodeFullVersion(version);
+    } else if (std.mem.eql(u8, package_name, "bun")) {
+        return bunFullVersion(version);
     } else if (std.mem.eql(u8, package_name, "postgresql") or std.mem.eql(u8, package_name, "postgres")) {
         if (std.mem.eql(u8, version, "16")) return "16.9.0";
         if (std.mem.eql(u8, version, "17")) return "17.5.0";
@@ -477,6 +526,8 @@ fn fullVersion(package_name: []const u8, version: []const u8) ?[]const u8 {
 pub fn availableVersions(package_name: []const u8) []const []const u8 {
     if (std.mem.eql(u8, package_name, "node")) {
         return &.{ "18", "20", "22", "23" };
+    } else if (std.mem.eql(u8, package_name, "bun")) {
+        return &.{ "1", "1.3" };
     } else if (std.mem.eql(u8, package_name, "postgresql") or std.mem.eql(u8, package_name, "postgres")) {
         return &.{ "16", "17", "18" };
     } else if (std.mem.eql(u8, package_name, "redis")) {
@@ -572,6 +623,40 @@ test "resolve node unsupported major" {
     try std.testing.expectError(ResolveError.UnknownVersion, resolve(std.testing.allocator, "node", "16"));
 }
 
+
+test "resolve bun@1 (github prebuilt binary)" {
+    const pkg = try resolve(std.testing.allocator, "bun", "1");
+    defer std.testing.allocator.free(pkg.url);
+    try std.testing.expectEqualStrings("bun", pkg.name);
+    try std.testing.expectEqualStrings("1.3.14", pkg.version);
+    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "github.com/oven-sh/bun/releases") != null);
+    // URL must point at the real release tag for the pinned version.
+    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "bun-v1.3.14") != null);
+    // Asset is a per-platform .zip containing a single executable.
+    try std.testing.expect(std.mem.endsWith(u8, pkg.url, ".zip"));
+    try std.testing.expect(pkg.archive_type == .zip);
+    // Upstream publishes no per-asset checksum we pin, so hash is computed on download.
+    try std.testing.expectEqualStrings(COMPUTE_ON_DOWNLOAD, pkg.sha256);
+}
+
+test "resolve bun short and full versions agree" {
+    inline for (.{ "1", "1.3", "1.3.14" }) |v| {
+        const pkg = try resolve(std.testing.allocator, "bun", v);
+        defer std.testing.allocator.free(pkg.url);
+        try std.testing.expectEqualStrings("bun", pkg.name);
+        try std.testing.expectEqualStrings("1.3.14", pkg.version);
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "bun-v1.3.14") != null);
+    }
+}
+
+test "resolve bun unknown version" {
+    try std.testing.expectError(ResolveError.UnknownVersion, resolve(std.testing.allocator, "bun", "2"));
+    try std.testing.expectError(ResolveError.UnknownVersion, resolve(std.testing.allocator, "bun", "0.6"));
+}
+
+test "bun is a known package" {
+    try std.testing.expect(isKnownPackage("bun"));
+}
 test "resolve postgresql@17 (prebuilt, not source)" {
     const pkg = try resolve(std.testing.allocator, "postgresql", "17");
     defer std.testing.allocator.free(pkg.url);
@@ -730,6 +815,8 @@ test "resolve unknown version" {
 
 test "resolveVersion maps short to full and is consistent with resolve" {
     try std.testing.expectEqualStrings("22.15.0", resolveVersion("node", "22"));
+    try std.testing.expectEqualStrings("1.3.14", resolveVersion("bun", "1"));
+    try std.testing.expectEqualStrings("1.3.14", resolveVersion("bun", "1.3"));
     try std.testing.expectEqualStrings("17.5.0", resolveVersion("postgres", "17"));
     try std.testing.expectEqualStrings("7.4.0", resolveVersion("redis", "7"));
     try std.testing.expectEqualStrings("7.4.0", resolveVersion("redis", "7.4"));

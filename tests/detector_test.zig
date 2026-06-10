@@ -48,6 +48,65 @@ test "detect package.json without engines defaults to 22" {
     try testing.expectEqualStrings("22", result.runtimes[0].value);
 }
 
+test "detect package.json with packageManager bun" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "package.json");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "package.json",
+        .data = "{\"name\":\"test\",\"packageManager\":\"bun@1.2.0\"}",
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    // bun replaces node as the detected JS runtime.
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("bun", result.runtimes[0].key);
+    try testing.expectEqualStrings("1", result.runtimes[0].value);
+    // The detected version must resolve to a real bun release.
+    const pkg = resolver.resolve(testing.allocator, "bun", result.runtimes[0].value) catch unreachable;
+    defer testing.allocator.free(pkg.url);
+    try testing.expectEqualStrings("1.3.14", pkg.version);
+}
+
+test "detect package.json with engines.bun" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "package.json");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "package.json",
+        .data = "{\"name\":\"test\",\"engines\":{\"bun\":\">=1.0.0\"}}",
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("bun", result.runtimes[0].key);
+    try testing.expectEqualStrings("1", result.runtimes[0].value);
+}
+
+test "detect package.json with non-bun packageManager falls back to node" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "package.json");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "package.json",
+        .data = "{\"name\":\"test\",\"packageManager\":\"pnpm@9.0.0\",\"engines\":{\"node\":\">=20\"}}",
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("node", result.runtimes[0].key);
+    try testing.expectEqualStrings("20", result.runtimes[0].value);
+}
+
 test "detect node engines snaps to nearest resolver-supported version" {
     // engines constraint -> expected snapped (resolver-supported) major.
     // Supported set: 18, 20, 22, 23. Ties resolve to the higher major.

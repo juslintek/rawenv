@@ -21,10 +21,17 @@ pub fn detect(allocator: std.mem.Allocator, dir: std.Io.Dir) !DetectionResult {
 
     if (readFile(allocator, dir, "package.json")) |data| {
         defer allocator.free(data);
-        try runtimes.append(allocator, .{
-            .key = "node",
-            .value = parseNodeVersion(allocator, data) orelse "22",
-        });
+        // bun projects pin the runtime via the `packageManager` field (or an
+        // `engines.bun` constraint). When that's present, bun — not node — is
+        // the JS runtime, so detect it instead of defaulting to node.
+        if (parseBunVersion(allocator, data)) |bun_version| {
+            try runtimes.append(allocator, .{ .key = "bun", .value = bun_version });
+        } else {
+            try runtimes.append(allocator, .{
+                .key = "node",
+                .value = parseNodeVersion(allocator, data) orelse "22",
+            });
+        }
     }
 
     if (readFile(allocator, dir, "composer.json")) |data| {
@@ -153,6 +160,63 @@ fn snapNodeVersion(raw: []const u8) ?[]const u8 {
         }
     }
     return best;
+}
+
+/// Detect a bun runtime from package.json. Bun projects pin the runtime via
+/// the `packageManager` field (Corepack convention, e.g. "bun@1.2.0") or via
+/// an `engines.bun` constraint. Returns a resolver-supported bun version
+/// literal, or null when the manifest does not call for bun.
+fn parseBunVersion(allocator: std.mem.Allocator, data: []const u8) ?[]const u8 {
+    const parsed = std.json.parseFromSlice(std.json.Value, allocator, data, .{}) catch return null;
+    defer parsed.deinit();
+    const obj = switch (parsed.value) {
+        .object => |o| o,
+        else => return null,
+    };
+
+    // packageManager: "bun@1.2.0"
+    if (obj.get("packageManager")) |pm| {
+        switch (pm) {
+            .string => |s| {
+                if (std.mem.startsWith(u8, s, "bun@")) return snapBunVersion(s["bun@".len..]);
+            },
+            else => {},
+        }
+    }
+
+    // engines: { "bun": ">=1.0.0" }
+    if (obj.get("engines")) |engines| {
+        switch (engines) {
+            .object => |eo| {
+                if (eo.get("bun")) |bun_v| {
+                    switch (bun_v) {
+                        .string => |s| return snapBunVersion(s),
+                        else => {},
+                    }
+                }
+            },
+            else => {},
+        }
+    }
+
+    return null;
+}
+
+/// Snap a bun version constraint (e.g. "1.2.0", ">=1.0.0", "^1") to the
+/// nearest bun major rawenv's resolver supports. rawenv currently pins bun
+/// 1.x, so any 1.* constraint resolves to "1". Returns null when no numeric
+/// major can be extracted or the major is unsupported. Returns a comptime
+/// literal (the parsed JSON is freed by the caller).
+fn snapBunVersion(raw: []const u8) ?[]const u8 {
+    var i: usize = 0;
+    while (i < raw.len and !std.ascii.isDigit(raw[i])) : (i += 1) {}
+    if (i >= raw.len) return null;
+    const start = i;
+    while (i < raw.len and std.ascii.isDigit(raw[i])) : (i += 1) {}
+    const major = std.fmt.parseInt(u32, raw[start..i], 10) catch return null;
+    // Only bun 1.x is supported today.
+    if (major == 1) return "1";
+    return null;
 }
 
 fn parsePhpVersion(allocator: std.mem.Allocator, data: []const u8) ?[]const u8 {
