@@ -37,6 +37,7 @@ const service = @import("service");
 const shell = @import("shell");
 const dns = @import("dns");
 const proxy = @import("proxy");
+const tls = @import("tls");
 const tunnel = @import("tunnel");
 const connections = @import("connections");
 const cell = @import("cell");
@@ -312,7 +313,96 @@ pub fn runUp(allocator: std.mem.Allocator, stdout: anytype) !u8 {
             return ExitCode.system;
         },
     };
+
+    // Wire live .test domains + auto-TLS to the running services. Best-effort:
+    // a networking hiccup (no sudo, no Caddy) must not fail an otherwise
+    // successful `up` — instead we persist configs and print next steps.
+    setupNetwork(allocator, result.cfg, stdout) catch {};
     return ExitCode.ok;
+}
+
+/// Configure live `.test` domains, a Caddy reverse proxy, and local TLS for the
+/// project's services after `rawenv up` brings them online:
+///   * Generates a TLS cert (mkcert if available, self-signed openssl fallback)
+///     covering `<project>.test` + `*.<project>.test`, under `~/.rawenv/certs`.
+///   * Builds Caddy routes: `<project>.test` → primary service, and
+///     `<service>.<project>.test` → each service's resolved port, all TLS.
+///   * Persists the Caddyfile to `~/.rawenv/proxy/<project>.Caddyfile` (no
+///     privilege needed) and attempts a non-interactive Caddy reload.
+///   * Adds `/etc/hosts` entries via non-interactive sudo; on failure prints
+///     the exact manual command so the user can finish setup.
+///
+/// Best-effort throughout: every privileged step degrades to a printed hint.
+fn setupNetwork(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !void {
+    if (comptime builtin.os.tag == .windows) return;
+    if (cfg.project_name.len == 0) return;
+
+    const services = try service.listServices(allocator, cfg);
+    defer service.freeServices(allocator, services);
+
+    // Nothing to route — skip silently (a runtimes-only project has no ports).
+    if (services.len == 0) return;
+
+    const home = service.getHome() orelse return;
+
+    try stdout.writeAll("\nWiring .test domains + TLS:\n");
+
+    // 1. TLS certificate (mkcert preferred, self-signed fallback).
+    const cert: ?tls.Certificate = tls.ensureCertificate(allocator, home, cfg.project_name) catch null;
+    defer if (cert) |c| c.deinit(allocator);
+    if (cert) |c| {
+        switch (c.method) {
+            .mkcert => try stdout.writeAll("  \u{2713} TLS cert via mkcert (locally trusted)\n"),
+            .self_signed => try stdout.writeAll("  \u{2713} TLS cert (self-signed — browsers will warn until trusted)\n"),
+        }
+    } else {
+        try stdout.writeAll("  \u{26A0} Could not generate a TLS cert (install mkcert or openssl). Using Caddy internal CA.\n");
+    }
+
+    // 2. Build proxy routes for each service instance + the apex domain.
+    const endpoints = try allocator.alloc(proxy.ServiceEndpoint, services.len);
+    defer allocator.free(endpoints);
+    for (services, 0..) |svc, i| endpoints[i] = .{ .name = svc.name, .port = svc.port };
+
+    const cert_path: ?[]const u8 = if (cert) |c| c.cert_path else null;
+    const key_path: ?[]const u8 = if (cert) |c| c.key_path else null;
+    const routes = try proxy.buildProjectRoutes(allocator, cfg.project_name, endpoints, cert_path, key_path);
+    defer proxy.freeRoutes(allocator, routes);
+
+    const caddyfile = try proxy.generateCaddyfile(allocator, routes);
+    defer allocator.free(caddyfile);
+
+    // 3. Persist the Caddyfile to an unprivileged path.
+    const caddy_path = try std.fmt.allocPrint(allocator, "{s}/.rawenv/proxy/{s}.Caddyfile", .{ home, cfg.project_name });
+    defer allocator.free(caddy_path);
+    if (proxy.writeCaddyfile(allocator, caddy_path, caddyfile)) {
+        try stdout.print("  \u{2713} Caddyfile written: {s}\n", .{caddy_path});
+    } else |_| {
+        try stdout.writeAll("  \u{26A0} Could not write the Caddyfile.\n");
+    }
+
+    // 4. DNS: non-interactive sudo so `up` never blocks on a password prompt.
+    var svc_names: std.ArrayList([]const u8) = .empty;
+    defer svc_names.deinit(allocator);
+    for (cfg.services) |svc| try svc_names.append(allocator, svc.key);
+    const dns_cfg = dns.DnsConfig{ .project = cfg.project_name, .services = svc_names.items };
+
+    if (dns.setupDNSEx(allocator, dns_cfg, false)) {
+        try stdout.print("  \u{2713} DNS: {s}.test → 127.0.0.1 (and per-service subdomains)\n", .{cfg.project_name});
+    } else |_| {
+        try stdout.writeAll("  \u{26A0} DNS not configured (needs sudo). Run: sudo rawenv dns setup\n");
+    }
+
+    // 5. Reload Caddy non-interactively if it's installed.
+    if (tls.binaryOnPath("caddy")) {
+        if (proxy.setupProxyEx(allocator, caddyfile, false)) {
+            try stdout.print("  \u{2713} Caddy reloaded — https://{s}.test is live\n", .{cfg.project_name});
+        } else |_| {
+            try stdout.print("  \u{26A0} Caddy not reloaded (needs sudo). Run: sudo caddy reload --config {s}\n", .{caddy_path});
+        }
+    } else {
+        try stdout.print("  \u{2139} Install Caddy to serve https://{s}.test (brew install caddy)\n", .{cfg.project_name});
+    }
 }
 
 pub fn runDown(allocator: std.mem.Allocator, stdout: anytype) !u8 {

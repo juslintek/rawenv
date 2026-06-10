@@ -111,11 +111,19 @@ const resolved_path = "/etc/systemd/resolved.conf.d/rawenv.conf";
 const hosts_path = if (builtin.os.tag == .windows) "C:\\Windows\\System32\\drivers\\etc\\hosts" else "/etc/hosts";
 
 pub fn setupDNS(allocator: std.mem.Allocator, cfg: DnsConfig) !void {
+    return setupDNSEx(allocator, cfg, true);
+}
+
+/// Apply DNS entries to /etc/hosts. When `interactive` is false, privilege
+/// escalation uses `sudo -n` (non-interactive) so callers like `rawenv up`
+/// never block on a password prompt — escalation simply fails fast and the
+/// caller can fall back to printing a manual command.
+pub fn setupDNSEx(allocator: std.mem.Allocator, cfg: DnsConfig, interactive: bool) !void {
     // For now, let's focus on /etc/hosts as it's the most universal and simple for MVP
     const entries = try generateHostsEntries(allocator, cfg);
     defer allocator.free(entries);
 
-    try applyHostsEntries(allocator, cfg.project, entries);
+    try applyHostsEntries(allocator, cfg.project, entries, interactive);
 
     if (comptime builtin.os.tag == .macos) {
         try runCommand(allocator, &.{ "dscacheutil", "-flushcache" });
@@ -124,7 +132,7 @@ pub fn setupDNS(allocator: std.mem.Allocator, cfg: DnsConfig) !void {
 }
 
 /// Safely apply hosts entries by wrapping them in markers.
-fn applyHostsEntries(allocator: std.mem.Allocator, project: []const u8, new_entries: []const u8) !void {
+fn applyHostsEntries(allocator: std.mem.Allocator, project: []const u8, new_entries: []const u8, interactive: bool) !void {
     const exec = @import("exec");
     
     // Read current hosts
@@ -165,7 +173,7 @@ fn applyHostsEntries(allocator: std.mem.Allocator, project: []const u8, new_entr
         try new_content.appendSlice(allocator, new_entries);
     }
 
-    try writeFilePrivileged(allocator, hosts_path, new_content.items);
+    try writeFilePrivileged(allocator, hosts_path, new_content.items, interactive);
 }
 
 pub fn teardownDNS(allocator: std.mem.Allocator) !void {
@@ -178,7 +186,7 @@ pub const installDns = setupDNS;
 /// Alias for teardownDNS (task-spec naming).
 pub const removeDns = teardownDNS;
 
-fn writeFilePrivileged(allocator: std.mem.Allocator, path: []const u8, content: []const u8) !void {
+fn writeFilePrivileged(allocator: std.mem.Allocator, path: []const u8, content: []const u8, interactive: bool) !void {
     const exec = @import("exec");
     const path_z = try allocator.dupeZ(u8, path);
     defer allocator.free(path_z);
@@ -192,8 +200,15 @@ fn writeFilePrivileged(allocator: std.mem.Allocator, path: []const u8, content: 
     defer _ = std.c.close(fd);
     _ = std.c.write(fd, content.ptr, content.len);
 
-    const mv_argv = [_][*:0]const u8{ "sudo", "mv", tmp_path, path_z };
-    const exit_code = try exec.run(&mv_argv);
+    // `sudo -n` (non-interactive) when called from automated flows like
+    // `rawenv up`, so a missing sudo timestamp fails fast instead of hanging
+    // on a password prompt. Interactive callers (`rawenv dns setup`) get a
+    // normal prompt.
+    const mv_argv = if (interactive)
+        &[_][*:0]const u8{ "sudo", "mv", tmp_path, path_z }
+    else
+        &[_][*:0]const u8{ "sudo", "-n", "mv", tmp_path, path_z };
+    const exit_code = try exec.run(mv_argv);
     if (exit_code != 0) return error.WriteFailed;
 }
 
