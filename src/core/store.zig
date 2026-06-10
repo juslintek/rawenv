@@ -6,6 +6,7 @@ pub const StoreError = error{
     Sha256Mismatch,
     DownloadFailed,
     ExtractionFailed,
+    PermissionDenied,
     HomeNotSet,
 };
 
@@ -39,6 +40,26 @@ fn accessPath(allocator: std.mem.Allocator, path: []const u8) bool {
     const z = std.fmt.allocPrintSentinel(allocator, "{s}", .{path}, 0) catch return false;
     defer allocator.free(z);
     return std.c.access(z, 0) == 0;
+}
+
+/// Returns true if `path` exists and is writable by the current user (W_OK).
+fn isWritable(allocator: std.mem.Allocator, path: []const u8) bool {
+    if (comptime builtin.os.tag == .windows) return true;
+    const z = std.fmt.allocPrintSentinel(allocator, "{s}", .{path}, 0) catch return false;
+    defer allocator.free(z);
+    // POSIX W_OK == 2
+    return std.c.access(z, 2) == 0;
+}
+
+/// Ensure the store base directory (~/.rawenv/store) exists and is writable.
+/// Returns StoreError.PermissionDenied with a distinct signal (separate from a
+/// failed download) so callers can suggest the right fix.
+pub fn ensureStoreWritable(allocator: std.mem.Allocator) StoreError!void {
+    if (comptime builtin.os.tag == .windows) return;
+    const base = getStoreBasePath(allocator) catch return StoreError.HomeNotSet;
+    defer allocator.free(base);
+    mkdirP(allocator, base);
+    if (!isWritable(allocator, base)) return StoreError.PermissionDenied;
 }
 
 /// Run a command using fork/exec, wait for completion. Returns exit code.
@@ -161,6 +182,11 @@ pub fn installPackage(allocator: std.mem.Allocator, pkg: resolver.ResolvedPackag
 
     const install_path = try getStorePath(allocator, pkg.name, pkg.version);
     defer allocator.free(install_path);
+
+    // Fail fast with a clear permission error before attempting a download, so
+    // a non-writable ~/.rawenv/ isn't misreported as a network failure.
+    try ensureStoreWritable(allocator);
+
     mkdirP(allocator, install_path);
 
     // Download archive to temp path
