@@ -10,9 +10,13 @@ import Foundation
 
     @Test @MainActor func scanFindsProjectThenDetectsRealServices() async throws {
         try? FileManager.default.removeItem(atPath: root)
-        let proj = "\(root)/webapp"
+        // Project basename must be globally unique across E2E suites: `rawenv init`
+        // keys the isolated data dir on basename(cwd) (~/.rawenv/data/{name}-{hash}),
+        // so reusing a plain name like "webapp" would collide with another suite's
+        // data dir under Swift Testing parallelism. See E2E-113.
+        let proj = "\(root)/findsetup-webapp"
         try FileManager.default.createDirectory(atPath: proj, withIntermediateDirectories: true)
-        try #"{"name":"webapp","engines":{"node":">=22"},"dependencies":{"express":"^4","pg":"^8","redis":"^4"}}"#
+        try #"{"name":"findsetup-webapp","engines":{"node":">=22"},"dependencies":{"express":"^4","pg":"^8","redis":"^4"}}"#
             .write(toFile: "\(proj)/package.json", atomically: true, encoding: .utf8)
         try "DATABASE_URL=postgres://localhost:5432/app\nREDIS_URL=redis://localhost:6379\n"
             .write(toFile: "\(proj)/.env", atomically: true, encoding: .utf8)
@@ -22,8 +26,8 @@ import Foundation
         let engine = ScannerEngine()
         engine.addCustomPath(path: root)
         try await Task.sleep(nanoseconds: 3_000_000_000)
-        let found = engine.discoveredProjects.first { $0.name == "webapp" }
-        #expect(found != nil, "scanner should find the webapp project")
+        let found = engine.discoveredProjects.first { $0.name == "findsetup-webapp" }
+        #expect(found != nil, "scanner should find the findsetup-webapp project")
         #expect(found?.stack.contains("Node.js") == true)
         #expect(found?.deps == "3 deps", "real dependency count (express, pg, redis), not a stack count")
 
