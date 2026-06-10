@@ -818,6 +818,23 @@ pub fn build(b: *std.Build) void {
    run_shell_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
    integration_step.dependOn(&run_shell_test.step);
 
+   // Resolver catalog coverage E2E (E2E-104): every advertised package/version
+   // resolves to a non-empty https URL with a valid, non-placeholder sha256,
+   // and (network-gated) every distinct URL answers a HEAD request with a
+   // reachable status (200/302). Imports the resolver module directly rather
+   // than spawning the binary, so it needs no install step / RAWENV_BIN.
+   const integration_resolver_coverage = b.addTest(.{
+       .root_module = b.createModule(.{
+           .root_source_file = b.path("tests/integration/resolver_coverage_e2e_test.zig"),
+           .target = target,
+           .optimize = optimize,
+           .imports = &.{.{ .name = "resolver", .module = resolver_mod }},
+       }),
+   });
+   integration_resolver_coverage.root_module.link_libc = true;
+   const run_resolver_coverage_test = b.addRunArtifact(integration_resolver_coverage);
+   integration_step.dependOn(&run_resolver_coverage_test.step);
+
    // Cross-compilation targets
    const cross_targets: []const struct { []const u8, std.Target.Cpu.Arch, std.Target.Os.Tag } = &.{
        .{ "aarch64-macos", .aarch64, .macos },
