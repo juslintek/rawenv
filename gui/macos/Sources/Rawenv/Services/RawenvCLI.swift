@@ -7,16 +7,42 @@ public final class RawenvCLI: Sendable {
         self.binaryPath = binaryPath ?? Self.findBinary()
     }
 
+    /// Ordered list of locations the CLI may live in, most-preferred first.
+    ///
+    /// The embedded copy that ships *inside* the .app bundle is tried before any
+    /// system install so a notarized, self-contained Rawenv.app always runs the
+    /// exact CLI it was shipped and signed with — even on a machine with no
+    /// `rawenv` on the PATH.
+    static func candidatePaths(bundle: Bundle = .main, home: String = NSHomeDirectory(),
+                               cwd: String = FileManager.default.currentDirectoryPath) -> [String] {
+        var paths: [String] = []
+
+        // 1. Embedded in the app bundle (Developer ID / App Store distribution).
+        if let aux = bundle.url(forAuxiliaryExecutable: "rawenv")?.path {
+            paths.append(aux)
+        }
+        if let resources = bundle.resourceURL?.appendingPathComponent("rawenv").path {
+            paths.append(resources)
+        }
+        if let bundlePath = bundle.bundleURL.path as String? {
+            paths.append("\(bundlePath)/Contents/Resources/rawenv")
+            paths.append("\(bundlePath)/Contents/MacOS/rawenv")
+        }
+
+        // 2. User / system installs.
+        paths.append("\(home)/.rawenv/bin/rawenv")
+        paths.append("/usr/local/bin/rawenv")
+        paths.append("/opt/homebrew/bin/rawenv")
+
+        // 3. Dev build from a source checkout.
+        paths.append("\(cwd)/zig-out/bin/rawenv")
+
+        return paths
+    }
+
     private static func findBinary() -> String {
-        let candidates = [
-            "\(NSHomeDirectory())/.rawenv/bin/rawenv",
-            "/usr/local/bin/rawenv",
-            "/opt/homebrew/bin/rawenv",
-            // Dev build
-            "\(FileManager.default.currentDirectoryPath)/zig-out/bin/rawenv",
-        ]
-        for path in candidates {
-            if FileManager.default.isExecutableFile(atPath: path) { return path }
+        for path in candidatePaths() where FileManager.default.isExecutableFile(atPath: path) {
+            return path
         }
         return "rawenv"
     }
