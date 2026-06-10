@@ -1019,6 +1019,12 @@ pub fn runDestroy(allocator: std.mem.Allocator, stdout: anytype, force: bool) !u
         service.stopService(allocator, svc.key, stdout) catch {};
     }
 
+    // Tear down the network artifacts `rawenv up` generated for this project:
+    // the Caddyfile + TLS certs under ~/.rawenv, and the /etc/hosts block.
+    // Best-effort — none of these should block destroying the project's data.
+    _ = service.removeNetworkArtifacts(allocator, project);
+    dns.removeHostsEntries(allocator, project, false) catch {};
+
     const removed = service.removeProjectData(allocator, project) catch false;
     if (removed) {
         try stdout.writeAll("Destroyed data for project '");

@@ -103,6 +103,53 @@ test "DNS - checkExistingEntries detects missing domains" {
 }
 
 // ============================================================
+// DNS teardown — stripProjectBlock (E2E-110 supporting unit tests)
+// ============================================================
+
+test "DNS - stripProjectBlock removes only the project's rawenv block" {
+    // Round-trip: generate a hosts block, splice it into a realistic file, then
+    // strip it back out. The rawenv-managed lines must be gone; everything else
+    // (and a *different* project's block) must survive untouched.
+    const services = [_][]const u8{"redis"};
+    const block = try dns.generateHostsEntries(testing.allocator, .{ .project = "myapp", .services = &services });
+    defer testing.allocator.free(block);
+
+    const hosts = try std.fmt.allocPrint(testing.allocator,
+        \\127.0.0.1 localhost
+        \\::1 localhost
+        \\# rawenv:other
+        \\127.0.0.1 other.test
+        \\# end-rawenv:other
+        \\{s}255.255.255.255 broadcasthost
+        \\
+    , .{block});
+    defer testing.allocator.free(hosts);
+
+    const stripped = try dns.stripProjectBlock(testing.allocator, hosts, "myapp");
+    defer testing.allocator.free(stripped);
+
+    // myapp's block (markers + entries) is gone.
+    try testing.expect(std.mem.indexOf(u8, stripped, "# rawenv:myapp") == null);
+    try testing.expect(std.mem.indexOf(u8, stripped, "# end-rawenv:myapp") == null);
+    try testing.expect(std.mem.indexOf(u8, stripped, "myapp.test") == null);
+    try testing.expect(std.mem.indexOf(u8, stripped, "redis.myapp.test") == null);
+
+    // Unrelated entries and a different project's block are preserved.
+    try testing.expect(std.mem.indexOf(u8, stripped, "127.0.0.1 localhost") != null);
+    try testing.expect(std.mem.indexOf(u8, stripped, "broadcasthost") != null);
+    try testing.expect(std.mem.indexOf(u8, stripped, "# rawenv:other") != null);
+    try testing.expect(std.mem.indexOf(u8, stripped, "127.0.0.1 other.test") != null);
+}
+
+test "DNS - stripProjectBlock is a no-op when the block is absent" {
+    const hosts = "127.0.0.1 localhost\n::1 localhost\n";
+    const stripped = try dns.stripProjectBlock(testing.allocator, hosts, "ghost");
+    defer testing.allocator.free(stripped);
+    try testing.expect(std.mem.indexOf(u8, stripped, "127.0.0.1 localhost") != null);
+    try testing.expect(std.mem.indexOf(u8, stripped, "::1 localhost") != null);
+}
+
+// ============================================================
 // Connection URL parsing and remote detection tests
 // ============================================================
 

@@ -747,6 +747,43 @@ pub fn removeProjectData(allocator: std.mem.Allocator, project: []const u8) !boo
     return exit_code == 0 and !accessPath(allocator, root);
 }
 
+/// Remove the network artifacts `rawenv up` generates for a project:
+///   * the Caddyfile at `~/.rawenv/proxy/<project>.Caddyfile`, and
+///   * the per-project TLS cert directory `~/.rawenv/certs/<project>/`
+///     (cert + key PEMs).
+///
+/// Best-effort and idempotent — a missing artifact is not an error. Returns
+/// true when at least one artifact existed and was successfully removed. The
+/// `/etc/hosts` DNS block is cleaned up separately (it requires privilege).
+/// No-op (returns false) on Windows, when HOME is unset, or for an empty
+/// project name.
+pub fn removeNetworkArtifacts(allocator: std.mem.Allocator, project: []const u8) bool {
+    if (comptime builtin.os.tag == .windows) return false;
+    if (project.len == 0) return false;
+    const home = getHome() orelse return false;
+    var removed = false;
+
+    // 1. Generated Caddyfile (unprivileged path — no sudo needed).
+    if (std.fmt.allocPrint(allocator, "{s}/.rawenv/proxy/{s}.Caddyfile", .{ home, project })) |caddy| {
+        defer allocator.free(caddy);
+        if (accessPath(allocator, caddy)) {
+            const code = runCommand(allocator, &.{ "/bin/rm", "-f", caddy }) catch 1;
+            if (code == 0 and !accessPath(allocator, caddy)) removed = true;
+        }
+    } else |_| {}
+
+    // 2. Per-project TLS cert directory (matches tls.certDir layout).
+    if (std.fmt.allocPrint(allocator, "{s}/.rawenv/certs/{s}", .{ home, project })) |certs| {
+        defer allocator.free(certs);
+        if (accessPath(allocator, certs)) {
+            const code = runCommand(allocator, &.{ "/bin/rm", "-rf", certs }) catch 1;
+            if (code == 0 and !accessPath(allocator, certs)) removed = true;
+        }
+    } else |_| {}
+
+    return removed;
+}
+
 /// Machine-wide uninstall cleanup (E2E-109). Removes every rawenv artifact:
 ///   - Stops and removes all rawenv-managed OS services. On macOS this unloads
 ///     and deletes every `~/Library/LaunchAgents/com.rawenv.*.plist`; on Linux
