@@ -47,6 +47,37 @@ test "detect package.json without engines defaults to 22" {
     try testing.expectEqualStrings("22", result.runtimes[0].value);
 }
 
+test "detect node engines snaps to nearest resolver-supported version" {
+    // engines constraint -> expected snapped (resolver-supported) major.
+    // Supported set: 18, 20, 22, 23. Ties resolve to the higher major.
+    const cases = [_]struct { engines: []const u8, want: []const u8 }{
+        .{ .engines = ">=18.0.0", .want = "18" },
+        .{ .engines = "^20.11.1", .want = "20" },
+        .{ .engines = "23.1.0", .want = "23" },
+        .{ .engines = ">=16", .want = "18" }, // 16 -> nearest is 18
+        .{ .engines = "19", .want = "20" }, // tie 18/20 -> higher = 20
+        .{ .engines = "21", .want = "22" }, // tie 20/22 -> higher = 22
+        .{ .engines = ">=24", .want = "23" }, // beyond top -> nearest = 23
+    };
+    inline for (cases) |c| {
+        var dir = try makeTmpDir();
+        defer dir.close(std.testing.io);
+        defer cleanFile(dir, "package.json");
+
+        try dir.writeFile(std.testing.io, .{
+            .sub_path = "package.json",
+            .data = "{\"name\":\"t\",\"engines\":{\"node\":\"" ++ c.engines ++ "\"}}",
+        });
+
+        var result = try detector.detect(testing.allocator, dir);
+        defer result.deinit(testing.allocator);
+
+        try testing.expectEqual(1, result.runtimes.len);
+        try testing.expectEqualStrings("node", result.runtimes[0].key);
+        try testing.expectEqualStrings(c.want, result.runtimes[0].value);
+    }
+}
+
 test "detect .env with DATABASE_URL postgres" {
     var dir = try makeTmpDir();
     defer dir.close(std.testing.io);

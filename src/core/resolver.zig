@@ -100,13 +100,10 @@ pub fn resolve(allocator: std.mem.Allocator, package_name: []const u8, version: 
 // https://nodejs.org/dist/v<ver>/SHASUMS256.txt)
 // ---------------------------------------------------------------------------
 fn resolveNode(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
-    const full_version = if (std.mem.eql(u8, version, "22") or std.mem.eql(u8, version, "22.15.0"))
-        "22.15.0"
-    else
-        return ResolveError.UnknownVersion;
+    const full_version = nodeFullVersion(version) orelse return ResolveError.UnknownVersion;
 
     const platform = try getPlatform();
-    const sha256 = getNodeSha256(platform.os, platform.arch) orelse
+    const sha256 = getNodeSha256(full_version, platform.os, platform.arch) orelse
         return ResolveError.UnsupportedPlatform;
 
     const url = try std.fmt.allocPrint(allocator, "https://nodejs.org/dist/v{s}/node-v{s}-{s}-{s}.tar.gz", .{
@@ -116,15 +113,71 @@ fn resolveNode(allocator: std.mem.Allocator, version: []const u8) (ResolveError 
     return .{ .name = "node", .version = full_version, .url = url, .sha256 = sha256, .archive_type = .tar_gz };
 }
 
-fn getNodeSha256(os: []const u8, arch: []const u8) ?[]const u8 {
-    if (std.mem.eql(u8, os, "darwin") and std.mem.eql(u8, arch, "arm64"))
-        return "92eb58f54d172ed9dee320b8450f1390db629d4262c936d5c074b25a110fed02";
-    if (std.mem.eql(u8, os, "darwin") and std.mem.eql(u8, arch, "x64"))
-        return "f7f42bee60d602783d3a842f0a02a2ecd9cb9d7f6f3088686c79295b0222facf";
-    if (std.mem.eql(u8, os, "linux") and std.mem.eql(u8, arch, "x64"))
-        return "29d1c60c5b64ccdb0bc4e5495135e68e08a872e0ae91f45d9ec34fc135a17981";
-    if (std.mem.eql(u8, os, "linux") and std.mem.eql(u8, arch, "arm64"))
-        return "c3582722db988ed1eaefd590b877b86aaace65f68746726c1f8c79d26e5cc7de";
+/// Supported node majors and the full version each one pins to. node ships
+/// official prebuilt binaries with checksums published in
+/// https://nodejs.org/dist/v<ver>/SHASUMS256.txt — keep these in sync.
+const NodeRelease = struct {
+    major: []const u8,
+    full: []const u8,
+    darwin_arm64: []const u8,
+    darwin_x64: []const u8,
+    linux_x64: []const u8,
+    linux_arm64: []const u8,
+};
+
+const node_releases = [_]NodeRelease{
+    .{
+        .major = "18",
+        .full = "18.20.8",
+        .darwin_arm64 = "bae4965d29d29bd32f96364eefbe3bca576a03e917ddbb70b9330d75f2cacd76",
+        .darwin_x64 = "ed2554677188f4afc0d050ecd8bd56effb2572d6518f8da6d40321ede6698509",
+        .linux_x64 = "27a9f3f14d5e99ad05a07ed3524ba3ee92f8ff8b6db5ff80b00f9feb5ec8097a",
+        .linux_arm64 = "2e3dfc51154e6fea9fc86a90c4ea8f3ecb8b60acaf7367c4b76691da192571c1",
+    },
+    .{
+        .major = "20",
+        .full = "20.20.2",
+        .darwin_arm64 = "466e05f3477c20dfb723054dfebffe55bc74660ee77f612166fca121dacb65b6",
+        .darwin_x64 = "8be6f5e4bb128c82774f8a0b8d7a1cc1365a7977d9657cece0ca647b3fe04e61",
+        .linux_x64 = "19e56f0825510207dd904f087fe52faa0a4eb6b2aab5f0ea7a33830d04888b8b",
+        .linux_arm64 = "47ef73d543ecf6eb19435f6c03a0ac4809b3bf0dd6b26c7c571efc2a6572a74d",
+    },
+    .{
+        .major = "22",
+        .full = "22.15.0",
+        .darwin_arm64 = "92eb58f54d172ed9dee320b8450f1390db629d4262c936d5c074b25a110fed02",
+        .darwin_x64 = "f7f42bee60d602783d3a842f0a02a2ecd9cb9d7f6f3088686c79295b0222facf",
+        .linux_x64 = "29d1c60c5b64ccdb0bc4e5495135e68e08a872e0ae91f45d9ec34fc135a17981",
+        .linux_arm64 = "c3582722db988ed1eaefd590b877b86aaace65f68746726c1f8c79d26e5cc7de",
+    },
+    .{
+        .major = "23",
+        .full = "23.11.1",
+        .darwin_arm64 = "255509d2c4fe8e1d6fefb950ad8db285ed75ba543e18744d83dc139f978e404d",
+        .darwin_x64 = "7e384a0cfa8b44ee4833b3823485baad78bf258e54f47020d2d2b4b75e9275d3",
+        .linux_x64 = "a2029c2b0cb05d10248e887c5df3f8547b7ab4aaa4e63b8e4da03e72f478140e",
+        .linux_arm64 = "277316a0b0ae3f50eb2cd57b74fa8a07f4d17fe0433468a790e6e47da297a9f6",
+    },
+};
+
+/// Map a node version request (short major like "20" or pinned full like
+/// "20.20.2") to its pinned full version. Returns null for unsupported.
+fn nodeFullVersion(version: []const u8) ?[]const u8 {
+    for (node_releases) |r| {
+        if (std.mem.eql(u8, version, r.major) or std.mem.eql(u8, version, r.full)) return r.full;
+    }
+    return null;
+}
+
+fn getNodeSha256(full_version: []const u8, os: []const u8, arch: []const u8) ?[]const u8 {
+    for (node_releases) |r| {
+        if (!std.mem.eql(u8, full_version, r.full)) continue;
+        if (std.mem.eql(u8, os, "darwin") and std.mem.eql(u8, arch, "arm64")) return r.darwin_arm64;
+        if (std.mem.eql(u8, os, "darwin") and std.mem.eql(u8, arch, "x64")) return r.darwin_x64;
+        if (std.mem.eql(u8, os, "linux") and std.mem.eql(u8, arch, "x64")) return r.linux_x64;
+        if (std.mem.eql(u8, os, "linux") and std.mem.eql(u8, arch, "arm64")) return r.linux_arm64;
+        return null;
+    }
     return null;
 }
 
@@ -329,7 +382,7 @@ pub fn resolveVersion(package_name: []const u8, version: []const u8) []const u8 
 
 fn fullVersion(package_name: []const u8, version: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, package_name, "node")) {
-        if (std.mem.eql(u8, version, "22")) return "22.15.0";
+        return nodeFullVersion(version);
     } else if (std.mem.eql(u8, package_name, "postgresql") or std.mem.eql(u8, package_name, "postgres")) {
         if (std.mem.eql(u8, version, "16")) return "16.9.0";
         if (std.mem.eql(u8, version, "17")) return "17.5.0";
@@ -352,7 +405,7 @@ fn fullVersion(package_name: []const u8, version: []const u8) ?[]const u8 {
 /// dispatch in `resolve` / `fullVersion`.
 pub fn availableVersions(package_name: []const u8) []const []const u8 {
     if (std.mem.eql(u8, package_name, "node")) {
-        return &.{"22"};
+        return &.{ "18", "20", "22", "23" };
     } else if (std.mem.eql(u8, package_name, "postgresql") or std.mem.eql(u8, package_name, "postgres")) {
         return &.{ "16", "17", "18" };
     } else if (std.mem.eql(u8, package_name, "redis")) {
@@ -402,6 +455,46 @@ test "resolve node@22" {
     // node publishes checksums, so this must never be the compute-on-download sentinel.
     try std.testing.expect(!std.mem.eql(u8, pkg.sha256, COMPUTE_ON_DOWNLOAD));
     try std.testing.expectEqual(@as(usize, 64), pkg.sha256.len);
+}
+
+test "resolve node 18/20/22/23 to real download URLs" {
+    const cases = [_]struct { req: []const u8, full: []const u8 }{
+        .{ .req = "18", .full = "18.20.8" },
+        .{ .req = "20", .full = "20.20.2" },
+        .{ .req = "22", .full = "22.15.0" },
+        .{ .req = "23", .full = "23.11.1" },
+    };
+    inline for (cases) |c| {
+        const pkg = try resolve(std.testing.allocator, "node", c.req);
+        defer std.testing.allocator.free(pkg.url);
+        try std.testing.expectEqualStrings("node", pkg.name);
+        try std.testing.expectEqualStrings(c.full, pkg.version);
+        // URL must point at the real nodejs.org dist for the pinned version.
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "nodejs.org/dist/v" ++ c.full) != null);
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "node-v" ++ c.full ++ "-") != null);
+        try std.testing.expect(pkg.archive_type == .tar_gz);
+        // node publishes real checksums — never the compute-on-download sentinel.
+        try std.testing.expect(!std.mem.eql(u8, pkg.sha256, COMPUTE_ON_DOWNLOAD));
+        try std.testing.expectEqual(@as(usize, 64), pkg.sha256.len);
+        // resolving the pinned full version directly must agree with the short alias.
+        const pkg_full = try resolve(std.testing.allocator, "node", c.full);
+        defer std.testing.allocator.free(pkg_full.url);
+        try std.testing.expectEqualStrings(pkg.url, pkg_full.url);
+        try std.testing.expectEqualStrings(pkg.sha256, pkg_full.sha256);
+    }
+}
+
+test "resolveVersion maps every supported node major" {
+    try std.testing.expectEqualStrings("18.20.8", resolveVersion("node", "18"));
+    try std.testing.expectEqualStrings("20.20.2", resolveVersion("node", "20"));
+    try std.testing.expectEqualStrings("22.15.0", resolveVersion("node", "22"));
+    try std.testing.expectEqualStrings("23.11.1", resolveVersion("node", "23"));
+}
+
+test "resolve node unsupported major" {
+    // A major rawenv doesn't pin must fail explicitly, not silently resolve.
+    try std.testing.expectError(ResolveError.UnknownVersion, resolve(std.testing.allocator, "node", "19"));
+    try std.testing.expectError(ResolveError.UnknownVersion, resolve(std.testing.allocator, "node", "16"));
 }
 
 test "resolve postgresql@17 (prebuilt, not source)" {

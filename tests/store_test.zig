@@ -63,6 +63,29 @@ test "resolve node@22 returns correct URL" {
     try std.testing.expect(pkg.archive_type == .tar_gz);
 }
 
+test "resolve node 18/20/22/23 LTS+current to real URLs" {
+    const cases = [_]struct { req: []const u8, full: []const u8 }{
+        .{ .req = "18", .full = "18.20.8" },
+        .{ .req = "20", .full = "20.20.2" },
+        .{ .req = "22", .full = "22.15.0" },
+        .{ .req = "23", .full = "23.11.1" },
+    };
+    inline for (cases) |c| {
+        const pkg = try resolver.resolve(std.testing.allocator, "node", c.req);
+        defer std.testing.allocator.free(pkg.url);
+        try std.testing.expectEqualStrings("node", pkg.name);
+        try std.testing.expectEqualStrings(c.full, pkg.version);
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "nodejs.org/dist/v" ++ c.full) != null);
+        try std.testing.expect(pkg.archive_type == .tar_gz);
+        // node ships published checksums (64 hex chars), never compute-on-download.
+        try std.testing.expectEqual(@as(usize, 64), pkg.sha256.len);
+    }
+}
+
+test "resolve node unsupported major errors" {
+    try std.testing.expectError(error.UnknownVersion, resolver.resolve(std.testing.allocator, "node", "19"));
+}
+
 test "resolve postgresql@18" {
     const pkg = try resolver.resolve(std.testing.allocator, "postgresql", "18");
     defer std.testing.allocator.free(pkg.url);

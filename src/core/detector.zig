@@ -116,8 +116,43 @@ fn parseNodeVersion(allocator: std.mem.Allocator, data: []const u8) ?[]const u8 
         .string => |s| s,
         else => return null,
     };
-    // node_str points into parsed arena or input; extract and return a comptime-known version
-    return matchMajor(node_str);
+    // Snap the engines constraint to the nearest node major the resolver can
+    // actually install, rather than echoing an arbitrary version from the
+    // manifest. Returns a comptime-known literal (node_str is only read here,
+    // before `parsed` is freed).
+    return snapNodeVersion(node_str);
+}
+
+/// Snap a package.json `engines.node` constraint (e.g. ">=20.0.0", "^18",
+/// "23.1.0") to the nearest node major rawenv's resolver supports. The
+/// supported set mirrors resolver.zig's `node_releases` table — keep them in
+/// sync. On a tie the higher (newer) major wins. Returns null when no numeric
+/// major can be extracted.
+fn snapNodeVersion(raw: []const u8) ?[]const u8 {
+    var i: usize = 0;
+    while (i < raw.len and !std.ascii.isDigit(raw[i])) : (i += 1) {}
+    if (i >= raw.len) return null;
+    const start = i;
+    while (i < raw.len and std.ascii.isDigit(raw[i])) : (i += 1) {}
+    const major = std.fmt.parseInt(u32, raw[start..i], 10) catch return null;
+
+    const supported = [_]struct { n: u32, s: []const u8 }{
+        .{ .n = 18, .s = "18" },
+        .{ .n = 20, .s = "20" },
+        .{ .n = 22, .s = "22" },
+        .{ .n = 23, .s = "23" },
+    };
+    var best: []const u8 = supported[0].s;
+    var best_dist: u32 = std.math.maxInt(u32);
+    for (supported) |c| {
+        const dist = if (c.n > major) c.n - major else major - c.n;
+        // `<=` lets the higher major win ties (the table is ascending).
+        if (dist <= best_dist) {
+            best_dist = dist;
+            best = c.s;
+        }
+    }
+    return best;
 }
 
 fn parsePhpVersion(allocator: std.mem.Allocator, data: []const u8) ?[]const u8 {
