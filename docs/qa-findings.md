@@ -14,13 +14,19 @@ and is tracked from discovery through resolution.
 
 | Metric | Count |
 |--------|-------|
-| Total findings | 17 |
-| 🔴 Open | 17 |
+| Total findings | 21 |
+| 🔴 Open | 21 |
 | 🟢 Resolved | 0 |
 | ⛔ Blockers (open) | 2 |
-| 🟠 Majors (open) | 8 |
+| 🟠 Majors (open) | 10 |
 
-**Status:** Four exploratory runs logged. EXPLORE-030 (qwik-fullstack) logged 7
+**Status:** Five exploratory runs logged (full 5-project run complete, **zero
+crashes**). EXPLORE-034 (gratis, a real 40+-plugin WordPress suite) logged 4 more
+(QF-018 major: php defaults to 8.4 ignoring the Dockerfile's php8.3; QF-019
+major: mariadb detected but unresolvable; QF-020/QF-021 minor) and reproduced
+QF-001/QF-005/QF-006/QF-012/QF-015 against a fifth project. A consolidated
+cross-project writeup lives in [`docs/exploratory-report.md`](exploratory-report.md).
+EXPLORE-030 (qwik-fullstack) logged 7
 findings (2 blockers, 2 majors, 3 minor/trivial). EXPLORE-031 (rentflowiq,
 greenfield Bun/SolidStart project) logged 5 more (QF-008…QF-012: 3 majors, 2
 minor) and reproduced QF-001/QF-004/QF-005/QF-006 against a second project.
@@ -809,6 +815,208 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 ---
 
+> **Exploratory run context (EXPLORE-034):** Same real CLI rebuilt from this
+> worktree (`zig build`, Zig 0.16.0, macOS arm64, binary at `zig-out/bin/rawenv`)
+> and run against the live project `/Volumes/Projects/gratis` — a **real,
+> large modular WordPress plugin suite** (40+ `gratis-*` plugins + a block
+> theme). The deployable unit is `gratis-suite/`, which carries a real
+> `docker-compose.yml` (a custom `wordpress` image built from a `Dockerfile`
+> based on `wordpress:7-php8.3-apache`, plus `db: mariadb:11` and
+> `redis: redis:7-alpine`), a `composer.json` (`phpredis/phpredis`,
+> `awesome/simdjson_plus` — **no `php` constraint**), a `.env`
+> (`COMPOSE_PROJECT_NAME=gratis` only), and a hand-written `rawenv.toml`
+> (`php 8.4`, `mariadb 11`, `redis 7`). Flow exercised at the repo root
+> (`/Volumes/Projects/gratis`) and inside `gratis-suite/`: `detect` (+`--json`)
+> → `init` → `status` (+`--json`) → `services ls` → `connections` →
+> `add mariadb@11` → `add php@8.4` → `add redis@7` → `up`. **No crashes occurred
+> in any command** (every invocation exited cleanly; `up` exited 0 even on
+> failure — see QF-012). All side effects (the empty `php-8.4.11/` store dir
+> from the failed download, plus `~/.rawenv/certs/gratis-suite/` and
+> `~/.rawenv/proxy/gratis-suite.Caddyfile` written by `up`) were cleaned up
+> afterward; the project's `rawenv.toml` was left byte-identical and `init`
+> correctly **skipped** the existing config.
+>
+> The store already contained real `php-8.4.0` and `php-8.3.21` runtimes (both
+> with `.rawenv-installed` markers), which again made the install-state and
+> version-mapping gaps reproducible against real installed binaries.
+>
+> Reproduced from earlier runs: **QF-001** (`add php@8.4`→`php@8.4.11` and
+> `add redis@7`→`redis@7.4.0` both failed **instantly** — 32 ms — while
+> `github.com` returned HTTP 200 in 1.9 s: the `execve`-without-PATH bug, now on
+> a **fifth** project), **QF-005** (`up` printed `▶ redis@7.4.0 started` then
+> `✗ redis (port 6381) failed: not ready after 30s` for an uninstalled binary),
+> **QF-006/QF-015** (a real installed `php-8.4.0` shows `installed` in
+> `services ls` but `not installed` in `status`/`up`, because `fullVersion`
+> maps `php 8.4 → 8.4.11` and `isInstalled` looks for the non-existent
+> `php-8.4.11` dir; redis version `7`→`7.4.0` across commands), and **QF-012**
+> (`up` exited **0** despite redis failing to start, after blocking 30 s).
+
+### QF-018 — `composer.json` with no `php` constraint defaults to php 8.4, ignoring the Dockerfile's pinned `php8.3` (detected runtime ≠ project's real PHP)
+
+- **Date:** 2026-06-10
+- **Severity:** 🟠 Major
+- **Status:** open
+- **Area:** CLI / detector (PHP version source)
+- **Source:** exploratory (EXPLORE-034)
+- **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w6-0
+
+**Steps to reproduce**
+1. In `/Volumes/Projects/gratis/gratis-suite`, run `rawenv detect --json`. Its
+   `composer.json` `require` block lists only `phpredis/phpredis` and
+   `awesome/simdjson_plus` (no `php` key). Its `Dockerfile` builds
+   `FROM wordpress:7-php8.3-apache` (the real runtime is **PHP 8.3**).
+2. Observe the detected runtime.
+
+**Expected**
+> The detected php version reflects the project's real PHP (8.3, as pinned by
+> the Dockerfile base image) — or, when no constraint is discoverable, rawenv
+> emits a clearly-labeled fallback rather than asserting a specific major.
+
+**Actual**
+> `{"runtimes":[{"name":"php","version":"8.4"}],...}` — php is reported as
+> **8.4**, the project's actual runtime is **8.3**. Root cause:
+> `detectRuntimes` in `src/core/detector.zig` does
+> `.value = parsePhpVersion(allocator, data) orelse "8.4"`, and `parsePhpVersion`
+> only reads `require.php` from `composer.json`. With no `php` key it returns
+> `null` and the hard-coded `"8.4"` default wins. The `Dockerfile` base image
+> tag (`php8.3`) — the authoritative version signal for a containerized
+> WordPress app — is never consulted. WordPress/Sail-style projects very
+> commonly pin PHP via the image rather than `composer.json`, so this
+> mis-detects the primary runtime for a large class of real projects. Combined
+> with QF-015, the mis-detected `8.4` is then also reported `not installed` by
+> `status` even though `php-8.4.0` is in the store.
+
+**Fix**
+> Treat the hard-coded `"8.4"` as a clearly-labeled last resort, and add a
+> Dockerfile/base-image version source (parse `php8.3` from
+> `FROM wordpress:*-php8.3-*` and `FROM php:8.3-*`). Optionally read
+> `config.platform.php` from `composer.json` and a `.php-version` file. Pending.
+
+**User story:** _required — convert before VERIFY-040_
+
+---
+
+### QF-019 — `mariadb` is detected from compose and written to `rawenv.toml`, but the resolver has no `mariadb`/`mysql` package, so it can never be installed
+
+- **Date:** 2026-06-10
+- **Severity:** 🟠 Major
+- **Status:** open
+- **Area:** CLI / detector ↔ resolver mismatch (install path)
+- **Source:** exploratory (EXPLORE-034)
+- **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w6-0
+
+**Steps to reproduce**
+1. In `gratis-suite` (compose `db: image: mariadb:11`), `rawenv detect` reports
+   `mariadb 11` and the hand-written `rawenv.toml` declares `mariadb = "11"`.
+2. `rawenv status` prints `⚠ mariadb: binary not installed — run
+   rawenv add mariadb@11`.
+3. Run `rawenv add mariadb@11`.
+
+**Expected**
+> A service the detector recognizes and `status` recommends installing
+> (`rawenv add mariadb@11`) must be installable. MariaDB/MySQL is the primary
+> database of essentially every WordPress, Laravel, and classic-LAMP project.
+
+**Actual**
+> `rawenv add mariadb@11` → `Unknown package: mariadb. Available: node, postgres,
+> redis, python, php, meilisearch` (exit 1). The detector matches `mariadb`/
+> `mysql` images (`src/core/detector.zig` `parseDockerComposeServices`), and
+> `resolver.zig` has a `postgres` entry — but **no `mariadb` and no `mysql`**.
+> So rawenv detects the DB, advertises an install command, then rejects it, and
+> `rawenv up` reports `mariadb@11 — not installed, skipping`. This is the same
+> class as QF-002 (mssql) and QF-009 (bun) — a runtime/service the tool surfaces
+> but cannot resolve — now for the single most common dev database. Note
+> `mariadb` (unknown service type) is **skipped** by `up`, whereas `redis` (a
+> known service type) gets the QF-005 false-"started" + 30 s probe, so the two
+> are also handled inconsistently.
+
+**Fix**
+> Add `mariadb` and `mysql` resolver entries (+ `resolveMariadb`/`resolveMysql`
+> dispatch and `available_packages` listing). Until then, `status`/detector
+> should not emit an `add mariadb@…` suggestion for an unresolvable service.
+> Pending.
+
+**User story:** _required — convert before VERIFY-040_
+
+---
+
+### QF-020 — A compose service with no published `ports:` reports `port: 0` in `detect` and a placeholder `1024` in `status`; redis's published host port `6380` is also dropped
+
+- **Date:** 2026-06-10
+- **Severity:** 🟡 Minor
+- **Status:** open
+- **Area:** CLI / detector + status (port reporting)
+- **Source:** exploratory (EXPLORE-034)
+- **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w6-0
+
+**Steps to reproduce**
+1. In `gratis-suite`, the compose `db` service (`mariadb:11`) declares **no**
+   `ports:` mapping; the `redis` service maps `- "6380:6379"`.
+2. Run `rawenv detect --json` then `rawenv status --json`.
+
+**Expected**
+> Ports are reported consistently and meaningfully: an unpublished service
+> falls back to its well-known default (mariadb → 3306), and a published
+> mapping surfaces the **host** port the developer actually connects to
+> (redis → 6380).
+
+**Actual**
+> - `mariadb`: `detect` → `"port":0`; `status` → `1024` (placeholder). Neither
+>   is the real/default 3306.
+> - `redis`: `detect` → `6379` (the container-side port, not the host `6380`);
+>   `status`/`up` → `6381` (conflict-avoidance remap). The actual published host
+>   port `6380` never appears anywhere.
+> So for one project the same two services show four different ports across
+> `detect`/`status`/compose, none matching what a developer would use. Extends
+> QF-006 with the new `port: 0` (unpublished service) and host-vs-container
+> (`6380:6379`) cases.
+
+**Fix**
+> When a compose service has no `ports:`, fall back to the service's default
+> port; when it has `"<host>:<container>"`, report the **host** port. Centralize
+> port resolution so `detect`/`status`/`up` agree. Pending. (Rolls up with
+> QF-006.)
+
+**User story:** n/a (minor; rolls up with QF-006)
+
+---
+
+### QF-021 — `connections` shows "No service dependencies found" even though compose declares `depends_on` (init flattens services and drops dependencies)
+
+- **Date:** 2026-06-10
+- **Severity:** 🟡 Minor
+- **Status:** open
+- **Area:** CLI / detector → init → connections (dependency map)
+- **Source:** exploratory (EXPLORE-034)
+- **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w6-0
+
+**Steps to reproduce**
+1. `gratis-suite`'s compose declares `wordpress.depends_on: [db, redis]` and
+   `wpcli.depends_on: [db]`.
+2. Run `rawenv connections`.
+
+**Expected**
+> The dependency map reflects the compose `depends_on` edges (e.g. the app
+> depends on mariadb + redis), so `connections` and `down`'s reverse-dependency
+> ordering have real data to work with.
+
+**Actual**
+> `rawenv connections` → `No service dependencies found.` The detector emits a
+> flat list of services and `init` writes a flat `[services]` table with no
+> `depends_on`, so the compose dependency graph is lost at import time and
+> `connections` has nothing to show. (Benign here, but the dependency-aware
+> `up`/`down` ordering the README advertises can never trigger for an
+> init-from-compose project.)
+
+**Fix**
+> Capture `depends_on` during compose parsing and persist it into `rawenv.toml`
+> (e.g. `[services.app] depends_on = [...]`), so `connections`/`down` can use
+> it. Pending.
+
+**User story:** n/a (minor)
+
+---
+
 ## Changelog
 
 | Date | Change |
@@ -819,3 +1027,4 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 | 2026-06-10 | EXPLORE-031: second exploratory run (rentflowiq, greenfield Bun/SolidStart). Logged QF-008 (major, `app` treated as package), QF-009 (major, bun unsupported by resolver), QF-010 (minor, meilisearch compose detection), QF-011 (minor, greenfield/packageManager), QF-012 (major, `up` exits 0 on total failure). Reproduced QF-001/QF-004/QF-005/QF-006 on a second project. |
 | 2026-06-10 | EXPLORE-032: third exploratory run (rahcolours-b2b2c, real Laravel 11 / PHP 8.3 + Node/Vite with Laravel Sail compose). Logged QF-013 (major, quoted compose images detect zero services), QF-014 (major, php 8.3 detected but resolver only supports 8.4 — primary runtime uninstallable), QF-015 (minor, installed php-8.3.21 invisible to status/up/add). Reproduced QF-003/QF-006 patterns on a third project. |
 | 2026-06-10 | EXPLORE-033: fourth exploratory run (zelkai-trends, real Node 22 + Python `uv`/`pyproject.toml` monorepo). Logged QF-016 (major, Python detected as zero — detector only reads `requirements.txt`, ignores `pyproject.toml`/`uv.lock`), QF-017 (minor, service detection ignores committed `.env.example`). Reproduced QF-001 for a `python` runtime (16 ms instant download failure while network was up) on a fourth project. |
+| 2026-06-10 | EXPLORE-034: fifth exploratory run (gratis, real 40+-plugin WordPress suite; `gratis-suite/` runs PHP via a `wordpress:7-php8.3-apache` Dockerfile + mariadb:11 + redis:7-alpine). Logged QF-018 (major, composer.json without a php constraint defaults to php 8.4, ignoring the Dockerfile's php8.3), QF-019 (major, mariadb detected + recommended but unresolvable — `Unknown package: mariadb`), QF-020 (minor, port reporting: `port:0` for unpublished service / placeholder 1024 / dropped host port 6380), QF-021 (minor, `connections` empty because `init` drops compose `depends_on`). Reproduced QF-001/QF-005/QF-006/QF-012/QF-015 on a fifth project. **Full 5-project run completed with zero crashes.** Wrote `docs/exploratory-report.md` (consolidated cross-project report). |
