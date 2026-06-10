@@ -181,8 +181,49 @@ test "E2E-102: depends_on compose — edges preserved in rawenv.toml and connect
 }
 
 // ---------------------------------------------------------------------------
-// 4. Port mappings → correct host ports.
+// 3b. depends_on via `rawenv init` (QF-021).
+//
+// `init` uses the detector (not the compose importer). It must still carry the
+// dependency edges between detected services into rawenv.toml so `connections`
+// can reconstruct them — the bug QF-021 reported as always-empty after init.
 // ---------------------------------------------------------------------------
+
+const init_depends_fixture = @embedFile("fixtures/compose-init-depends.yml");
+
+test "QF-021: rawenv init preserves compose depends_on for connections" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try tmp.dir.writeFile(io, .{ .sub_path = "docker-compose.yml", .data = init_depends_fixture });
+
+    {
+        const r = try run(&.{ rawenvBin(), "init" }, tmp.dir);
+        defer r.deinit();
+        if (!r.exitedWith(0)) {
+            std.debug.print("init failed: term={any}\nstdout={s}\nstderr={s}\n", .{ r.term, r.stdout, r.stderr });
+            return error.InitFailed;
+        }
+    }
+
+    const toml = tmp.dir.readFileAlloc(io, "rawenv.toml", testing.allocator, Io.Limit.limited(8192)) catch |err| {
+        std.debug.print("init produced no rawenv.toml: {}\n", .{err});
+        return err;
+    };
+    defer testing.allocator.free(toml);
+
+    // The cache → db edge is resolved to package keys and written to the config.
+    try expectContains(toml, "[services.redis]");
+    try expectContains(toml, "depends_on = [\"postgresql\"]");
+
+    // `rawenv connections` reconstructs the dependency map after init.
+    const r = try run(&.{ rawenvBin(), "connections" }, tmp.dir);
+    defer r.deinit();
+    if (!r.exitedWith(0)) {
+        std.debug.print("connections failed: term={any}\nstdout={s}\nstderr={s}\n", .{ r.term, r.stdout, r.stderr });
+        return error.ConnectionsFailed;
+    }
+    try expectContains(r.stdout, "redis -> postgresql");
+}
 
 test "E2E-102: port-mapping compose — host ports land in config" {
     var tmp = testing.tmpDir(.{});

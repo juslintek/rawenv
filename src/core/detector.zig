@@ -4,9 +4,22 @@ pub const DetectionResult = struct {
     runtimes: []Entry,
     services: []Entry,
 
-    pub const Entry = struct { key: []const u8, value: []const u8 };
+    pub const Entry = struct {
+        key: []const u8,
+        value: []const u8,
+        /// Service keys this entry depends on, recovered from a
+        /// docker-compose.yml `depends_on:` block. Each element is a rawenv
+        /// service key (e.g. "postgresql"), already resolved from the compose
+        /// service name via its image. The slice is owned by the allocator
+        /// passed to `detect` and freed by `deinit`; its elements are static
+        /// literals (the package keys) and must not be freed individually.
+        depends_on: []const []const u8 = &.{},
+    };
 
     pub fn deinit(self: *DetectionResult, allocator: std.mem.Allocator) void {
+        for (self.services) |svc| {
+            if (svc.depends_on.len > 0) allocator.free(svc.depends_on);
+        }
         allocator.free(self.runtimes);
         allocator.free(self.services);
         self.* = .{ .runtimes = &.{}, .services = &.{} };
@@ -346,47 +359,200 @@ fn parseEnvServices(allocator: std.mem.Allocator, data: []const u8, services: *s
     }
 }
 
+/// Recognised service image → rawenv package key + default version.
+const ServiceInfo = struct { key: []const u8, default: []const u8 };
+
+fn mapComposeImage(image: []const u8) ?ServiceInfo {
+    const base = imageBasename(image);
+    if (std.mem.startsWith(u8, base, "postgres")) return .{ .key = "postgresql", .default = "16" };
+    if (std.mem.startsWith(u8, base, "redis")) return .{ .key = "redis", .default = "7" };
+    if (std.mem.startsWith(u8, base, "mysql")) return .{ .key = "mysql", .default = "8" };
+    if (std.mem.startsWith(u8, base, "mariadb")) return .{ .key = "mariadb", .default = "11" };
+    if (std.mem.startsWith(u8, base, "mongo")) return .{ .key = "mongodb", .default = "7" };
+    if (std.mem.indexOf(u8, image, "azure-sql-edge") != null or std.mem.indexOf(u8, image, "mssql") != null)
+        return .{ .key = "mssql", .default = "2022" };
+    if (std.mem.indexOf(u8, image, "meilisearch") != null) return .{ .key = "meilisearch", .default = "1" };
+    return null;
+}
+
+/// Extract the version major from an image basename (e.g. "postgres:15" → "15"),
+/// falling back to the package default when the tag is non-numeric or absent.
+fn versionForImage(base: []const u8, default: []const u8) []const u8 {
+    const colon = std.mem.indexOfScalar(u8, base, ':') orelse return default;
+    return matchMajor(base[colon..]) orelse default;
+}
+
+/// Parse the `services:` block of a docker-compose.yml. Two things are
+/// recovered per service: the rawenv package key (from its `image:`) and its
+/// `depends_on:` edges. Detected database/cache services are appended to
+/// `services` (deduped by key, preserving declaration order) with their
+/// `depends_on` resolved from compose service names to rawenv keys — so the
+/// dependency graph survives `rawenv init` and `rawenv connections` can
+/// reconstruct it. Edges whose endpoints are not recognised services (e.g. an
+/// app's own runtime image, which `init` tracks as a runtime not a service)
+/// are dropped, since there is no service entry to anchor them to.
 fn parseDockerComposeServices(allocator: std.mem.Allocator, data: []const u8, services: *std.ArrayList(DetectionResult.Entry)) !void {
+    var arena_state = std.heap.ArenaAllocator.init(allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    const ComposeSvc = struct {
+        name: []const u8,
+        info: ?ServiceInfo = null,
+        version: []const u8 = "",
+        deps: std.ArrayList([]const u8) = .empty, // compose service names
+    };
+
+    var svcs: std.ArrayList(ComposeSvc) = .empty;
+
+    var in_services = false;
+    var service_indent: ?usize = null;
+    var prop_indent: ?usize = null;
+    var cur: ?*ComposeSvc = null;
+    var in_depends = false;
+
     var it = std.mem.splitScalar(u8, data, '\n');
-    while (it.next()) |line| {
+    while (it.next()) |raw| {
+        const line = stripCr(raw);
         const trimmed = std.mem.trim(u8, line, &std.ascii.whitespace);
-        if (!std.mem.startsWith(u8, trimmed, "image:")) continue;
-        // Unwrap single-quoted, double-quoted, or unquoted image values
-        // identically (e.g. Laravel Sail uses `image: 'mysql:8.0.39'`).
-        const image = extractImageValue(trimmed["image:".len..]);
-        if (image.len == 0) continue;
-        // Match against the registry/org-stripped basename for the common
-        // images, and a substring match for vendor images that always carry an
-        // org prefix (e.g. `mcr.microsoft.com/azure-sql-edge`,
-        // `getmeili/meilisearch`).
-        const base = imageBasename(image);
-        const Info = struct { key: []const u8, default: []const u8 };
-        const info: ?Info = if (std.mem.startsWith(u8, base, "postgres"))
-            .{ .key = "postgresql", .default = "16" }
-        else if (std.mem.startsWith(u8, base, "redis"))
-            .{ .key = "redis", .default = "7" }
-        else if (std.mem.startsWith(u8, base, "mysql"))
-            .{ .key = "mysql", .default = "8" }
-        else if (std.mem.startsWith(u8, base, "mariadb"))
-            .{ .key = "mariadb", .default = "11" }
-        else if (std.mem.startsWith(u8, base, "mongo"))
-            .{ .key = "mongodb", .default = "7" }
-        else if (std.mem.indexOf(u8, image, "azure-sql-edge") != null or std.mem.indexOf(u8, image, "mssql") != null)
-            .{ .key = "mssql", .default = "2022" }
-        else if (std.mem.indexOf(u8, image, "meilisearch") != null)
-            .{ .key = "meilisearch", .default = "1" }
-        else
-            null;
-        if (info) |si| {
-            if (!hasService(services, si.key)) {
-                const ver = blk: {
-                    const colon = std.mem.indexOfScalar(u8, base, ':') orelse break :blk si.default;
-                    break :blk matchMajor(base[colon..]) orelse si.default;
-                };
-                try services.append(allocator, .{ .key = si.key, .value = ver });
+        if (trimmed.len == 0 or trimmed[0] == '#') continue;
+
+        const indent = leadingSpaces(line);
+
+        if (indent == 0) {
+            in_services = std.mem.eql(u8, keyOf(trimmed), "services");
+            service_indent = null;
+            cur = null;
+            in_depends = false;
+            continue;
+        }
+        if (!in_services) continue;
+
+        if (service_indent == null) service_indent = indent;
+        const svc_indent = service_indent.?;
+        if (indent < svc_indent) continue;
+
+        if (indent == svc_indent) {
+            // New service declaration: "<name>:".
+            try svcs.append(arena, .{ .name = try arena.dupe(u8, keyOf(trimmed)) });
+            cur = &svcs.items[svcs.items.len - 1];
+            prop_indent = null;
+            in_depends = false;
+            continue;
+        }
+
+        const svc = cur orelse continue;
+
+        // List item under depends_on: "- name".
+        if (std.mem.startsWith(u8, trimmed, "- ") or std.mem.eql(u8, trimmed, "-")) {
+            if (in_depends) {
+                const dep = unquote(std.mem.trim(u8, trimmed[1..], &std.ascii.whitespace));
+                if (dep.len > 0) try svc.deps.append(arena, try arena.dupe(u8, dep));
             }
+            continue;
+        }
+
+        if (prop_indent == null) prop_indent = indent;
+
+        if (indent <= prop_indent.?) {
+            // A property key line: "key:" or "key: value".
+            const key = keyOf(trimmed);
+            const value = valueOf(trimmed);
+            in_depends = false;
+            if (std.mem.eql(u8, key, "image")) {
+                const image = extractImageValue(value);
+                if (image.len > 0) {
+                    if (mapComposeImage(image)) |info| {
+                        svc.info = info;
+                        svc.version = versionForImage(imageBasename(image), info.default);
+                    }
+                }
+            } else if (std.mem.eql(u8, key, "depends_on")) {
+                in_depends = true;
+                // Inline array form: "depends_on: [a, b]".
+                if (std.mem.indexOfScalar(u8, value, '[')) |s| {
+                    const e = std.mem.indexOfScalar(u8, value, ']') orelse value.len;
+                    var vit = std.mem.splitScalar(u8, value[s + 1 .. e], ',');
+                    while (vit.next()) |rawv| {
+                        const dv = unquote(std.mem.trim(u8, rawv, &std.ascii.whitespace));
+                        if (dv.len > 0) try svc.deps.append(arena, try arena.dupe(u8, dv));
+                    }
+                }
+            }
+        } else if (in_depends and std.mem.endsWith(u8, trimmed, ":")) {
+            // Long form: "depends_on:\n  <name>:\n    condition: ...".
+            try svc.deps.append(arena, try arena.dupe(u8, keyOf(trimmed)));
         }
     }
+
+    // Emit detected services (deduped by key) with resolved dependency edges.
+    for (svcs.items) |*cs| {
+        const info = cs.info orelse continue;
+        if (hasService(services, info.key)) continue;
+
+        var resolved: std.ArrayList([]const u8) = .empty;
+        errdefer resolved.deinit(allocator);
+        for (cs.deps.items) |dep_name| {
+            const dep_key = blk: {
+                for (svcs.items) |other| {
+                    if (std.mem.eql(u8, other.name, dep_name)) {
+                        if (other.info) |oi| break :blk oi.key;
+                    }
+                }
+                break :blk null;
+            };
+            if (dep_key) |dk| {
+                var dup = false;
+                for (resolved.items) |r| {
+                    if (std.mem.eql(u8, r, dk)) {
+                        dup = true;
+                        break;
+                    }
+                }
+                if (!dup) try resolved.append(allocator, dk);
+            }
+        }
+
+        const deps_slice: []const []const u8 = if (resolved.items.len > 0)
+            try resolved.toOwnedSlice(allocator)
+        else blk: {
+            resolved.deinit(allocator);
+            break :blk &.{};
+        };
+
+        try services.append(allocator, .{ .key = info.key, .value = cs.version, .depends_on = deps_slice });
+    }
+}
+
+/// Strip a trailing carriage return (CRLF line endings).
+fn stripCr(line: []const u8) []const u8 {
+    if (line.len > 0 and line[line.len - 1] == '\r') return line[0 .. line.len - 1];
+    return line;
+}
+
+fn leadingSpaces(line: []const u8) usize {
+    var n: usize = 0;
+    while (n < line.len and (line[n] == ' ' or line[n] == '\t')) : (n += 1) {}
+    return n;
+}
+
+/// Text before the first ':' in "key: value" (or "key:" / "name:").
+fn keyOf(trimmed: []const u8) []const u8 {
+    const colon = std.mem.indexOfScalar(u8, trimmed, ':') orelse return trimmed;
+    return std.mem.trim(u8, trimmed[0..colon], &std.ascii.whitespace);
+}
+
+/// Text after the first ':' in "key: value" (may be empty).
+fn valueOf(trimmed: []const u8) []const u8 {
+    const colon = std.mem.indexOfScalar(u8, trimmed, ':') orelse return "";
+    return std.mem.trim(u8, trimmed[colon + 1 ..], &std.ascii.whitespace);
+}
+
+fn unquote(s: []const u8) []const u8 {
+    if (s.len >= 2 and ((s[0] == '"' and s[s.len - 1] == '"') or (s[0] == '\'' and s[s.len - 1] == '\''))) {
+        return s[1 .. s.len - 1];
+    }
+    return s;
 }
 
 /// Extract the bare image reference from a compose `image:` value, treating

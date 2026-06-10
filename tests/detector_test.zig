@@ -229,6 +229,69 @@ test "detect docker-compose.yml images" {
     try testing.expectEqualStrings("7", result.services[1].value);
 }
 
+test "detect docker-compose.yml preserves depends_on edges between services" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "docker-compose.yml");
+    cleanFile(dir, "package.json");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+
+    // The cache service depends on the database. Both map to recognised rawenv
+    // services, so the edge must survive detection as a resolved package key.
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "docker-compose.yml",
+        .data =
+        \\services:
+        \\  cache:
+        \\    image: redis:7
+        \\    depends_on:
+        \\      - db
+        \\  db:
+        \\    image: postgres:16
+        ,
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(2, result.services.len);
+    try testing.expectEqualStrings("redis", result.services[0].key);
+    try testing.expectEqual(1, result.services[0].depends_on.len);
+    try testing.expectEqualStrings("postgresql", result.services[0].depends_on[0]);
+    try testing.expectEqualStrings("postgresql", result.services[1].key);
+    try testing.expectEqual(0, result.services[1].depends_on.len);
+}
+
+test "detect docker-compose.yml depends_on inline array form" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "docker-compose.yml");
+    cleanFile(dir, "package.json");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "docker-compose.yml",
+        .data =
+        \\services:
+        \\  db:
+        \\    image: postgres:16
+        \\    depends_on: [cache]
+        \\  cache:
+        \\    image: redis:7
+        ,
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(2, result.services.len);
+    try testing.expectEqualStrings("postgresql", result.services[0].key);
+    try testing.expectEqual(1, result.services[0].depends_on.len);
+    try testing.expectEqualStrings("redis", result.services[0].depends_on[0]);
+}
+
 test "detect docker-compose.yml single-quoted image (Laravel Sail)" {
     var dir = try makeTmpDir();
     defer dir.close(std.testing.io);

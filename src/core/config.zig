@@ -313,7 +313,7 @@ pub fn generate(allocator: std.mem.Allocator, project_name: []const u8, runtimes
     if (services.len > 0) {
         var needs_sections = false;
         for (services) |svc| {
-            if (svc.port != 0 or svc.app or std.mem.indexOfScalar(u8, svc.key, '.') != null) needs_sections = true;
+            if (svc.port != 0 or svc.app or svc.depends_on.len > 0 or std.mem.indexOfScalar(u8, svc.key, '.') != null) needs_sections = true;
         }
         if (needs_sections) {
             for (services) |svc| {
@@ -324,6 +324,16 @@ pub fn generate(allocator: std.mem.Allocator, project_name: []const u8, runtimes
                 try buf.appendSlice(allocator, "\"\n");
                 if (svc.port != 0) {
                     try buf.print(allocator, "port = {d}\n", .{svc.port});
+                }
+                if (svc.depends_on.len > 0) {
+                    try buf.appendSlice(allocator, "depends_on = [");
+                    for (svc.depends_on, 0..) |dep, i| {
+                        if (i > 0) try buf.appendSlice(allocator, ", ");
+                        try buf.appendSlice(allocator, "\"");
+                        try buf.appendSlice(allocator, dep);
+                        try buf.appendSlice(allocator, "\"");
+                    }
+                    try buf.appendSlice(allocator, "]\n");
                 }
                 if (svc.app) {
                     try buf.appendSlice(allocator, "app = true\n");

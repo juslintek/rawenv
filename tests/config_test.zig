@@ -241,6 +241,26 @@ test "generate round-trips port and instance names" {
     try testing.expectEqual(6390, cfg.services[1].port);
 }
 
+test "generate round-trips depends_on edges" {
+    const services = &[_]config.Config.Entry{
+        .{ .key = "postgresql", .value = "16" },
+        .{ .key = "redis", .value = "7", .depends_on = &.{"postgresql"} },
+    };
+    const toml = try config.generate(testing.allocator, "deps", &.{}, services);
+    defer testing.allocator.free(toml);
+
+    // The edge is emitted as a TOML array and round-trips back through parse.
+    try testing.expect(std.mem.containsAtLeast(u8, toml, 1, "depends_on = [\"postgresql\"]"));
+
+    var cfg = try config.parse(testing.allocator, toml);
+    defer config.deinit(testing.allocator, &cfg);
+
+    try testing.expectEqual(2, cfg.services.len);
+    try testing.expectEqualStrings("redis", cfg.services[1].key);
+    try testing.expectEqual(1, cfg.services[1].depends_on.len);
+    try testing.expectEqualStrings("postgresql", cfg.services[1].depends_on[0]);
+}
+
 test "parse depends_on array under a service" {
     const input =
         \\name = "deps-app"

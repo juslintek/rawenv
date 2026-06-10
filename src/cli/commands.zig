@@ -91,7 +91,7 @@ pub fn runInit(allocator: std.mem.Allocator, stdout: anytype) !u8 {
     for (result.runtimes, 0..) |e, i| rt_entries[i] = .{ .key = e.key, .value = e.value };
     const svc_entries = try allocator.alloc(config.Config.Entry, result.services.len);
     defer allocator.free(svc_entries);
-    for (result.services, 0..) |e, i| svc_entries[i] = .{ .key = e.key, .value = e.value };
+    for (result.services, 0..) |e, i| svc_entries[i] = .{ .key = e.key, .value = e.value, .depends_on = e.depends_on };
     const toml = try config.generate(allocator, project_name, rt_entries, svc_entries);
     defer allocator.free(toml);
 
