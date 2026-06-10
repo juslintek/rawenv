@@ -206,6 +206,13 @@ pub fn defaultPort(name: []const u8) u16 {
 /// Returns true if a TCP port can be bound on 127.0.0.1 (i.e. nothing is listening).
 pub fn isPortFree(port: u16) bool {
     if (port == 0) return false;
+    if (comptime builtin.os.tag == .windows) {
+        // Windows lacks the POSIX/std socket layer used below (Zig 0.16 moved
+        // networking into std.Io and dropped std.net). Mirror tcpProbe's
+        // graceful Windows degradation: assume the port is bindable so port
+        // allocation still proceeds. OS-level conflict detection is a no-op here.
+        return true;
+    }
     const fd = std.c.socket(std.c.AF.INET, std.c.SOCK.STREAM, 0);
     if (fd < 0) return false;
     defer _ = std.c.close(fd);

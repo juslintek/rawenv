@@ -5,6 +5,12 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Version string, injectable from the release pipeline via `-Dversion=1.2.3`.
+    // Falls back to the build.zig.zon version when not provided.
+    const cli_version = b.option([]const u8, "version", "Override the rawenv version string") orelse "0.2.0";
+    const version_options = b.addOptions();
+    version_options.addOption([]const u8, "version", cli_version);
+
     const config_mod = b.createModule(.{
         .root_source_file = b.path("src/core/config.zig"),
         .target = target,
@@ -274,6 +280,7 @@ pub fn build(b: *std.Build) void {
         },
     });
     exe_mod.link_libc = true;
+    exe_mod.addOptions("build_info", version_options);
     const exe = b.addExecutable(.{ .name = "rawenv", .root_module = exe_mod });
     b.installArtifact(exe);
 
@@ -321,6 +328,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    main_tests.root_module.addOptions("build_info", version_options);
 
     const tui_tests = b.addTest(.{
         .root_module = b.createModule(.{
@@ -708,6 +716,7 @@ pub fn build(b: *std.Build) void {
             },
         });
         cross_mod.link_libc = true;
+        cross_mod.addOptions("build_info", version_options);
         const cross_exe = b.addExecutable(.{ .name = "rawenv", .root_module = cross_mod });
         const install = b.addInstallArtifact(cross_exe, .{
             .dest_dir = .{ .override = .{ .custom = ct[0] } },

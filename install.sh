@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="rawenv/rawenv"
+REPO="juslintek/rawenv"
 INSTALL_DIR="$HOME/.rawenv/bin"
 
 # Detect OS and arch
@@ -11,8 +11,8 @@ ARCH="$(uname -m)"
 case "$OS" in
   Darwin)
     case "$ARCH" in
-      arm64|aarch64) ARTIFACT="rawenv-macos-arm64" ;;
-      x86_64|amd64)  ARTIFACT="rawenv-macos-x64" ;;
+      arm64|aarch64) ARTIFACT="rawenv-darwin-arm64" ;;
+      x86_64|amd64)  ARTIFACT="rawenv-darwin-x64" ;;
       *) echo "Error: unsupported architecture: $ARCH" >&2; exit 1 ;;
     esac
     ;;
