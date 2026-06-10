@@ -63,7 +63,19 @@ const help =
     \\
 ;
 
-pub fn main(init: std.process.Init) !void {
+pub fn main(init: std.process.Init) u8 {
+    // `main` intentionally returns `u8` (not `!u8`): a `u8` return never triggers
+    // the Zig runtime's error-return-trace dump, so users never see a stack trace
+    // in release builds. Any error that escapes `run` is mapped to a clean
+    // message + system exit code (2) here.
+    return run(init) catch |err| {
+        const stdout = StdoutWriter{};
+        stdout.print("Error: an unexpected problem occurred ({t}).\n", .{err}) catch {};
+        return commands.ExitCode.system;
+    };
+}
+
+fn run(init: std.process.Init) !u8 {
     const stdout = StdoutWriter{};
     const allocator = init.gpa;
 
@@ -98,160 +110,132 @@ pub fn main(init: std.process.Init) !void {
             } else {
                 try stdout.writeAll(version ++ "\n");
             }
-            return;
+            return commands.ExitCode.ok;
         }
-        if (std.mem.eql(u8, arg, "--help")) {
+        if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h") or std.mem.eql(u8, arg, "help")) {
             try stdout.writeAll(help);
-            return;
+            return commands.ExitCode.ok;
         }
         if (std.mem.eql(u8, arg, "init")) {
-            commands.runInit(allocator, stdout) catch {
-                try stdout.writeAll("Error: init failed\n");
-            };
-            return;
+            return try commands.runInit(allocator, stdout);
         }
         if (std.mem.eql(u8, arg, "detect")) {
-            commands.runDetect(allocator, stdout, json_mode) catch {
-                try stdout.writeAll("Error: detect failed\n");
-            };
-            return;
+            return try commands.runDetect(allocator, stdout, json_mode);
         }
         if (std.mem.eql(u8, arg, "add")) {
             if (i + 1 < args.len) {
-                commands.runAdd(allocator, stdout, args[i + 1]) catch {
-                    try stdout.writeAll("Error: add failed\n");
-                };
+                return try commands.runAdd(allocator, stdout, args[i + 1]);
             } else {
-                try stdout.writeAll("Usage: rawenv add <package>@<version>\n");
+                try stdout.writeAll("Error: missing package. Usage: rawenv add <package>@<version>\n");
+                try stdout.writeAll("Example: rawenv add node@22\n");
+                return commands.ExitCode.user;
             }
-            return;
         }
         if (std.mem.eql(u8, arg, "up")) {
-            commands.runUp(allocator, stdout) catch {
-                try stdout.writeAll("Error: up failed\n");
-            };
-            return;
+            return try commands.runUp(allocator, stdout);
         }
         if (std.mem.eql(u8, arg, "services")) {
             const sub = if (i + 1 < args.len) args[i + 1] else "";
             if (std.mem.eql(u8, sub, "ls")) {
-                commands.runServicesList(allocator, stdout, json_mode) catch {
-                    try stdout.writeAll("Error: services ls failed\n");
-                };
+                return try commands.runServicesList(allocator, stdout, json_mode);
             } else {
                 try stdout.writeAll("Usage: rawenv services ls\n");
+                return commands.ExitCode.user;
             }
-            return;
         }
         if (std.mem.eql(u8, arg, "shell")) {
-            commands.runShell(allocator, stdout) catch {
-                try stdout.writeAll("Error: shell failed\n");
-            };
-            return;
+            return try commands.runShell(allocator, stdout);
         }
         if (std.mem.eql(u8, arg, "dns")) {
-            commands.runDns(allocator, stdout) catch {
-                try stdout.writeAll("Error: dns failed\n");
-            };
-            return;
+            return try commands.runDns(allocator, stdout);
         }
         if (std.mem.eql(u8, arg, "proxy")) {
-            commands.runProxy(allocator, stdout) catch {
-                try stdout.writeAll("Error: proxy failed\n");
-            };
-            return;
+            return try commands.runProxy(allocator, stdout);
         }
         if (std.mem.eql(u8, arg, "tunnel")) {
             if (i + 1 < args.len) {
-                commands.runTunnel(allocator, stdout, args[i + 1]) catch {
-                    try stdout.writeAll("Error: tunnel failed\n");
-                };
+                return try commands.runTunnel(allocator, stdout, args[i + 1]);
             } else {
-                try stdout.writeAll("Usage: rawenv tunnel <port>\n");
+                try stdout.writeAll("Error: missing port. Usage: rawenv tunnel <port>\n");
+                return commands.ExitCode.user;
             }
-            return;
         }
         if (std.mem.eql(u8, arg, "connections")) {
-            commands.runConnections(allocator, stdout, json_mode) catch {
-                try stdout.writeAll("Error: connections failed\n");
-            };
-            return;
+            return try commands.runConnections(allocator, stdout, json_mode);
         }
         if (std.mem.eql(u8, arg, "cell")) {
             const sub = if (i + 1 < args.len) args[i + 1] else "";
             if (std.mem.eql(u8, sub, "info")) {
-                commands.runCellInfo(allocator, stdout) catch {
-                    try stdout.writeAll("Error: cell info failed\n");
-                };
+                return try commands.runCellInfo(allocator, stdout);
             } else {
                 try stdout.writeAll("Usage: rawenv cell info\n");
+                return commands.ExitCode.user;
             }
-            return;
         }
         if (std.mem.eql(u8, arg, "discover")) {
-            commands.runDiscover(allocator, stdout, json_mode) catch {
-                try stdout.writeAll("Error: discover failed\n");
-            };
-            return;
+            return try commands.runDiscover(allocator, stdout, json_mode);
         }
         if (std.mem.eql(u8, arg, "destroy")) {
-            commands.runDestroy(allocator, stdout, force_mode) catch {
-                try stdout.writeAll("Error: destroy failed\n");
-            };
-            return;
+            return try commands.runDestroy(allocator, stdout, force_mode);
         }
         if (std.mem.eql(u8, arg, "uninstall")) {
-            commands.runUninstall(allocator, stdout) catch {
-                try stdout.writeAll("Error: uninstall failed\n");
-            };
-            return;
+            return try commands.runUninstall(allocator, stdout);
         }
         if (std.mem.eql(u8, arg, "tui")) {
-            try tui.run();
-            return;
+            tui.run() catch {
+                try stdout.writeAll("Error: failed to launch the TUI dashboard.\n");
+                return commands.ExitCode.system;
+            };
+            return commands.ExitCode.ok;
         }
         if (std.mem.eql(u8, arg, "gui")) {
-            try gui.run();
-            return;
+            gui.run() catch {
+                try stdout.writeAll("Error: failed to launch the GUI window.\n");
+                return commands.ExitCode.system;
+            };
+            return commands.ExitCode.ok;
         }
         if (std.mem.eql(u8, arg, "menubar")) {
-            commands.runMenubar(allocator, stdout) catch {
-                try stdout.writeAll("Error: menubar failed\n");
-            };
-            return;
+            return try commands.runMenubar(allocator, stdout);
         }
         if (std.mem.eql(u8, arg, "ai")) {
             if (i + 1 < args.len) {
-                try runAiOneShot(allocator, stdout, args[i + 1]);
+                return try runAiOneShot(allocator, stdout, args[i + 1]);
             } else {
-                try stdout.writeAll("Usage: rawenv ai \"your question\"\n");
+                try stdout.writeAll("Error: missing question. Usage: rawenv ai \"your question\"\n");
+                return commands.ExitCode.user;
             }
-            return;
         }
         if (std.mem.eql(u8, arg, "deploy")) {
             const sub = if (i + 1 < args.len) args[i + 1] else "";
             if (std.mem.eql(u8, sub, "generate")) {
-                try handleDeployGenerate(allocator, stdout, json_mode);
+                return try handleDeployGenerate(allocator, stdout, json_mode);
             } else if (std.mem.eql(u8, sub, "apply")) {
-                try handleDeployApply(stdout);
+                return try handleDeployApply(stdout);
             } else {
                 try stdout.writeAll("Usage: rawenv deploy [generate|apply]\n");
+                return commands.ExitCode.user;
             }
-            return;
         }
+
+        // Unrecognized command.
+        try stdout.print("Error: unknown command '{s}'. Run `rawenv --help` to see available commands.\n", .{arg});
+        return commands.ExitCode.user;
     }
 
+    // No command provided: show help. This is not an error.
     try stdout.writeAll(help);
+    return commands.ExitCode.ok;
 }
 
-fn runAiOneShot(allocator: std.mem.Allocator, stdout: anytype, question: []const u8) !void {
+fn runAiOneShot(allocator: std.mem.Allocator, stdout: anytype, question: []const u8) !u8 {
     const system_prompt = ai.context.buildContext(allocator, .{
         .project_name = "current-project",
         .os = @tagName(comptime @import("builtin").os.tag),
         .isolation = "seatbelt",
     }, 4096) catch {
-        try stdout.writeAll("Error: failed to build context\n");
-        return;
+        try stdout.writeAll("Error: failed to build AI context.\n");
+        return commands.ExitCode.system;
     };
     defer allocator.free(system_prompt);
 
@@ -259,28 +243,29 @@ fn runAiOneShot(allocator: std.mem.Allocator, stdout: anytype, question: []const
     defer session.deinit();
 
     session.addMessage(.user, question) catch {
-        try stdout.writeAll("Error: failed to add message\n");
-        return;
+        try stdout.writeAll("Error: failed to process the question.\n");
+        return commands.ExitCode.system;
     };
 
     const response = session.getResponse(null) catch {
         try stdout.writeAll("Error: all AI providers failed. Check your internet connection or set API keys.\n");
-        return;
+        return commands.ExitCode.system;
     };
 
     try stdout.writeAll(response);
     try stdout.writeAll("\n");
+    return commands.ExitCode.ok;
 }
 
-fn handleDeployGenerate(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !void {
+fn handleDeployGenerate(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !u8 {
     const toml = blk: {
         if (comptime @import("builtin").os.tag == .windows) {
-            try stdout.writeAll("Error: deploy generate not supported on Windows yet\n");
-            return;
+            try stdout.writeAll("Error: deploy generate is not supported on Windows yet.\n");
+            return commands.ExitCode.system;
         }
         const fd = std.posix.openat(std.posix.AT.FDCWD, "rawenv.toml", .{}, 0) catch {
-            try stdout.writeAll("Error: rawenv.toml not found in current directory\n");
-            return;
+            try stdout.writeAll("Error: rawenv.toml not found in the current directory. Run `rawenv init` first.\n");
+            return commands.ExitCode.user;
         };
         defer _ = std.c.close(fd);
         var buf_list: std.ArrayList(u8) = .empty;
@@ -288,8 +273,8 @@ fn handleDeployGenerate(allocator: std.mem.Allocator, stdout: anytype, json_mode
         var read_buf: [4096]u8 = undefined;
         while (true) {
             const n = std.posix.read(fd, &read_buf) catch {
-                try stdout.writeAll("Error: failed to read rawenv.toml\n");
-                return;
+                try stdout.writeAll("Error: failed to read rawenv.toml.\n");
+                return commands.ExitCode.system;
             };
             if (n == 0) break;
             try buf_list.appendSlice(allocator, read_buf[0..n]);
@@ -299,8 +284,8 @@ fn handleDeployGenerate(allocator: std.mem.Allocator, stdout: anytype, json_mode
     defer allocator.free(toml);
 
     var cfg = config.parse(allocator, toml) catch {
-        try stdout.writeAll("Error: failed to parse rawenv.toml\n");
-        return;
+        try stdout.writeAll("Error: failed to parse rawenv.toml. Check the file for syntax errors.\n");
+        return commands.ExitCode.user;
     };
     defer config.deinit(allocator, &cfg);
 
@@ -346,10 +331,12 @@ fn handleDeployGenerate(allocator: std.mem.Allocator, stdout: anytype, json_mode
         }
         try stdout.writeAll("\"}\n");
     }
+    return commands.ExitCode.ok;
 }
 
-fn handleDeployApply(stdout: anytype) !void {
+fn handleDeployApply(stdout: anytype) !u8 {
     try stdout.writeAll("Deploy apply: dry-run mode (no actual deployment without --confirm)\n");
+    return commands.ExitCode.ok;
 }
 
 test {

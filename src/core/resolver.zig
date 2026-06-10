@@ -29,6 +29,18 @@ pub const ResolveError = error{
     UnsupportedPlatform,
 };
 
+/// Canonical list of package names rawenv knows how to install. Used to build
+/// user-facing "Available: ..." hints when an unknown package is requested.
+/// Keep in sync with the dispatch in `resolve`.
+pub const available_packages = [_][]const u8{
+    "node",
+    "postgres",
+    "redis",
+    "python",
+    "php",
+    "meilisearch",
+};
+
 const PlatformKey = struct {
     os: []const u8,
     arch: []const u8,
@@ -423,6 +435,20 @@ test "resolve meilisearch@1.12 (github prebuilt binary)" {
 test "resolve unknown package" {
     const result = resolve(std.testing.allocator, "unknown", "1.0");
     try std.testing.expectError(ResolveError.UnknownPackage, result);
+}
+
+test "available_packages lists every resolvable package" {
+    // Every advertised package name must actually resolve (or fail only on
+    // version/platform, never UnknownPackage). Guards the "Available: ..."
+    // hint against drifting out of sync with `resolve`.
+    for (available_packages) |name| {
+        const result = resolve(std.testing.allocator, name, "0.0.0-nope");
+        if (result) |pkg| {
+            std.testing.allocator.free(pkg.url);
+        } else |err| {
+            try std.testing.expect(err != ResolveError.UnknownPackage);
+        }
+    }
 }
 
 test "resolve unknown version" {

@@ -42,20 +42,44 @@ const connections = @import("connections");
 const cell = @import("cell");
 const discover = @import("discover");
 
-pub fn runInit(allocator: std.mem.Allocator, stdout: anytype) !void {
+/// Process exit codes shared across all commands.
+///   ok     (0) — success
+///   user   (1) — user/input error (bad args, unknown package, missing config)
+///   system (2) — system/environment error (network, permissions, I/O, OOM)
+pub const ExitCode = struct {
+    pub const ok: u8 = 0;
+    pub const user: u8 = 1;
+    pub const system: u8 = 2;
+};
+
+/// Write the comma-separated list of installable package names.
+fn writeAvailablePackages(stdout: anytype) !void {
+    for (resolver.available_packages, 0..) |name, idx| {
+        if (idx > 0) try stdout.writeAll(", ");
+        try stdout.writeAll(name);
+    }
+}
+
+pub fn runInit(allocator: std.mem.Allocator, stdout: anytype) !u8 {
     // Check if rawenv.toml already exists
     if (std.c.access("rawenv.toml", 0) == 0) {
         try stdout.writeAll("rawenv.toml already exists — skipping.\n");
-        return;
+        return ExitCode.ok;
     }
 
     // Detect project
-    var result = try detector.detect(allocator, std.Io.Dir.cwd());
+    var result = detector.detect(allocator, std.Io.Dir.cwd()) catch {
+        try stdout.writeAll("Error: failed to scan the current directory. Check that you have read access.\n");
+        return ExitCode.system;
+    };
     defer result.deinit(allocator);
 
     // Derive project name from cwd
     var cwd_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const cwd_ptr = std.c.getcwd(&cwd_buf, cwd_buf.len) orelse return error.CwdFailed;
+    const cwd_ptr = std.c.getcwd(&cwd_buf, cwd_buf.len) orelse {
+        try stdout.writeAll("Error: could not determine the current working directory.\n");
+        return ExitCode.system;
+    };
     const cwd_path = std.mem.sliceTo(cwd_ptr, 0);
     const project_name = std.fs.path.basename(cwd_path);
 
@@ -70,7 +94,10 @@ pub fn runInit(allocator: std.mem.Allocator, stdout: anytype) !void {
     defer allocator.free(toml);
 
     // Write file
-    if (!writeFileSimple("rawenv.toml", toml)) return error.WriteError;
+    if (!writeFileSimple("rawenv.toml", toml)) {
+        try stdout.writeAll("Cannot write rawenv.toml in the current directory. Check permissions.\n");
+        return ExitCode.system;
+    }
 
     // Print summary
     try stdout.writeAll("Created rawenv.toml\n");
@@ -94,14 +121,22 @@ pub fn runInit(allocator: std.mem.Allocator, stdout: anytype) !void {
             try stdout.writeAll("\n");
         }
     }
+    return ExitCode.ok;
 }
 
 /// Detect runtimes + services in the current directory and print them.
 /// Non-mutating: never writes rawenv.toml (unlike `init`). With `--json`,
 /// emits a single JSON object `{"runtimes":[...],"services":[...]}` so callers
 /// (e.g. the GUI ProjectSetupVM) can read detection results without side effects.
-pub fn runDetect(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !void {
-    var result = try detector.detect(allocator, std.Io.Dir.cwd());
+pub fn runDetect(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !u8 {
+    var result = detector.detect(allocator, std.Io.Dir.cwd()) catch {
+        if (json_mode) {
+            try stdout.writeAll("{\"runtimes\":[],\"services\":[]}\n");
+        } else {
+            try stdout.writeAll("Error: failed to scan the current directory. Check that you have read access.\n");
+        }
+        return ExitCode.system;
+    };
     defer result.deinit(allocator);
 
     if (json_mode) {
@@ -119,12 +154,12 @@ pub fn runDetect(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool)
             );
         }
         try stdout.writeAll("]}\n");
-        return;
+        return ExitCode.ok;
     }
 
     if (result.runtimes.len == 0 and result.services.len == 0) {
         try stdout.writeAll("No runtimes or services detected.\n");
-        return;
+        return ExitCode.ok;
     }
     if (result.runtimes.len > 0) {
         try stdout.writeAll("Detected runtimes:\n");
@@ -146,29 +181,66 @@ pub fn runDetect(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool)
             try stdout.writeAll("\n");
         }
     }
+    return ExitCode.ok;
 }
 
-pub fn runAdd(allocator: std.mem.Allocator, stdout: anytype, package_spec: []const u8) !void {
+pub fn runAdd(allocator: std.mem.Allocator, stdout: anytype, package_spec: []const u8) !u8 {
     const parsed = resolver.parsePackageSpec(package_spec) orelse {
-        try stdout.writeAll("Usage: rawenv add <package>@<version>\n");
+        try stdout.writeAll("Error: invalid package spec. Expected <package>@<version>.\n");
         try stdout.writeAll("Example: rawenv add node@22\n");
-        return;
+        return ExitCode.user;
     };
 
     const pkg = resolver.resolve(allocator, parsed.name, parsed.version) catch |err| {
         switch (err) {
-            error.UnknownPackage => try stdout.writeAll("Error: unknown package\n"),
-            error.UnknownVersion => try stdout.writeAll("Error: unknown version\n"),
-            error.UnsupportedPlatform => try stdout.writeAll("Error: unsupported platform\n"),
-            error.OutOfMemory => try stdout.writeAll("Error: out of memory\n"),
+            error.UnknownPackage => {
+                try stdout.print("Unknown package: {s}. Available: ", .{parsed.name});
+                try writeAvailablePackages(stdout);
+                try stdout.writeAll("\n");
+                return ExitCode.user;
+            },
+            error.UnknownVersion => {
+                try stdout.print(
+                    "Unknown version '{s}' for package '{s}'. Try a supported version (e.g. rawenv add {s}@<version>).\n",
+                    .{ parsed.version, parsed.name, parsed.name },
+                );
+                return ExitCode.user;
+            },
+            error.UnsupportedPlatform => {
+                try stdout.print("Cannot install {s}: no prebuilt binary for this OS/architecture.\n", .{parsed.name});
+                return ExitCode.system;
+            },
+            error.OutOfMemory => {
+                try stdout.writeAll("Error: out of memory.\n");
+                return ExitCode.system;
+            },
         }
-        return;
     };
     defer allocator.free(pkg.url);
 
-    store.add(allocator, pkg, stdout) catch {
-        try stdout.writeAll("Error: installation failed\n");
+    store.add(allocator, pkg, stdout) catch |err| {
+        switch (err) {
+            error.DownloadFailed => try stdout.print(
+                "Download failed: could not download {s}@{s}. Check your connection and try again.\n",
+                .{ pkg.name, pkg.version },
+            ),
+            error.Sha256Mismatch => try stdout.writeAll(
+                "Download failed: checksum verification failed (the file may be corrupted or incomplete). Try again.\n",
+            ),
+            error.ExtractionFailed => try stdout.writeAll(
+                "Error: failed to extract the downloaded archive. The download may be corrupted; try again.\n",
+            ),
+            error.PermissionDenied => try stdout.writeAll(
+                "Cannot write to ~/.rawenv/. Check permissions.\n",
+            ),
+            error.HomeNotSet => try stdout.writeAll(
+                "Error: HOME environment variable is not set. rawenv needs it to locate ~/.rawenv/.\n",
+            ),
+            else => try stdout.print("Error: installation failed ({t}).\n", .{err}),
+        }
+        return ExitCode.system;
     };
+    return ExitCode.ok;
 }
 
 fn loadConfig(allocator: std.mem.Allocator, stdout: anytype) !?struct { cfg: config.Config, toml: []const u8 } {
@@ -186,15 +258,19 @@ fn loadConfig(allocator: std.mem.Allocator, stdout: anytype) !?struct { cfg: con
     return .{ .cfg = cfg, .toml = toml };
 }
 
-pub fn runUp(allocator: std.mem.Allocator, stdout: anytype) !void {
-    var result = (try loadConfig(allocator, stdout)) orelse return;
+pub fn runUp(allocator: std.mem.Allocator, stdout: anytype) !u8 {
+    var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
-    try service.up(allocator, result.cfg, stdout);
+    service.up(allocator, result.cfg, stdout) catch {
+        try stdout.writeAll("Error: failed to activate runtimes. Run `rawenv add` for any missing packages, then try again.\n");
+        return ExitCode.system;
+    };
+    return ExitCode.ok;
 }
 
-pub fn runServicesList(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !void {
-    var result = (try loadConfig(allocator, stdout)) orelse return;
+pub fn runServicesList(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !u8 {
+    var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
     if (json_mode) {
@@ -209,17 +285,22 @@ pub fn runServicesList(allocator: std.mem.Allocator, stdout: anytype, json_mode:
     } else {
         try service.list(allocator, result.cfg, stdout);
     }
+    return ExitCode.ok;
 }
 
-pub fn runShell(allocator: std.mem.Allocator, stdout: anytype) !void {
-    var result = (try loadConfig(allocator, stdout)) orelse return;
+pub fn runShell(allocator: std.mem.Allocator, stdout: anytype) !u8 {
+    var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
-    try shell.enter(allocator, result.cfg, stdout);
+    shell.enter(allocator, result.cfg, stdout) catch {
+        try stdout.writeAll("Error: failed to start the rawenv shell.\n");
+        return ExitCode.system;
+    };
+    return ExitCode.ok;
 }
 
-pub fn runDns(allocator: std.mem.Allocator, stdout: anytype) !void {
-    var result = (try loadConfig(allocator, stdout)) orelse return;
+pub fn runDns(allocator: std.mem.Allocator, stdout: anytype) !u8 {
+    var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
 
@@ -234,6 +315,7 @@ pub fn runDns(allocator: std.mem.Allocator, stdout: anytype) !void {
     const entries = try dns.generateHostsEntries(allocator, cfg);
     defer allocator.free(entries);
     try stdout.writeAll(entries);
+    return ExitCode.ok;
 }
 
 pub fn runDnsSetup(allocator: std.mem.Allocator, stdout: anytype) !void {
@@ -255,8 +337,8 @@ pub fn runDnsSetup(allocator: std.mem.Allocator, stdout: anytype) !void {
     try stdout.writeAll("Done. Project is now accessible via .test domains.\n");
 }
 
-pub fn runProxy(allocator: std.mem.Allocator, stdout: anytype) !void {
-    var result = (try loadConfig(allocator, stdout)) orelse return;
+pub fn runProxy(allocator: std.mem.Allocator, stdout: anytype) !u8 {
+    var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
 
@@ -272,6 +354,7 @@ pub fn runProxy(allocator: std.mem.Allocator, stdout: anytype) !void {
     const caddy = try p.generateCaddyConfig(allocator);
     defer allocator.free(caddy);
     try stdout.writeAll(caddy);
+    return ExitCode.ok;
 }
 
 pub fn runProxySetup(allocator: std.mem.Allocator, stdout: anytype) !void {
@@ -302,11 +385,15 @@ pub fn runProxySetup(allocator: std.mem.Allocator, stdout: anytype) !void {
     try stdout.writeAll("Done. Caddy has been reloaded with the new configuration.\n");
 }
 
-pub fn runTunnel(allocator: std.mem.Allocator, stdout: anytype, port_str: []const u8) !void {
+pub fn runTunnel(allocator: std.mem.Allocator, stdout: anytype, port_str: []const u8) !u8 {
     const port = std.fmt.parseInt(u16, port_str, 10) catch {
-        try stdout.writeAll("Error: invalid port number\n");
-        return;
+        try stdout.print("Error: invalid port '{s}'. Expected a number between 1 and 65535.\n", .{port_str});
+        return ExitCode.user;
     };
+    if (port == 0) {
+        try stdout.writeAll("Error: invalid port '0'. Expected a number between 1 and 65535.\n");
+        return ExitCode.user;
+    }
     const cfg = tunnel.TunnelConfig{
         .local_port = port,
         .ssh_host = "tunnel.example.com",
@@ -316,10 +403,11 @@ pub fn runTunnel(allocator: std.mem.Allocator, stdout: anytype, port_str: []cons
     defer allocator.free(cmd);
     try stdout.writeAll(cmd);
     try stdout.writeAll("\n");
+    return ExitCode.ok;
 }
 
-pub fn runConnections(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !void {
-    var result = (try loadConfig(allocator, stdout)) orelse return;
+pub fn runConnections(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !u8 {
+    var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
 
@@ -338,12 +426,12 @@ pub fn runConnections(allocator: std.mem.Allocator, stdout: anytype, json_mode: 
             try stdout.writeAll("\"}");
         }
         try stdout.writeAll("]\n");
-        return;
+        return ExitCode.ok;
     }
 
     if (map.count() == 0) {
         try stdout.writeAll("No service dependencies found.\n");
-        return;
+        return ExitCode.ok;
     }
     for (map.links.items) |link| {
         try stdout.writeAll(link.from);
@@ -351,9 +439,10 @@ pub fn runConnections(allocator: std.mem.Allocator, stdout: anytype, json_mode: 
         try stdout.writeAll(link.to);
         try stdout.writeAll("\n");
     }
+    return ExitCode.ok;
 }
 
-pub fn runCellInfo(_: std.mem.Allocator, stdout: anytype) !void {
+pub fn runCellInfo(_: std.mem.Allocator, stdout: anytype) !u8 {
     try stdout.writeAll("Isolation backends available on this OS:\n");
     switch (builtin.os.tag) {
         .macos => try stdout.writeAll("  seatbelt (sandbox-exec) — macOS App Sandbox\n"),
@@ -365,22 +454,31 @@ pub fn runCellInfo(_: std.mem.Allocator, stdout: anytype) !void {
         .windows => try stdout.writeAll("  job objects — process memory/CPU limits\n"),
         else => try stdout.writeAll("  none — unsupported OS\n"),
     }
+    return ExitCode.ok;
 }
 
-pub fn runMenubar(allocator: std.mem.Allocator, stdout: anytype) !void {
+pub fn runMenubar(allocator: std.mem.Allocator, stdout: anytype) !u8 {
     const macos = @import("macos");
     if (comptime builtin.os.tag == .macos) {
-        try macos.runMenuBar(allocator);
+        macos.runMenuBar(allocator) catch {
+            try stdout.writeAll("Error: failed to launch the menu bar item.\n");
+            return ExitCode.system;
+        };
+        return ExitCode.ok;
     } else {
-        try stdout.writeAll("Menu bar is only available on macOS\n");
+        try stdout.writeAll("Menu bar is only available on macOS.\n");
+        return ExitCode.user;
     }
 }
 
-pub fn runDiscover(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !void {
+pub fn runDiscover(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !u8 {
     const results = discover.discover(allocator) catch {
-        if (json_mode) { try stdout.writeAll("[]\n"); return; }
-        try stdout.writeAll("Error: discovery failed\n");
-        return;
+        if (json_mode) {
+            try stdout.writeAll("[]\n");
+        } else {
+            try stdout.writeAll("Error: project discovery failed while scanning the filesystem.\n");
+        }
+        return ExitCode.system;
     };
     defer discover.freeResults(allocator, results);
 
@@ -397,12 +495,12 @@ pub fn runDiscover(allocator: std.mem.Allocator, stdout: anytype, json_mode: boo
             try stdout.writeAll("}");
         }
         try stdout.writeAll("]\n");
-        return;
+        return ExitCode.ok;
     }
 
     if (results.len == 0) {
         try stdout.writeAll("No projects found.\n");
-        return;
+        return ExitCode.ok;
     }
     for (results) |p| {
         try stdout.writeAll(p.path);
@@ -411,12 +509,13 @@ pub fn runDiscover(allocator: std.mem.Allocator, stdout: anytype, json_mode: boo
         if (p.has_rawenv_toml) try stdout.writeAll(", rawenv");
         try stdout.writeAll("]\n");
     }
+    return ExitCode.ok;
 }
 
 /// Wipe a project's isolated data directories (~/.rawenv/data/{project-name-hash}).
 /// Prompts for confirmation unless `force` is set.
-pub fn runDestroy(allocator: std.mem.Allocator, stdout: anytype, force: bool) !void {
-    var result = (try loadConfig(allocator, stdout)) orelse return;
+pub fn runDestroy(allocator: std.mem.Allocator, stdout: anytype, force: bool) !u8 {
+    var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
 
@@ -424,8 +523,8 @@ pub fn runDestroy(allocator: std.mem.Allocator, stdout: anytype, force: bool) !v
 
     const home = if (comptime builtin.os.tag == .windows) null else if (std.c.getenv("HOME")) |s| std.mem.sliceTo(s, 0) else null;
     if (home == null) {
-        try stdout.writeAll("Error: HOME not set\n");
-        return;
+        try stdout.writeAll("Error: HOME environment variable is not set.\n");
+        return ExitCode.system;
     }
 
     const root = try service.buildProjectDataRoot(allocator, home.?, project);
@@ -443,12 +542,12 @@ pub fn runDestroy(allocator: std.mem.Allocator, stdout: anytype, force: bool) !v
         const n: usize = if (n_raw > 0) @intCast(n_raw) else 0;
         if (n == 0) {
             try stdout.writeAll("Aborted.\n");
-            return;
+            return ExitCode.ok;
         }
         const answer = std.mem.trimEnd(u8, buf[0..n], "\r\n");
         if (!std.mem.eql(u8, answer, "y") and !std.mem.eql(u8, answer, "Y")) {
             try stdout.writeAll("Aborted.\n");
-            return;
+            return ExitCode.ok;
         }
     }
 
@@ -465,17 +564,18 @@ pub fn runDestroy(allocator: std.mem.Allocator, stdout: anytype, force: bool) !v
     } else {
         try stdout.writeAll("Nothing to remove (no data dirs found) or removal unsupported on this platform.\n");
     }
+    return ExitCode.ok;
 }
 
-pub fn runUninstall(_: std.mem.Allocator, stdout: anytype) !void {
+pub fn runUninstall(_: std.mem.Allocator, stdout: anytype) !u8 {
     const home = if (comptime builtin.os.tag == .windows) blk: {
         break :blk if (std.c.getenv("USERPROFILE")) |s| std.mem.sliceTo(s, 0) else null orelse {
-            try stdout.writeAll("Error: USERPROFILE not set\n");
-            return;
+            try stdout.writeAll("Error: USERPROFILE environment variable is not set.\n");
+            return ExitCode.system;
         };
     } else if (std.c.getenv("HOME")) |s| std.mem.sliceTo(s, 0) else null orelse {
-        try stdout.writeAll("Error: HOME not set\n");
-        return;
+        try stdout.writeAll("Error: HOME environment variable is not set.\n");
+        return ExitCode.system;
     };
     defer if (comptime builtin.os.tag == .windows) std.heap.page_allocator.free(home);
 
@@ -492,17 +592,23 @@ pub fn runUninstall(_: std.mem.Allocator, stdout: anytype) !void {
     var buf: [16]u8 = undefined;
     const n_raw = if (comptime builtin.os.tag == .windows) @as(isize, 0) else std.c.read(0, &buf, buf.len);
     const n: usize = if (n_raw > 0) @intCast(n_raw) else 0;
-    if (n == 0) return;
+    if (n == 0) {
+        try stdout.writeAll("Aborted.\n");
+        return ExitCode.ok;
+    }
     const answer = std.mem.trimEnd(u8, buf[0..n], "\r\n");
     if (!std.mem.eql(u8, answer, "y") and !std.mem.eql(u8, answer, "Y")) {
         try stdout.writeAll("Aborted.\n");
-        return;
+        return ExitCode.ok;
     }
 
     // Remove ~/.rawenv/
     var rawenv_path_buf: [1024]u8 = undefined;
     // Remove ~/.rawenv/ directory
-    const rm_cmd = std.fmt.bufPrintZ(&rawenv_path_buf, "rm -rf {s}/.rawenv", .{home}) catch return;
+    const rm_cmd = std.fmt.bufPrintZ(&rawenv_path_buf, "rm -rf {s}/.rawenv", .{home}) catch {
+        try stdout.writeAll("Error: home path is too long to process.\n");
+        return ExitCode.system;
+    };
     _ = std.c.unlink(rm_cmd); // Best-effort cleanup; full rm -rf needs Io
     // Note: full recursive delete requires Io in 0.16.0; manual cleanup may be needed
 
@@ -513,6 +619,7 @@ pub fn runUninstall(_: std.mem.Allocator, stdout: anytype) !void {
     }
 
     try stdout.writeAll("rawenv uninstalled\n");
+    return ExitCode.ok;
 }
 
 fn cleanRcFile(home: []const u8, filename: []const u8) !void {
