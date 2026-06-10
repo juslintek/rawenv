@@ -41,6 +41,7 @@ const tunnel = @import("tunnel");
 const connections = @import("connections");
 const cell = @import("cell");
 const discover = @import("discover");
+const compose = @import("compose");
 
 /// Process exit codes shared across all commands.
 ///   ok     (0) — success
@@ -124,7 +125,65 @@ pub fn runInit(allocator: std.mem.Allocator, stdout: anytype) !u8 {
     return ExitCode.ok;
 }
 
-/// Detect runtimes + services in the current directory and print them.
+/// Import an existing docker-compose.yml and write an equivalent rawenv.toml.
+/// Maps recognised images (postgres, redis, node, …) to rawenv packages,
+/// preserves port mappings, environment variables and depends_on edges, and
+/// prints warnings for features rawenv cannot represent (custom Dockerfiles,
+/// networks, volumes, unknown images) without failing.
+pub fn runImport(allocator: std.mem.Allocator, stdout: anytype, path: [:0]const u8) !u8 {
+    // Refuse to clobber an existing rawenv.toml.
+    if (std.c.access("rawenv.toml", 0) == 0) {
+        try stdout.writeAll("Error: rawenv.toml already exists. Remove it first, then re-run import.\n");
+        return ExitCode.user;
+    }
+
+    const data = readFileSimple(allocator, path.ptr) orelse {
+        try stdout.print("Error: could not read '{s}'. Check the path and try again.\n", .{path});
+        return ExitCode.user;
+    };
+    defer allocator.free(data);
+
+    // Derive project name from the current directory.
+    var cwd_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const project_name = blk: {
+        const cwd_ptr = std.c.getcwd(&cwd_buf, cwd_buf.len) orelse break :blk "app";
+        break :blk std.fs.path.basename(std.mem.sliceTo(cwd_ptr, 0));
+    };
+
+    var result = compose.importCompose(allocator, data, project_name) catch |err| switch (err) {
+        compose.ImportError.NoServices => {
+            try stdout.writeAll("Error: no 'services:' block found in the compose file.\n");
+            return ExitCode.user;
+        },
+        else => {
+            try stdout.writeAll("Error: failed to import the compose file.\n");
+            return ExitCode.system;
+        },
+    };
+    defer result.deinit(allocator);
+
+    if (result.mapped_count == 0) {
+        try stdout.writeAll("Error: no services in the compose file could be mapped to rawenv packages.\n");
+        for (result.warnings) |w| {
+            try stdout.print("  warning: {s}\n", .{w});
+        }
+        return ExitCode.user;
+    }
+
+    if (!writeFileSimple("rawenv.toml", result.toml)) {
+        try stdout.writeAll("Cannot write rawenv.toml in the current directory. Check permissions.\n");
+        return ExitCode.system;
+    }
+
+    try stdout.print("Imported {s} → rawenv.toml ({d} service", .{ path, result.mapped_count });
+    if (result.mapped_count != 1) try stdout.writeAll("s");
+    try stdout.writeAll(")\n");
+
+    for (result.warnings) |w| {
+        try stdout.print("  warning: {s}\n", .{w});
+    }
+    return ExitCode.ok;
+}
 /// Non-mutating: never writes rawenv.toml (unlike `init`). With `--json`,
 /// emits a single JSON object `{"runtimes":[...],"services":[...]}` so callers
 /// (e.g. the GUI ProjectSetupVM) can read detection results without side effects.
