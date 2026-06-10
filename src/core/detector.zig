@@ -180,27 +180,71 @@ fn parseDockerComposeServices(allocator: std.mem.Allocator, data: []const u8, se
     while (it.next()) |line| {
         const trimmed = std.mem.trim(u8, line, &std.ascii.whitespace);
         if (!std.mem.startsWith(u8, trimmed, "image:")) continue;
-        const image = std.mem.trim(u8, trimmed["image:".len..], &std.ascii.whitespace);
+        // Unwrap single-quoted, double-quoted, or unquoted image values
+        // identically (e.g. Laravel Sail uses `image: 'mysql:8.0.39'`).
+        const image = extractImageValue(trimmed["image:".len..]);
+        if (image.len == 0) continue;
+        // Match against the registry/org-stripped basename for the common
+        // images, and a substring match for vendor images that always carry an
+        // org prefix (e.g. `mcr.microsoft.com/azure-sql-edge`,
+        // `getmeili/meilisearch`).
+        const base = imageBasename(image);
         const Info = struct { key: []const u8, default: []const u8 };
-        const info: ?Info = if (std.mem.startsWith(u8, image, "postgres"))
+        const info: ?Info = if (std.mem.startsWith(u8, base, "postgres"))
             .{ .key = "postgresql", .default = "16" }
-        else if (std.mem.startsWith(u8, image, "redis"))
+        else if (std.mem.startsWith(u8, base, "redis"))
             .{ .key = "redis", .default = "7" }
-        else if (std.mem.startsWith(u8, image, "mysql"))
+        else if (std.mem.startsWith(u8, base, "mysql"))
             .{ .key = "mysql", .default = "8" }
-        else if (std.mem.startsWith(u8, image, "mariadb"))
+        else if (std.mem.startsWith(u8, base, "mariadb"))
             .{ .key = "mariadb", .default = "11" }
-        else if (std.mem.startsWith(u8, image, "mongo"))
+        else if (std.mem.startsWith(u8, base, "mongo"))
             .{ .key = "mongodb", .default = "7" }
+        else if (std.mem.indexOf(u8, image, "azure-sql-edge") != null or std.mem.indexOf(u8, image, "mssql") != null)
+            .{ .key = "mssql", .default = "2022" }
+        else if (std.mem.indexOf(u8, image, "meilisearch") != null)
+            .{ .key = "meilisearch", .default = "1" }
         else
             null;
         if (info) |si| {
             if (!hasService(services, si.key)) {
-                const ver = matchMajor(image[std.mem.indexOfScalar(u8, image, ':') orelse continue ..]) orelse si.default;
+                const ver = blk: {
+                    const colon = std.mem.indexOfScalar(u8, base, ':') orelse break :blk si.default;
+                    break :blk matchMajor(base[colon..]) orelse si.default;
+                };
                 try services.append(allocator, .{ .key = si.key, .value = ver });
             }
         }
     }
+}
+
+/// Extract the bare image reference from a compose `image:` value, treating
+/// single-quoted, double-quoted, and unquoted forms identically. Trailing
+/// inline comments on unquoted values are stripped.
+fn extractImageValue(raw: []const u8) []const u8 {
+    const s = std.mem.trim(u8, raw, &std.ascii.whitespace);
+    if (s.len == 0) return s;
+    if (s[0] == '\'' or s[0] == '"') {
+        const q = s[0];
+        const end = std.mem.indexOfScalarPos(u8, s, 1, q) orelse return s[1..];
+        return s[1..end];
+    }
+    // Unquoted: drop an inline " # comment" suffix.
+    var i: usize = 1;
+    while (i < s.len) : (i += 1) {
+        if (s[i] == '#' and (s[i - 1] == ' ' or s[i - 1] == '\t')) {
+            return std.mem.trim(u8, s[0..i], &std.ascii.whitespace);
+        }
+    }
+    return s;
+}
+
+/// Strip registry/org prefix → bare image name with tag retained.
+/// "mcr.microsoft.com/azure-sql-edge" → "azure-sql-edge",
+/// "getmeili/meilisearch:v1.6" → "meilisearch:v1.6".
+fn imageBasename(image: []const u8) []const u8 {
+    const slash = std.mem.lastIndexOfScalar(u8, image, '/');
+    return if (slash) |s| image[s + 1 ..] else image;
 }
 
 fn hasService(services: *const std.ArrayList(DetectionResult.Entry), key: []const u8) bool {

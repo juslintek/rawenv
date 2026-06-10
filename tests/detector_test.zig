@@ -92,6 +92,133 @@ test "detect docker-compose.yml images" {
     try testing.expectEqualStrings("7", result.services[1].value);
 }
 
+test "detect docker-compose.yml single-quoted image (Laravel Sail)" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "docker-compose.yml");
+    cleanFile(dir, "package.json");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+
+    // Laravel Sail style: services use single-quoted image values.
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "docker-compose.yml",
+        .data =
+        \\services:
+        \\  mysql:
+        \\    image: 'mysql:8.0.39'
+        \\  redis:
+        \\    image: 'redis:alpine'
+        ,
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(2, result.services.len);
+    try testing.expectEqualStrings("mysql", result.services[0].key);
+    try testing.expectEqualStrings("8", result.services[0].value);
+    try testing.expectEqualStrings("redis", result.services[1].key);
+}
+
+test "detect quoted, double-quoted, and unquoted images identically" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "docker-compose.yml");
+    cleanFile(dir, "package.json");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "docker-compose.yml",
+        .data =
+        \\services:
+        \\  a:
+        \\    image: postgres:15
+        \\  b:
+        \\    image: "mysql:8.0.39"
+        \\  c:
+        \\    image: 'mariadb:11'
+        ,
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(3, result.services.len);
+    try testing.expectEqualStrings("postgresql", result.services[0].key);
+    try testing.expectEqualStrings("15", result.services[0].value);
+    try testing.expectEqualStrings("mysql", result.services[1].key);
+    try testing.expectEqualStrings("8", result.services[1].value);
+    try testing.expectEqualStrings("mariadb", result.services[2].key);
+    try testing.expectEqualStrings("11", result.services[2].value);
+}
+
+test "detect azure-sql-edge and mssql images as mssql" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "docker-compose.yml");
+    cleanFile(dir, "package.json");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "docker-compose.yml",
+        .data =
+        \\services:
+        \\  db:
+        \\    image: 'mcr.microsoft.com/azure-sql-edge'
+        ,
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.services.len);
+    try testing.expectEqualStrings("mssql", result.services[0].key);
+
+    cleanFile(dir, "docker-compose.yml");
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "docker-compose.yml",
+        .data =
+        \\services:
+        \\  db:
+        \\    image: mcr.microsoft.com/mssql/server:2022-latest
+        ,
+    });
+
+    var result2 = try detector.detect(testing.allocator, dir);
+    defer result2.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result2.services.len);
+    try testing.expectEqualStrings("mssql", result2.services[0].key);
+}
+
+test "detect getmeili/meilisearch image as meilisearch" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "docker-compose.yml");
+    cleanFile(dir, "package.json");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "docker-compose.yml",
+        .data =
+        \\services:
+        \\  search:
+        \\    image: 'getmeili/meilisearch:v1.6'
+        ,
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.services.len);
+    try testing.expectEqualStrings("meilisearch", result.services[0].key);
+    try testing.expectEqualStrings("1", result.services[0].value);
+}
+
 test "detect empty directory" {
     var dir = try makeTmpDir();
     defer dir.close(std.testing.io);
