@@ -587,3 +587,64 @@ test "down on circular dependency surfaces the error" {
     );
     buf = aw.toArrayList();
 }
+
+test "isProjectApp: explicit app flag wins" {
+    const config = @import("config");
+    const entry = config.Config.Entry{ .key = "app", .value = "1", .service_type = "app", .app = true };
+    try testing.expect(service.isProjectApp(entry));
+}
+
+test "isProjectApp: inferred from depends_on + non-installable base type" {
+    const config = @import("config");
+    const deps = [_][]const u8{ "postgres", "redis" };
+    const entry = config.Config.Entry{
+        .key = "app",
+        .value = "latest",
+        .service_type = "app",
+        .depends_on = &deps,
+    };
+    try testing.expect(service.isProjectApp(entry));
+}
+
+test "isProjectApp: installable services are never the app" {
+    const config = @import("config");
+    // Even with depends_on, a known installable package is an external service.
+    const deps = [_][]const u8{"redis"};
+    const pg = config.Config.Entry{ .key = "postgres", .value = "16", .service_type = "postgres", .depends_on = &deps };
+    try testing.expect(!service.isProjectApp(pg));
+
+    const redis = config.Config.Entry{ .key = "redis", .value = "7", .service_type = "redis" };
+    try testing.expect(!service.isProjectApp(redis));
+}
+
+test "isProjectApp: a bare unknown entry without deps is not flagged" {
+    const config = @import("config");
+    // Without an explicit flag or depends_on, we don't guess.
+    const entry = config.Config.Entry{ .key = "app", .value = "1", .service_type = "app" };
+    try testing.expect(!service.isProjectApp(entry));
+}
+
+test "listServices marks the project app" {
+    const config = @import("config");
+    const input =
+        \\name = "myapp"
+        \\
+        \\[services.postgres]
+        \\version = "16"
+        \\
+        \\[services.app]
+        \\version = "1"
+        \\depends_on = ["postgres"]
+    ;
+    var cfg = try config.parse(testing.allocator, input);
+    defer config.deinit(testing.allocator, &cfg);
+
+    const services = try service.listServices(testing.allocator, cfg);
+    defer service.freeServices(testing.allocator, services);
+
+    try testing.expectEqual(2, services.len);
+    try testing.expectEqualStrings("postgres", services[0].name);
+    try testing.expect(!services[0].is_app);
+    try testing.expectEqualStrings("app", services[1].name);
+    try testing.expect(services[1].is_app);
+}
