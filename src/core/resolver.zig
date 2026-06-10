@@ -64,6 +64,19 @@ fn isPlatform(p: PlatformKey, os: []const u8, arch: []const u8) bool {
     return std.mem.eql(u8, p.os, os) and std.mem.eql(u8, p.arch, arch);
 }
 
+/// True when `name` (a base service/runtime type) maps to a package that
+/// rawenv can download and install. Returns false for the project's own
+/// application and for images rawenv has no installer for — callers use this
+/// to avoid routing first-party/unsupported entries through `rawenv add`.
+/// Keep in sync with the dispatch in `resolve`.
+pub fn isKnownPackage(name: []const u8) bool {
+    if (std.mem.eql(u8, name, "postgresql") or std.mem.eql(u8, name, "postgres")) return true;
+    for (available_packages) |p| {
+        if (std.mem.eql(u8, name, p)) return true;
+    }
+    return false;
+}
+
 /// Resolve a package name + version to a download URL and SHA256.
 pub fn resolve(allocator: std.mem.Allocator, package_name: []const u8, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
     if (std.mem.eql(u8, package_name, "node")) {

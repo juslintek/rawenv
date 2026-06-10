@@ -298,3 +298,43 @@ test "parse empty depends_on array" {
     defer config.deinit(testing.allocator, &cfg);
     try testing.expectEqual(0, cfg.services[0].depends_on.len);
 }
+
+test "parse app = true marks the project's own application" {
+    const input =
+        \\name = "myapp"
+        \\
+        \\[services.postgres]
+        \\version = "16"
+        \\
+        \\[services.app]
+        \\version = "1"
+        \\app = true
+        \\depends_on = ["postgres"]
+    ;
+    var cfg = try config.parse(testing.allocator, input);
+    defer config.deinit(testing.allocator, &cfg);
+
+    try testing.expectEqual(2, cfg.services.len);
+    // External service defaults to not-app.
+    try testing.expectEqualStrings("postgres", cfg.services[0].key);
+    try testing.expect(!cfg.services[0].app);
+    // The project's own application is flagged.
+    try testing.expectEqualStrings("app", cfg.services[1].key);
+    try testing.expect(cfg.services[1].app);
+}
+
+test "generate round-trips the app flag" {
+    const services = &[_]config.Config.Entry{
+        .{ .key = "postgres", .value = "16", .service_type = "postgres" },
+        .{ .key = "app", .value = "1", .service_type = "app", .app = true },
+    };
+    const toml = try config.generate(testing.allocator, "myapp", &.{}, services);
+    defer testing.allocator.free(toml);
+
+    var cfg = try config.parse(testing.allocator, toml);
+    defer config.deinit(testing.allocator, &cfg);
+
+    try testing.expectEqual(2, cfg.services.len);
+    try testing.expect(!cfg.services[0].app);
+    try testing.expect(cfg.services[1].app);
+}

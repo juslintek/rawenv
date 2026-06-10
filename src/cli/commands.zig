@@ -564,8 +564,8 @@ pub fn runStatus(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool)
             const conflict = service.portConflictsWith(services, idx);
             const stale = service.isStale(statuses[idx], svc.port);
             try stdout.print(
-                "{{\"name\":\"{s}\",\"version\":\"{s}\",\"port\":{d},\"status\":\"{s}\",\"installed\":{s},\"port_conflict\":{s},\"stale_pid\":{s}}}",
-                .{ svc.name, svc.version, svc.port, @tagName(statuses[idx]), if (installed) "true" else "false", if (conflict) "true" else "false", if (stale) "true" else "false" },
+                "{{\"name\":\"{s}\",\"version\":\"{s}\",\"port\":{d},\"status\":\"{s}\",\"installed\":{s},\"app\":{s},\"port_conflict\":{s},\"stale_pid\":{s}}}",
+                .{ svc.name, svc.version, svc.port, @tagName(statuses[idx]), if (installed) "true" else "false", if (svc.is_app) "true" else "false", if (conflict) "true" else "false", if (stale) "true" else "false" },
             );
         }
         try stdout.writeAll("],\"warnings\":[");
@@ -578,7 +578,7 @@ pub fn runStatus(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool)
             }
         }
         for (services, 0..) |svc, idx| {
-            if (!isEntryInstalled(allocator, svc.name, svc.version)) {
+            if (!svc.is_app and !isEntryInstalled(allocator, svc.name, svc.version)) {
                 if (warn_idx > 0) try stdout.writeAll(",");
                 try stdout.print("\"{s}: binary not installed\"", .{svc.name});
                 warn_idx += 1;
@@ -632,7 +632,11 @@ pub fn runStatus(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool)
             try stdout.writeAll(port_str);
             pad = if (port_str.len < 7) 7 - port_str.len else 2;
             for (0..pad) |_| try stdout.writeAll(" ");
-            try stdout.writeAll(@tagName(statuses[idx]));
+            if (svc.is_app) {
+                try stdout.writeAll("your app (managed by you)");
+            } else {
+                try stdout.writeAll(@tagName(statuses[idx]));
+            }
             try stdout.writeAll("\n");
         }
     }
@@ -653,7 +657,7 @@ pub fn runStatus(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool)
         }
     }
     for (services, 0..) |svc, idx| {
-        if (!isEntryInstalled(allocator, svc.name, svc.version)) {
+        if (!svc.is_app and !isEntryInstalled(allocator, svc.name, svc.version)) {
             if (!any_warning) {
                 try stdout.writeAll("\nWarnings:\n");
                 any_warning = true;

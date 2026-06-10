@@ -68,7 +68,25 @@ pub const ServiceInfo = struct {
     status: ServiceStatus,
     data_dir: []const u8,
     health: config.Config.HealthCheck = .{},
+    /// True when this is the project's own application (see `isProjectApp`)
+    /// rather than an installable upstream service. The app is never routed
+    /// through the package resolver/installer.
+    is_app: bool = false,
 };
+
+/// True when a service entry represents the project's *own application* rather
+/// than an installable upstream service (postgres, redis, …). The project app
+/// has no downloadable artifact, so it must never be passed to the package
+/// resolver/installer (`rawenv add`), nor reported as a "missing binary".
+///
+/// An entry is treated as the project app when either:
+///   * it is explicitly marked `app = true` in rawenv.toml, or
+///   * it declares `depends_on` but its base type is not an installable
+///     package — e.g. `[services.app]` with `depends_on = ["postgres"]`.
+pub fn isProjectApp(entry: config.Config.Entry) bool {
+    if (entry.app) return true;
+    return entry.depends_on.len > 0 and !resolver.isKnownPackage(entry.baseType());
+}
 /// Outcome of a readiness probe for a single service.
 pub const HealthResult = enum {
     /// Service accepted a connection (TCP) or returned HTTP 200 within timeout.
@@ -661,6 +679,7 @@ pub fn listServices(allocator: std.mem.Allocator, cfg: config.Config) ![]Service
             .status = .stopped,
             .data_dir = data_dir,
             .health = svc.health,
+            .is_app = isProjectApp(svc),
         });
     }
     return list_arr.toOwnedSlice(allocator);
@@ -962,6 +981,13 @@ pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !vo
 
     for (order) |idx| {
         const svc = services[idx];
+        // The project's own application has no upstream artifact to install or
+        // launch on its behalf — surface it as user-managed and move on rather
+        // than reporting a missing binary or routing it through the installer.
+        if (svc.is_app) {
+            try stdout.print("  {s} — your application (managed by you), skipping\n", .{svc.name});
+            continue;
+        }
         // Skip services whose runtime isn't installed yet — mirrors the runtime
         // behavior above and avoids blocking on a readiness gate that can never
         // pass.
@@ -1059,7 +1085,8 @@ pub fn list(_: std.mem.Allocator, cfg: config.Config, stdout: anytype) !void {
         try printEntry(stdout, rt.key, rt.value, "installed");
     }
     for (cfg.services) |svc| {
-        try printEntry(stdout, svc.key, svc.value, "stopped");
+        const status: []const u8 = if (isProjectApp(svc)) "your app" else "stopped";
+        try printEntry(stdout, svc.key, svc.value, status);
     }
 }
 
