@@ -6,6 +6,23 @@ pub const Config = struct {
     services: []Entry = &.{},
     auto_detect: bool = false,
 
+    /// Readiness/health-check policy for a service, configured via
+    /// `[services.X.health]` in rawenv.toml. `rawenv up` polls each started
+    /// service until it becomes ready (or the timeout elapses).
+    pub const HealthCheck = struct {
+        /// Probe strategy. `.auto` picks TCP for datastores and HTTP for web
+        /// services. `.none` disables readiness gating for the service.
+        kind: Kind = .auto,
+        /// Maximum time to wait for readiness, in seconds.
+        timeout_secs: u32 = 30,
+        /// Request path for HTTP probes (ignored for TCP).
+        path: []const u8 = "/",
+        /// Port to probe. 0 means "use the service's resolved port".
+        port: u16 = 0,
+
+        pub const Kind = enum { auto, tcp, http, none };
+    };
+
     /// A service/runtime entry. For instances like [services.postgres.primary],
     /// `key` is the full instance id ("postgres.primary"), `service_type` is the
     /// base type ("postgres"), and `port` is an explicit override (0 = auto).
@@ -14,6 +31,7 @@ pub const Config = struct {
         value: []const u8,
         port: u16 = 0,
         service_type: []const u8 = "",
+        health: HealthCheck = .{},
 
         /// Base service type: the part before the first '.', or the whole key.
         pub fn baseType(self: Entry) []const u8 {
@@ -29,7 +47,7 @@ pub const ParseError = error{
     MissingProjectName,
 };
 
-const SectionKind = enum { none, project, runtimes, services, detect, runtime_item, service_item };
+const SectionKind = enum { none, project, runtimes, services, detect, runtime_item, service_item, service_health };
 
 pub fn parse(allocator: std.mem.Allocator, input: []const u8) !Config {
     var cfg = Config{};
@@ -60,16 +78,24 @@ pub fn parse(allocator: std.mem.Allocator, input: []const u8) !Config {
                 section = .runtime_item;
                 current_item_name = name["runtimes.".len..];
             } else if (std.mem.startsWith(u8, name, "services.")) {
-                section = .service_item;
-                current_item_name = name["services.".len..];
-                const dot = std.mem.indexOfScalar(u8, current_item_name, '.');
-                const base = if (dot) |d| current_item_name[0..d] else current_item_name;
-                try services.append(allocator, .{
-                    .key = current_item_name,
-                    .value = "latest",
-                    .service_type = base,
-                    .port = 0,
-                });
+                const sub = name["services.".len..];
+                if (std.mem.endsWith(u8, sub, ".health")) {
+                    // [services.X.health] attaches a readiness policy to an
+                    // already-declared service rather than defining a new one.
+                    section = .service_health;
+                    current_item_name = sub[0 .. sub.len - ".health".len];
+                } else {
+                    section = .service_item;
+                    current_item_name = sub;
+                    const dot = std.mem.indexOfScalar(u8, current_item_name, '.');
+                    const base = if (dot) |d| current_item_name[0..d] else current_item_name;
+                    try services.append(allocator, .{
+                        .key = current_item_name,
+                        .value = "latest",
+                        .service_type = base,
+                        .port = 0,
+                    });
+                }
             } else {
                 return ParseError.InvalidToml;
             }
@@ -118,6 +144,39 @@ pub fn parse(allocator: std.mem.Allocator, input: []const u8) !Config {
                     last.value = stripQuotes(val_raw) orelse return ParseError.InvalidToml;
                 } else if (std.mem.eql(u8, key, "port")) {
                     last.port = std.fmt.parseInt(u16, val_raw, 10) catch return ParseError.InvalidToml;
+                }
+            },
+            .service_health => {
+                // [services.X.health]: type/timeout/path/port. Locate the
+                // matching service by key (it must be declared above).
+                var target: ?*Config.Entry = null;
+                for (services.items) |*svc| {
+                    if (std.mem.eql(u8, svc.key, current_item_name)) {
+                        target = svc;
+                        break;
+                    }
+                }
+                if (target) |t| {
+                    if (std.mem.eql(u8, key, "type") or std.mem.eql(u8, key, "kind")) {
+                        const v = stripQuotes(val_raw) orelse val_raw;
+                        if (std.mem.eql(u8, v, "tcp")) {
+                            t.health.kind = .tcp;
+                        } else if (std.mem.eql(u8, v, "http")) {
+                            t.health.kind = .http;
+                        } else if (std.mem.eql(u8, v, "none")) {
+                            t.health.kind = .none;
+                        } else if (std.mem.eql(u8, v, "auto")) {
+                            t.health.kind = .auto;
+                        } else {
+                            return ParseError.InvalidToml;
+                        }
+                    } else if (std.mem.eql(u8, key, "timeout")) {
+                        t.health.timeout_secs = std.fmt.parseInt(u32, val_raw, 10) catch return ParseError.InvalidToml;
+                    } else if (std.mem.eql(u8, key, "path")) {
+                        t.health.path = stripQuotes(val_raw) orelse return ParseError.InvalidToml;
+                    } else if (std.mem.eql(u8, key, "port")) {
+                        t.health.port = std.fmt.parseInt(u16, val_raw, 10) catch return ParseError.InvalidToml;
+                    }
                 }
             },
             .detect => {

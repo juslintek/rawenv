@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const testing = std.testing;
 const service = @import("service");
 const shell = @import("shell");
@@ -128,4 +129,131 @@ test "listServices honors explicit port override" {
 
     try testing.expectEqual(1, services.len);
     try testing.expectEqual(12345, services[0].port);
+}
+
+// --- Health check / readiness gate tests (CLI-013) ---
+
+/// Open an ephemeral, listening TCP socket on 127.0.0.1 and return {fd, port}.
+/// Caller must close the fd. Used to exercise readiness probes deterministically.
+fn mockListener() !struct { fd: std.c.fd_t, port: u16 } {
+    const fd = std.c.socket(std.c.AF.INET, std.c.SOCK.STREAM, 0);
+    try testing.expect(fd >= 0);
+    var sa: std.c.sockaddr.in = .{
+        .family = std.c.AF.INET,
+        .port = 0, // ask the kernel for a free ephemeral port
+        .addr = std.mem.nativeToBig(u32, 0x7f00_0001),
+    };
+    try testing.expect(std.c.bind(fd, @ptrCast(&sa), @sizeOf(std.c.sockaddr.in)) == 0);
+    try testing.expect(std.c.listen(fd, 1) == 0);
+
+    var addr: std.c.sockaddr.in = undefined;
+    var len: std.c.socklen_t = @sizeOf(std.c.sockaddr.in);
+    try testing.expect(std.c.getsockname(fd, @ptrCast(&addr), &len) == 0);
+    const port = std.mem.bigToNative(u16, addr.port);
+    try testing.expect(port != 0);
+    return .{ .fd = fd, .port = port };
+}
+
+test "tcpProbe detects a live listener and rejects a closed port" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+    const l = try mockListener();
+
+    // A live listener is reachable.
+    try testing.expect(service.tcpProbe(l.port));
+
+    // After closing, nothing is listening on that port.
+    _ = std.c.close(l.fd);
+    try testing.expect(!service.tcpProbe(l.port));
+
+    // Port 0 is never probeable.
+    try testing.expect(!service.tcpProbe(0));
+}
+
+test "waitForReady returns ready immediately against a mock listener" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+    const l = try mockListener();
+    defer _ = std.c.close(l.fd);
+
+    const result = service.waitForReady(testing.allocator, .tcp, l.port, "/", 5);
+    try testing.expectEqual(service.HealthResult.ready, result);
+}
+
+test "waitForReady times out against a closed port" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+    // Grab an ephemeral port then immediately release it so nothing listens.
+    const l = try mockListener();
+    const port = l.port;
+    _ = std.c.close(l.fd);
+
+    // timeout_secs = 0 collapses to a single probe attempt (fast, ~200ms).
+    const result = service.waitForReady(testing.allocator, .tcp, port, "/", 0);
+    try testing.expectEqual(service.HealthResult.timeout, result);
+}
+
+test "waitForReady skips when health is disabled and fails with no port" {
+    try testing.expectEqual(service.HealthResult.skipped, service.waitForReady(testing.allocator, .none, 1234, "/", 5));
+    try testing.expectEqual(service.HealthResult.failed, service.waitForReady(testing.allocator, .tcp, 0, "/", 5));
+}
+
+test "defaultHealthKind picks http for web servers and tcp otherwise" {
+    const config = @import("config");
+    const Kind = config.Config.HealthCheck.Kind;
+    try testing.expectEqual(Kind.http, service.defaultHealthKind("node"));
+    try testing.expectEqual(Kind.http, service.defaultHealthKind("nginx"));
+    try testing.expectEqual(Kind.tcp, service.defaultHealthKind("postgres"));
+    try testing.expectEqual(Kind.tcp, service.defaultHealthKind("redis"));
+}
+
+test "config parses [services.X.health] policy" {
+    const config = @import("config");
+    const input =
+        \\name = "app"
+        \\
+        \\[services.postgres]
+        \\version = "16"
+        \\
+        \\[services.postgres.health]
+        \\type = "tcp"
+        \\timeout = 45
+        \\port = 6000
+        \\
+        \\[services.web]
+        \\version = "1"
+        \\
+        \\[services.web.health]
+        \\type = "http"
+        \\path = "/healthz"
+    ;
+    var cfg = try config.parse(testing.allocator, input);
+    defer config.deinit(testing.allocator, &cfg);
+
+    // Only two real services — the .health sections must not create phantoms.
+    try testing.expectEqual(2, cfg.services.len);
+
+    const pg = cfg.services[0];
+    try testing.expectEqualStrings("postgres", pg.key);
+    try testing.expectEqual(config.Config.HealthCheck.Kind.tcp, pg.health.kind);
+    try testing.expectEqual(@as(u32, 45), pg.health.timeout_secs);
+    try testing.expectEqual(@as(u16, 6000), pg.health.port);
+
+    const web = cfg.services[1];
+    try testing.expectEqualStrings("web", web.key);
+    try testing.expectEqual(config.Config.HealthCheck.Kind.http, web.health.kind);
+    try testing.expectEqualStrings("/healthz", web.health.path);
+}
+
+test "config defaults health to auto with 30s timeout" {
+    const config = @import("config");
+    const input =
+        \\name = "app"
+        \\
+        \\[services.redis]
+        \\version = "7"
+    ;
+    var cfg = try config.parse(testing.allocator, input);
+    defer config.deinit(testing.allocator, &cfg);
+
+    try testing.expectEqual(1, cfg.services.len);
+    try testing.expectEqual(config.Config.HealthCheck.Kind.auto, cfg.services[0].health.kind);
+    try testing.expectEqual(@as(u32, 30), cfg.services[0].health.timeout_secs);
 }
