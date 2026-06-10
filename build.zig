@@ -560,6 +560,23 @@ pub fn build(b: *std.Build) void {
    run_detect_test.step.dependOn(&exe.step);
    integration_step.dependOn(&run_detect_test.step);
 
+   // Detector coverage E2E (E2E-103): one fixture + test per supported manifest
+   // type (package.json, composer.json, pyproject.toml, Cargo.toml, go.mod,
+   // Gemfile, docker-compose.yml, .env, .env.example) driven through
+   // `rawenv detect --json`.
+   const integration_detect_coverage = b.addTest(.{
+       .root_module = b.createModule(.{
+           .root_source_file = b.path("tests/integration/detect_coverage_e2e_test.zig"),
+           .target = target,
+           .optimize = optimize,
+       }),
+   });
+   integration_detect_coverage.root_module.link_libc = true;
+   const run_detect_coverage_test = b.addRunArtifact(integration_detect_coverage);
+   run_detect_coverage_test.step.dependOn(b.getInstallStep());
+   run_detect_coverage_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+   integration_step.dependOn(&run_detect_coverage_test.step);
+
    const integration_add = b.addTest(.{
        .root_module = b.createModule(.{
            .root_source_file = b.path("tests/integration/add_test.zig"),
