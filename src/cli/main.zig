@@ -28,7 +28,7 @@ pub const StdoutWriter = struct {
     }
 };
 
-const version = "0.2.0";
+const version = @import("build_info").version;
 
 const help =
     \\rawenv - native dev environment manager

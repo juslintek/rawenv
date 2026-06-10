@@ -4,10 +4,10 @@ pkgver=VERSION
 pkgrel=1
 pkgdesc="Universal development environment manager"
 arch=('x86_64' 'aarch64')
-url="https://github.com/rawenv/rawenv"
+url="https://github.com/juslintek/rawenv"
 license=('MIT')
 makedepends=('zig>=0.14')
-source=("${pkgname}-${pkgver}.tar.gz::https://github.com/rawenv/rawenv/archive/refs/tags/v${pkgver}.tar.gz")
+source=("${pkgname}-${pkgver}.tar.gz::https://github.com/juslintek/rawenv/archive/refs/tags/v${pkgver}.tar.gz")
 sha256sums=('SHA256_SOURCE')
 
 build() {

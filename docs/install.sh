@@ -8,22 +8,22 @@ BIN_DIR="$INSTALL_DIR/bin"
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 case "$ARCH" in
-  x86_64|amd64) ARCH="x86_64" ;;
-  aarch64|arm64) ARCH="aarch64" ;;
+  x86_64|amd64) ARCH="x64" ;;
+  aarch64|arm64) ARCH="arm64" ;;
   *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
 esac
 
 case "$OS" in
-  linux) TARGET="${ARCH}-linux" ;;
-  darwin) TARGET="${ARCH}-macos" ;;
+  linux) ARTIFACT="rawenv-linux-${ARCH}" ;;
+  darwin) ARTIFACT="rawenv-darwin-${ARCH}" ;;
   *) echo "Unsupported OS: $OS"; exit 1 ;;
 esac
 
-echo "Installing rawenv for $TARGET..."
+echo "Installing rawenv ($ARTIFACT)..."
 
 mkdir -p "$BIN_DIR"
 
-DOWNLOAD_URL="https://github.com/$REPO/releases/latest/download/rawenv-$TARGET"
+DOWNLOAD_URL="https://github.com/$REPO/releases/latest/download/$ARTIFACT"
 curl -fsSL "$DOWNLOAD_URL" -o "$BIN_DIR/rawenv"
 chmod +x "$BIN_DIR/rawenv"
 
