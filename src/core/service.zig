@@ -286,9 +286,16 @@ pub fn buildDataDir(allocator: std.mem.Allocator, home: []const u8, project: []c
     return std.fs.path.join(allocator, &.{ home, ".rawenv", "data", key, instance });
 }
 
-/// Generate a launchd plist XML string for a service
+/// Generate a launchd plist XML string for a service. `args` are appended to
+/// the ProgramArguments array after the binary path so services can be pointed
+/// at their rawenv-managed data dir / generated config (e.g. redis.conf,
+/// postgres `-D <data_dir>`).
 pub fn generateLaunchdPlist(allocator: std.mem.Allocator, name: []const u8, binary_path: []const u8, args: []const []const u8, data_dir: []const u8) ![]const u8 {
-    _ = args;
+    var prog_args: std.ArrayList(u8) = .empty;
+    defer prog_args.deinit(allocator);
+    try prog_args.print(allocator, "    <string>{s}</string>\n", .{binary_path});
+    for (args) |a| try prog_args.print(allocator, "    <string>{s}</string>\n", .{a});
+
     return std.fmt.allocPrint(allocator,
         \\<?xml version="1.0" encoding="UTF-8"?>
         \\<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -298,8 +305,7 @@ pub fn generateLaunchdPlist(allocator: std.mem.Allocator, name: []const u8, bina
         \\  <string>com.rawenv.{s}</string>
         \\  <key>ProgramArguments</key>
         \\  <array>
-        \\    <string>{s}</string>
-        \\  </array>
+        \\{s}  </array>
         \\  <key>WorkingDirectory</key>
         \\  <string>{s}</string>
         \\  <key>RunAtLoad</key>
@@ -313,7 +319,34 @@ pub fn generateLaunchdPlist(allocator: std.mem.Allocator, name: []const u8, bina
         \\</dict>
         \\</plist>
         \\
-    , .{ name, binary_path, data_dir, data_dir, data_dir });
+    , .{ name, prog_args.items, data_dir, data_dir, data_dir });
+}
+
+/// Build the extra CLI arguments a service binary needs so it uses its
+/// rawenv-managed data dir / generated config. Caller owns the returned slice
+/// and each element (free with `freeServiceArgs`).
+///   redis    -> [<data_dir>/redis.conf]  (redis-server reads a positional conf)
+///   postgres -> [-D, <data_dir>]         (postgres data directory flag)
+/// Anything else returns an empty slice.
+pub fn serviceStartArgs(allocator: std.mem.Allocator, base: []const u8, data_dir: []const u8) ![][]const u8 {
+    var args: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (args.items) |a| allocator.free(a);
+        args.deinit(allocator);
+    }
+    if (std.mem.eql(u8, base, "redis")) {
+        try args.append(allocator, try redisConfPath(allocator, data_dir));
+    } else if (std.mem.eql(u8, base, "postgres") or std.mem.eql(u8, base, "postgresql")) {
+        try args.append(allocator, try allocator.dupe(u8, "-D"));
+        try args.append(allocator, try allocator.dupe(u8, data_dir));
+    }
+    return args.toOwnedSlice(allocator);
+}
+
+/// Free a slice returned by `serviceStartArgs`.
+pub fn freeServiceArgs(allocator: std.mem.Allocator, args: [][]const u8) void {
+    for (args) |a| allocator.free(a);
+    allocator.free(args);
 }
 
 /// Get the plist path: ~/Library/LaunchAgents/com.rawenv.{name}.plist
@@ -350,7 +383,11 @@ pub fn writePlist(allocator: std.mem.Allocator, name: []const u8, plist_content:
 pub fn startServiceMacOS(allocator: std.mem.Allocator, name: []const u8, binary_path: []const u8, data_dir: []const u8) !void {
     mkdirP(allocator, data_dir);
 
-    const plist = try generateLaunchdPlist(allocator, name, binary_path, &.{}, data_dir);
+    const base = baseTypeOf(name);
+    const args = try serviceStartArgs(allocator, base, data_dir);
+    defer freeServiceArgs(allocator, args);
+
+    const plist = try generateLaunchdPlist(allocator, name, binary_path, args, data_dir);
     defer allocator.free(plist);
 
     const plist_path = try writePlist(allocator, name, plist);
@@ -398,7 +435,18 @@ fn startServiceLinux(allocator: std.mem.Allocator, name: []const u8, binary_path
     const unit_path = try std.fs.path.join(allocator, &.{ unit_dir, unit_name });
     defer allocator.free(unit_path);
 
-    const content = try std.fmt.allocPrint(allocator, "[Unit]\nDescription=rawenv {s}\n\n[Service]\nExecStart={s}\nWorkingDirectory={s}\nRestart=always\n\n[Install]\nWantedBy=default.target\n", .{ name, binary_path, data_dir });
+    // Point the service at its rawenv-managed data dir / generated config.
+    const base = baseTypeOf(name);
+    const args = try serviceStartArgs(allocator, base, data_dir);
+    defer freeServiceArgs(allocator, args);
+    var exec_extra: std.ArrayList(u8) = .empty;
+    defer exec_extra.deinit(allocator);
+    for (args) |a| {
+        try exec_extra.append(allocator, ' ');
+        try exec_extra.appendSlice(allocator, a);
+    }
+
+    const content = try std.fmt.allocPrint(allocator, "[Unit]\nDescription=rawenv {s}\n\n[Service]\nExecStart={s}{s}\nWorkingDirectory={s}\nRestart=always\n\n[Install]\nWantedBy=default.target\n", .{ name, binary_path, exec_extra.items, data_dir });
     defer allocator.free(content);
 
     if (comptime builtin.os.tag != .windows) {
@@ -537,6 +585,151 @@ pub fn removeProjectData(allocator: std.mem.Allocator, project: []const u8) !boo
     // Absolute path: runCommand uses execve which does not search PATH.
     const exit_code = runCommand(allocator, &.{ "/bin/rm", "-rf", root }) catch return false;
     return exit_code == 0 and !accessPath(allocator, root);
+}
+
+/// ---------------------------------------------------------------------------
+/// Service auto-configuration (SVC-070)
+///
+/// After a service binary is installed, it must be configured for first use so
+/// `rawenv up` works without manual steps:
+///   - postgres: run `initdb` to initialize the data dir (idempotent — skipped
+///     when a PG_VERSION marker already exists).
+///   - redis: generate a redis.conf pointing at the project data dir with dev
+///     defaults (idempotent — regenerated deterministically).
+/// All operations are best-effort and safe to run twice.
+/// ---------------------------------------------------------------------------
+
+/// True for services rawenv knows how to auto-configure on first install.
+/// Accepts both the store package name ("postgresql") and config key family.
+pub fn isConfigurableService(name: []const u8) bool {
+    const base = baseTypeOf(name);
+    return std.mem.eql(u8, base, "postgres") or
+        std.mem.eql(u8, base, "postgresql") or
+        std.mem.eql(u8, base, "redis");
+}
+
+/// True when two service identifiers belong to the same family. Treats
+/// "postgres" and "postgresql" as equivalent so a config key of `postgres`
+/// matches an installed package named `postgresql`.
+pub fn sameServiceFamily(a: []const u8, b: []const u8) bool {
+    if (std.mem.eql(u8, a, b)) return true;
+    const a_pg = std.mem.eql(u8, a, "postgres") or std.mem.eql(u8, a, "postgresql");
+    const b_pg = std.mem.eql(u8, b, "postgres") or std.mem.eql(u8, b, "postgresql");
+    return a_pg and b_pg;
+}
+
+/// Path to a redis instance's generated config file inside its data dir.
+pub fn redisConfPath(allocator: std.mem.Allocator, data_dir: []const u8) ![]const u8 {
+    return std.fs.path.join(allocator, &.{ data_dir, "redis.conf" });
+}
+
+/// Generate redis.conf content with dev-friendly defaults. The on-disk data
+/// directory is pinned to `data_dir` and the server listens on `port`.
+/// Deterministic for a given (data_dir, port), which makes regeneration
+/// idempotent. Caller owns the returned slice.
+pub fn redisConfContent(allocator: std.mem.Allocator, data_dir: []const u8, port: u16) ![]const u8 {
+    return std.fmt.allocPrint(allocator,
+        \\# Generated by rawenv — dev defaults. Safe to regenerate.
+        \\bind 127.0.0.1
+        \\port {d}
+        \\dir {s}
+        \\daemonize no
+        \\protected-mode no
+        \\appendonly no
+        \\save 900 1
+        \\
+    , .{ port, data_dir });
+}
+
+/// Write redis.conf into `data_dir` (created if missing). Idempotent: a repeat
+/// call rewrites identical content. Returns the conf path (caller owns it).
+pub fn writeRedisConf(allocator: std.mem.Allocator, data_dir: []const u8, port: u16) ![]const u8 {
+    mkdirP(allocator, data_dir);
+
+    const content = try redisConfContent(allocator, data_dir, port);
+    defer allocator.free(content);
+
+    const path = try redisConfPath(allocator, data_dir);
+    errdefer allocator.free(path);
+
+    if (comptime builtin.os.tag != .windows) {
+        const pz = try std.fmt.allocPrintSentinel(allocator, "{s}", .{path}, 0);
+        defer allocator.free(pz);
+        const fd = std.posix.openat(std.posix.AT.FDCWD, std.mem.sliceTo(pz, 0), .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644) catch return error.WriteFailed;
+        var written: usize = 0;
+        while (written < content.len) {
+            const n = std.c.write(fd, content.ptr + written, content.len - written);
+            if (n < 0) {
+                _ = std.c.close(fd);
+                return error.WriteFailed;
+            }
+            written += @intCast(n);
+        }
+        _ = std.c.close(fd);
+    }
+
+    return path;
+}
+
+/// True if a Postgres data dir has already been initialized (initdb wrote a
+/// PG_VERSION marker). Used to keep initialization idempotent.
+pub fn postgresInitialized(allocator: std.mem.Allocator, data_dir: []const u8) bool {
+    const marker = std.fs.path.join(allocator, &.{ data_dir, "PG_VERSION" }) catch return false;
+    defer allocator.free(marker);
+    return accessPath(allocator, marker);
+}
+
+/// Initialize a Postgres data dir by running `initdb` from `store_bin_dir`.
+/// Idempotent: returns immediately when the data dir is already initialized.
+/// Best-effort: if the binary is missing (e.g. install layout differs), the
+/// step is skipped with a notice rather than failing the whole `add`.
+pub fn initPostgres(allocator: std.mem.Allocator, store_bin_dir: []const u8, data_dir: []const u8, stdout: anytype) !void {
+    if (postgresInitialized(allocator, data_dir)) {
+        try stdout.print("  postgres data dir already initialized: {s}\n", .{data_dir});
+        return;
+    }
+    mkdirP(allocator, data_dir);
+
+    const initdb = try std.fs.path.join(allocator, &.{ store_bin_dir, "initdb" });
+    defer allocator.free(initdb);
+
+    if (!accessPath(allocator, initdb)) {
+        try stdout.writeAll("  ⚠ initdb not found in store; skipping postgres initialization\n");
+        return;
+    }
+
+    // --auth=trust: dev-friendly local-only access. Absolute initdb path is
+    // required because runCommand uses execve (no PATH search).
+    const code = runCommand(allocator, &.{ initdb, "-D", data_dir, "-U", "postgres", "--auth=trust", "--encoding=UTF8" }) catch 1;
+    if (code == 0) {
+        try stdout.print("  ✓ initialized postgres data dir: {s}\n", .{data_dir});
+    } else {
+        try stdout.writeAll("  ✗ initdb failed\n");
+    }
+}
+
+/// Run service-specific first-run configuration for a freshly installed
+/// package. `store_name`/`version` locate binaries in the store (~/.rawenv/store
+/// /{store_name}-{version}); `data_dir` is the per-project, per-instance data
+/// directory; `port` is the dev-default listening port. Idempotent and
+/// best-effort — unknown services are a no-op.
+pub fn autoConfigure(allocator: std.mem.Allocator, store_name: []const u8, version: []const u8, data_dir: []const u8, port: u16, stdout: anytype) !void {
+    const base = baseTypeOf(store_name);
+    if (std.mem.eql(u8, base, "redis")) {
+        const path = writeRedisConf(allocator, data_dir, port) catch {
+            try stdout.writeAll("  ✗ failed to write redis.conf\n");
+            return;
+        };
+        defer allocator.free(path);
+        try stdout.print("  ✓ generated redis config: {s}\n", .{path});
+    } else if (std.mem.eql(u8, base, "postgres") or std.mem.eql(u8, base, "postgresql")) {
+        const home = getHome() orelse return;
+        const store_path = try buildStorePath(allocator, home, store_name, version);
+        defer allocator.free(store_path);
+        const bin_dir = try std.fs.path.join(allocator, &.{ store_path, "bin" });
+        defer allocator.free(bin_dir);
+        try initPostgres(allocator, bin_dir, data_dir, stdout);
+    }
 }
 
 /// Activate all configured runtimes by creating symlinks in ~/.rawenv/bin/
@@ -751,4 +944,97 @@ test "buildProjectDataRoot points at the per-project data root" {
     const root = try buildProjectDataRoot(std.testing.allocator, "/home/user", "myapp");
     defer std.testing.allocator.free(root);
     try std.testing.expect(std.mem.startsWith(u8, root, "/home/user/.rawenv/data/myapp-"));
+}
+
+// --- Service auto-configuration tests (SVC-070) ---
+
+test "isConfigurableService recognizes postgres and redis (incl. store names)" {
+    try std.testing.expect(isConfigurableService("postgres"));
+    try std.testing.expect(isConfigurableService("postgresql"));
+    try std.testing.expect(isConfigurableService("redis"));
+    // Instance keys (base before the dot) are honored.
+    try std.testing.expect(isConfigurableService("redis.cache"));
+    try std.testing.expect(isConfigurableService("postgres.primary"));
+    // Unknown services are not auto-configured.
+    try std.testing.expect(!isConfigurableService("node"));
+    try std.testing.expect(!isConfigurableService("meilisearch"));
+}
+
+test "sameServiceFamily treats postgres and postgresql as equal" {
+    try std.testing.expect(sameServiceFamily("postgres", "postgresql"));
+    try std.testing.expect(sameServiceFamily("postgresql", "postgres"));
+    try std.testing.expect(sameServiceFamily("redis", "redis"));
+    try std.testing.expect(!sameServiceFamily("redis", "postgres"));
+    try std.testing.expect(!sameServiceFamily("node", "redis"));
+}
+
+test "redisConfContent pins data dir and port with dev defaults" {
+    const conf = try redisConfContent(std.testing.allocator, "/home/user/.rawenv/data/app-1/redis", 6390);
+    defer std.testing.allocator.free(conf);
+    try std.testing.expect(std.mem.indexOf(u8, conf, "port 6390") != null);
+    try std.testing.expect(std.mem.indexOf(u8, conf, "dir /home/user/.rawenv/data/app-1/redis") != null);
+    try std.testing.expect(std.mem.indexOf(u8, conf, "bind 127.0.0.1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, conf, "appendonly no") != null);
+}
+
+test "redisConfContent is deterministic (idempotent regeneration)" {
+    const a = try redisConfContent(std.testing.allocator, "/data/redis", 6379);
+    defer std.testing.allocator.free(a);
+    const b = try redisConfContent(std.testing.allocator, "/data/redis", 6379);
+    defer std.testing.allocator.free(b);
+    try std.testing.expectEqualStrings(a, b);
+}
+
+test "redisConfPath joins data dir and redis.conf" {
+    const p = try redisConfPath(std.testing.allocator, "/data/redis");
+    defer std.testing.allocator.free(p);
+    try std.testing.expectEqualStrings("/data/redis/redis.conf", p);
+}
+
+test "postgresInitialized is false for a non-existent data dir" {
+    try std.testing.expect(!postgresInitialized(std.testing.allocator, "/nonexistent/rawenv/data/pg"));
+}
+
+test "serviceStartArgs supplies conf for redis and -D for postgres" {
+    const r = try serviceStartArgs(std.testing.allocator, "redis", "/data/redis");
+    defer freeServiceArgs(std.testing.allocator, r);
+    try std.testing.expectEqual(@as(usize, 1), r.len);
+    try std.testing.expectEqualStrings("/data/redis/redis.conf", r[0]);
+
+    const pg = try serviceStartArgs(std.testing.allocator, "postgres", "/data/pg");
+    defer freeServiceArgs(std.testing.allocator, pg);
+    try std.testing.expectEqual(@as(usize, 2), pg.len);
+    try std.testing.expectEqualStrings("-D", pg[0]);
+    try std.testing.expectEqualStrings("/data/pg", pg[1]);
+
+    const none = try serviceStartArgs(std.testing.allocator, "node", "/data/node");
+    defer freeServiceArgs(std.testing.allocator, none);
+    try std.testing.expectEqual(@as(usize, 0), none.len);
+}
+
+test "generateLaunchdPlist includes extra program arguments" {
+    const args = [_][]const u8{"/tmp/redis/redis.conf"};
+    const plist = try generateLaunchdPlist(std.testing.allocator, "redis", "/store/bin/redis-server", &args, "/tmp/redis");
+    defer std.testing.allocator.free(plist);
+    try std.testing.expect(std.mem.indexOf(u8, plist, "/store/bin/redis-server") != null);
+    try std.testing.expect(std.mem.indexOf(u8, plist, "/tmp/redis/redis.conf") != null);
+}
+
+test "writeRedisConf writes an idempotent config into a temp data dir" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+    // Use a unique temp data dir under the system temp location.
+    var buf: [256]u8 = undefined;
+    const data_dir = try std.fmt.bufPrint(&buf, "/tmp/rawenv-test-redis-{d}", .{std.time.milliTimestamp()});
+
+    const p1 = try writeRedisConf(std.testing.allocator, data_dir, 6379);
+    defer std.testing.allocator.free(p1);
+    try std.testing.expect(accessPath(std.testing.allocator, p1));
+
+    // Second call is safe (idempotent) and yields the same path/content.
+    const p2 = try writeRedisConf(std.testing.allocator, data_dir, 6379);
+    defer std.testing.allocator.free(p2);
+    try std.testing.expectEqualStrings(p1, p2);
+
+    // Cleanup.
+    _ = runCommand(std.testing.allocator, &.{ "/bin/rm", "-rf", data_dir }) catch {};
 }

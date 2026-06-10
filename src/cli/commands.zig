@@ -240,7 +240,49 @@ pub fn runAdd(allocator: std.mem.Allocator, stdout: anytype, package_spec: []con
         }
         return ExitCode.system;
     };
+
+    // Auto-configure the service for first use (initdb / redis.conf) so that
+    // `rawenv up` works immediately with no manual steps. Best-effort: a
+    // configuration hiccup must not turn a successful install into a failure.
+    configureAfterAdd(allocator, pkg, stdout) catch {};
     return ExitCode.ok;
+}
+
+/// Run service-specific first-run configuration after a package is installed.
+/// Resolves the project + per-instance data dirs from rawenv.toml when present
+/// (so multi-instance services each get their own config/data dir); otherwise
+/// falls back to a single default instance. Idempotent and best-effort.
+fn configureAfterAdd(allocator: std.mem.Allocator, pkg: resolver.ResolvedPackage, stdout: anytype) !void {
+    if (!service.isConfigurableService(pkg.name)) return;
+    if (comptime builtin.os.tag == .windows) return;
+
+    var configured_any = false;
+
+    if (readFileSimple(allocator, "rawenv.toml")) |toml| {
+        defer allocator.free(toml);
+        if (config.parse(allocator, toml)) |parsed| {
+            var cfg = parsed;
+            defer config.deinit(allocator, &cfg);
+            const home = (if (std.c.getenv("HOME")) |s| std.mem.sliceTo(s, 0) else null) orelse return;
+            for (cfg.services) |svc| {
+                if (!service.sameServiceFamily(svc.baseType(), pkg.name)) continue;
+                const port: u16 = if (svc.port != 0) svc.port else service.defaultPort(svc.baseType());
+                const data_dir = service.buildDataDir(allocator, home, cfg.project_name, svc.key) catch continue;
+                defer allocator.free(data_dir);
+                service.autoConfigure(allocator, pkg.name, pkg.version, data_dir, port, stdout) catch {};
+                configured_any = true;
+            }
+        } else |_| {}
+    }
+
+    if (!configured_any) {
+        // No config (or no matching instance): configure a default instance so
+        // the service is usable straight after `rawenv add`.
+        const home = (if (std.c.getenv("HOME")) |s| std.mem.sliceTo(s, 0) else null) orelse return;
+        const data_dir = service.buildDataDir(allocator, home, "default", pkg.name) catch return;
+        defer allocator.free(data_dir);
+        service.autoConfigure(allocator, pkg.name, pkg.version, data_dir, service.defaultPort(pkg.name), stdout) catch {};
+    }
 }
 
 fn loadConfig(allocator: std.mem.Allocator, stdout: anytype) !?struct { cfg: config.Config, toml: []const u8 } {

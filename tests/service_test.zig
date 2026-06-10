@@ -257,3 +257,102 @@ test "config defaults health to auto with 30s timeout" {
     try testing.expectEqual(config.Config.HealthCheck.Kind.auto, cfg.services[0].health.kind);
     try testing.expectEqual(@as(u32, 30), cfg.services[0].health.timeout_secs);
 }
+
+// --- Service auto-configuration tests (SVC-070) ---
+
+test "isConfigurableService recognizes postgres and redis families" {
+    try testing.expect(service.isConfigurableService("postgres"));
+    try testing.expect(service.isConfigurableService("postgresql"));
+    try testing.expect(service.isConfigurableService("redis"));
+    try testing.expect(service.isConfigurableService("redis.cache"));
+    try testing.expect(service.isConfigurableService("postgres.primary"));
+    try testing.expect(!service.isConfigurableService("node"));
+    try testing.expect(!service.isConfigurableService("meilisearch"));
+}
+
+test "sameServiceFamily treats postgres and postgresql as equal" {
+    try testing.expect(service.sameServiceFamily("postgres", "postgresql"));
+    try testing.expect(service.sameServiceFamily("postgresql", "postgres"));
+    try testing.expect(service.sameServiceFamily("redis", "redis"));
+    try testing.expect(!service.sameServiceFamily("redis", "postgres"));
+    try testing.expect(!service.sameServiceFamily("node", "redis"));
+}
+
+test "redisConfContent pins data dir + port with dev defaults and is idempotent" {
+    const conf = try service.redisConfContent(testing.allocator, "/home/user/.rawenv/data/app-1/redis", 6390);
+    defer testing.allocator.free(conf);
+    try testing.expect(std.mem.indexOf(u8, conf, "port 6390") != null);
+    try testing.expect(std.mem.indexOf(u8, conf, "dir /home/user/.rawenv/data/app-1/redis") != null);
+    try testing.expect(std.mem.indexOf(u8, conf, "bind 127.0.0.1") != null);
+    try testing.expect(std.mem.indexOf(u8, conf, "appendonly no") != null);
+
+    const again = try service.redisConfContent(testing.allocator, "/home/user/.rawenv/data/app-1/redis", 6390);
+    defer testing.allocator.free(again);
+    try testing.expectEqualStrings(conf, again);
+}
+
+test "redisConfPath joins data dir and redis.conf" {
+    const p = try service.redisConfPath(testing.allocator, "/data/redis");
+    defer testing.allocator.free(p);
+    try testing.expectEqualStrings("/data/redis/redis.conf", p);
+}
+
+test "postgresInitialized is false for a non-existent data dir" {
+    try testing.expect(!service.postgresInitialized(testing.allocator, "/nonexistent/rawenv/data/pg"));
+}
+
+test "serviceStartArgs supplies conf for redis and -D for postgres" {
+    const r = try service.serviceStartArgs(testing.allocator, "redis", "/data/redis");
+    defer service.freeServiceArgs(testing.allocator, r);
+    try testing.expectEqual(@as(usize, 1), r.len);
+    try testing.expectEqualStrings("/data/redis/redis.conf", r[0]);
+
+    const pg = try service.serviceStartArgs(testing.allocator, "postgres", "/data/pg");
+    defer service.freeServiceArgs(testing.allocator, pg);
+    try testing.expectEqual(@as(usize, 2), pg.len);
+    try testing.expectEqualStrings("-D", pg[0]);
+    try testing.expectEqualStrings("/data/pg", pg[1]);
+
+    const none = try service.serviceStartArgs(testing.allocator, "node", "/data/node");
+    defer service.freeServiceArgs(testing.allocator, none);
+    try testing.expectEqual(@as(usize, 0), none.len);
+}
+
+test "generateLaunchdPlist includes extra program arguments" {
+    const args = [_][]const u8{"/tmp/redis/redis.conf"};
+    const plist = try service.generateLaunchdPlist(testing.allocator, "redis", "/store/bin/redis-server", &args, "/tmp/redis");
+    defer testing.allocator.free(plist);
+    try testing.expect(std.mem.indexOf(u8, plist, "/store/bin/redis-server") != null);
+    try testing.expect(std.mem.indexOf(u8, plist, "/tmp/redis/redis.conf") != null);
+    try testing.expect(std.mem.indexOf(u8, plist, "com.rawenv.redis") != null);
+}
+
+test "writeRedisConf writes an idempotent config into a temp data dir" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+    var buf: [256]u8 = undefined;
+    const data_dir = try std.fmt.bufPrint(&buf, "/tmp/rawenv-test-redis-{d}", .{std.c.getpid()});
+
+    const p1 = try service.writeRedisConf(testing.allocator, data_dir, 6379);
+    defer testing.allocator.free(p1);
+
+    // The conf file exists and lives under the data dir.
+    const exists = blk: {
+        const f = std.posix.openat(std.posix.AT.FDCWD, p1, .{}, 0) catch break :blk false;
+        _ = std.c.close(f);
+        break :blk true;
+    };
+    try testing.expect(exists);
+
+    // Second call is idempotent: same path, succeeds again.
+    const p2 = try service.writeRedisConf(testing.allocator, data_dir, 6379);
+    defer testing.allocator.free(p2);
+    try testing.expectEqualStrings(p1, p2);
+
+    // Best-effort cleanup of the temp dir.
+    var filez: [320]u8 = undefined;
+    const fz = std.fmt.bufPrintZ(&filez, "{s}", .{p1}) catch return;
+    _ = std.c.unlink(fz.ptr);
+    var pathz: [288]u8 = undefined;
+    const dz = std.fmt.bufPrintZ(&pathz, "{s}", .{data_dir}) catch return;
+    _ = std.c.rmdir(dz.ptr);
+}
