@@ -213,11 +213,24 @@ pub fn buildBinPath(allocator: std.mem.Allocator, home: []const u8) ![]const u8 
     return std.fs.path.join(allocator, &.{ home, ".rawenv", "bin" });
 }
 
-/// Default port for known services
+/// Default (preferred) port for a known service base type.
+///
+/// Used as the starting point for auto-allocation when a service has no
+/// explicit `port` and no published host port from a compose import. Every
+/// recognised service maps to its canonical port so the allocator never falls
+/// back to the generic 1024 base — a service without a published port still
+/// gets a meaningful, conflict-checked port (e.g. mysql → 3306, not 1024).
 pub fn defaultPort(name: []const u8) u16 {
     if (std.mem.eql(u8, name, "postgresql") or std.mem.eql(u8, name, "postgres")) return 5432;
-    if (std.mem.eql(u8, name, "redis")) return 6379;
+    if (std.mem.eql(u8, name, "redis") or std.mem.eql(u8, name, "valkey")) return 6379;
+    if (std.mem.eql(u8, name, "mysql")) return 3306;
+    if (std.mem.eql(u8, name, "mariadb")) return 3306;
+    if (std.mem.eql(u8, name, "mongodb") or std.mem.eql(u8, name, "mongo")) return 27017;
+    if (std.mem.eql(u8, name, "meilisearch")) return 7700;
+    if (std.mem.eql(u8, name, "mssql")) return 1433;
     if (std.mem.eql(u8, name, "node")) return 3000;
+    if (std.mem.eql(u8, name, "python")) return 8000;
+    if (std.mem.eql(u8, name, "php")) return 8000;
     return 0;
 }
 
@@ -263,8 +276,13 @@ pub const PortAllocator = struct {
 
     /// Claim a free port starting at `preferred`, skipping already-claimed and
     /// OS-bound ports. Returns 0 if none available.
+    ///
+    /// When `preferred` is 0 (an unrecognised service with no published port)
+    /// the scan starts in the IANA dynamic/ephemeral range rather than at 1024,
+    /// so auto-allocated ports are always meaningful (never 0 or the privileged
+    /// 1024 fallback).
     pub fn claim(self: *PortAllocator, preferred: u16) !u16 {
-        var p: u16 = if (preferred == 0) 1024 else preferred;
+        var p: u16 = if (preferred == 0) 49152 else preferred;
         while (p < 65535) : (p += 1) {
             if (self.used.contains(p)) continue;
             if (!isPortFree(p)) continue;
