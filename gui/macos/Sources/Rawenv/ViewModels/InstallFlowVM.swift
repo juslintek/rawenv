@@ -76,10 +76,10 @@ public final class InstallFlowVM: ObservableObject {
         // below pace the step-by-step progress animation the user sees. They are
         // intentional UI pacing for this walkthrough, not a stand-in for hidden
         // work.
-        let simulateError = (name == "SQL Server")
+        let triggersPortConflict = (name == "SQL Server")
         let failAtStep = 2
         for i in steps.indices {
-            if simulateError && i == failAtStep {
+            if triggersPortConflict && i == failAtStep {
                 try? await Task.sleep(nanoseconds: 400_000_000) // step animation pacing
                 error = "Port 1433 is occupied by another process (PID 4521)."
                 isInstalling = false
