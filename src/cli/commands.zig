@@ -96,6 +96,58 @@ pub fn runInit(allocator: std.mem.Allocator, stdout: anytype) !void {
     }
 }
 
+/// Detect runtimes + services in the current directory and print them.
+/// Non-mutating: never writes rawenv.toml (unlike `init`). With `--json`,
+/// emits a single JSON object `{"runtimes":[...],"services":[...]}` so callers
+/// (e.g. the GUI ProjectSetupVM) can read detection results without side effects.
+pub fn runDetect(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !void {
+    var result = try detector.detect(allocator, std.Io.Dir.cwd());
+    defer result.deinit(allocator);
+
+    if (json_mode) {
+        try stdout.writeAll("{\"runtimes\":[");
+        for (result.runtimes, 0..) |rt, idx| {
+            if (idx > 0) try stdout.writeAll(",");
+            try stdout.print("{{\"name\":\"{s}\",\"version\":\"{s}\"}}", .{ rt.key, rt.value });
+        }
+        try stdout.writeAll("],\"services\":[");
+        for (result.services, 0..) |svc, idx| {
+            if (idx > 0) try stdout.writeAll(",");
+            try stdout.print(
+                "{{\"name\":\"{s}\",\"version\":\"{s}\",\"port\":{d},\"status\":\"stopped\"}}",
+                .{ svc.key, svc.value, service.defaultPort(svc.key) },
+            );
+        }
+        try stdout.writeAll("]}\n");
+        return;
+    }
+
+    if (result.runtimes.len == 0 and result.services.len == 0) {
+        try stdout.writeAll("No runtimes or services detected.\n");
+        return;
+    }
+    if (result.runtimes.len > 0) {
+        try stdout.writeAll("Detected runtimes:\n");
+        for (result.runtimes) |rt| {
+            try stdout.writeAll("  ");
+            try stdout.writeAll(rt.key);
+            try stdout.writeAll(" ");
+            try stdout.writeAll(rt.value);
+            try stdout.writeAll("\n");
+        }
+    }
+    if (result.services.len > 0) {
+        try stdout.writeAll("Detected services:\n");
+        for (result.services) |svc| {
+            try stdout.writeAll("  ");
+            try stdout.writeAll(svc.key);
+            try stdout.writeAll(" ");
+            try stdout.writeAll(svc.value);
+            try stdout.writeAll("\n");
+        }
+    }
+}
+
 pub fn runAdd(allocator: std.mem.Allocator, stdout: anytype, package_spec: []const u8) !void {
     const parsed = resolver.parsePackageSpec(package_spec) orelse {
         try stdout.writeAll("Usage: rawenv add <package>@<version>\n");

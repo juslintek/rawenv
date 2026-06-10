@@ -24,14 +24,28 @@ public final class ProjectSetupVM: ObservableObject {
 
     private struct SvcJSON: Decodable { let name: String; let port: Int; let version: String; let status: String }
 
-    /// Generate the project's isolated config (`rawenv init`) and load the real detected services.
+    /// Shape of `rawenv detect --json`: detected runtimes + services, no files written.
+    private struct DetectJSON: Decodable {
+        struct Runtime: Decodable { let name: String; let version: String }
+        struct Svc: Decodable { let name: String; let port: Int; let version: String; let status: String }
+        let runtimes: [Runtime]
+        let services: [Svc]
+    }
+
+    /// Load the project's detected services via the non-mutating `rawenv detect --json`,
+    /// then materialize the isolated config (`rawenv init`) so later steps (up/connections/
+    /// dns/deploy) have a rawenv.toml to work with.
     public func detect(project: Project) async {
         projectName = project.name
         projectPath = project.path
         services = []; installed = []; error = nil; isDetecting = true
         defer { isDetecting = false }
+        if let detected = try? await cli.runJSON(["detect"], as: DetectJSON.self, cwd: project.path) {
+            services = detected.services.map {
+                Service(name: $0.name, port: $0.port, version: $0.version, pid: nil, cpu: nil, mem: nil, uptime: nil, status: $0.status, icon: Self.icon($0.name))
+            }
+        }
         _ = try? await cli.run(["init"], cwd: project.path)
-        await refresh()
         for s in services where Self.toolInstalled(s.name) { installed.insert(s.name) }
     }
 

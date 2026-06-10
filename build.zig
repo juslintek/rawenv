@@ -504,6 +504,18 @@ pub fn build(b: *std.Build) void {
     integration_step.dependOn(&run_help_test.step);
     integration_step.dependOn(&run_services_test.step);
 
+    const integration_detect = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/detect_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_detect.root_module.link_libc = true;
+    const run_detect_test = b.addRunArtifact(integration_detect);
+    run_detect_test.step.dependOn(&exe.step);
+    integration_step.dependOn(&run_detect_test.step);
+
     const integration_add = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("tests/integration/add_test.zig"),

@@ -37,6 +37,7 @@ const help =
     \\
     \\Commands:
     \\  init             Detect project and generate rawenv.toml
+    \\  detect           Detect runtimes/services (use --json); writes no files
     \\  add <pkg>@<ver>  Install a package (e.g. rawenv add node@22)
     \\  up               Activate all configured runtimes
     \\  services ls      List configured runtimes/services with status
@@ -102,6 +103,12 @@ pub fn main(init: std.process.Init) !void {
         if (std.mem.eql(u8, arg, "init")) {
             commands.runInit(allocator, stdout) catch {
                 try stdout.writeAll("Error: init failed\n");
+            };
+            return;
+        }
+        if (std.mem.eql(u8, arg, "detect")) {
+            commands.runDetect(allocator, stdout, json_mode) catch {
+                try stdout.writeAll("Error: detect failed\n");
             };
             return;
         }
