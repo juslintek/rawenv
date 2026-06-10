@@ -642,20 +642,6 @@ pub fn build(b: [3mstd.Build) void {[0m[0m
    run_migration_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));[0m[0m
    integration_step.dependOn(&run_migration_test.step);[0m[0m
 [0m[0m
-   // Deploy generate E2E (writes terraform/ansible/Containerfile + clean re-run).[0m[0m
-   const integration_deploy = b.addTest(.{[0m[0m
-       .root_module = b.createModule(.{[0m[0m
-           .root_source_file = b.path("tests/integration/deploy_e2e_test.zig"),[0m[0m
-           .target = target,[0m[0m
-           .optimize = optimize,[0m[0m
-       }),[0m[0m
-   });[0m[0m
-   integration_deploy.root_module.link_libc = true;[0m[0m
-   const run_deploy_test = b.addRunArtifact(integration_deploy);[0m[0m
-   run_deploy_test.step.dependOn(b.getInstallStep());[0m[0m
-   run_deploy_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));[0m[0m
-   integration_step.dependOn(&run_deploy_test.step);[0m[0m
-[0m[0m
    // Error handling + edge cases E2E (unknown package/version, missing/corrupt[0m[0m
    // config, invalid args — all exit cleanly with user-friendly messages).[0m[0m
    const integration_errors = b.addTest(.{[0m[0m
@@ -670,6 +656,20 @@ pub fn build(b: [3mstd.Build) void {[0m[0m
    run_errors_test.step.dependOn(b.getInstallStep());[0m[0m
    run_errors_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));[0m[0m
    integration_step.dependOn(&run_errors_test.step);[0m[0m
+[0m[0m
+   // Deploy generate E2E (writes terraform/ansible/Containerfile + clean re-run).[0m[0m
+   const integration_deploy = b.addTest(.{[0m[0m
+       .root_module = b.createModule(.{[0m[0m
+           .root_source_file = b.path("tests/integration/deploy_e2e_test.zig"),[0m[0m
+           .target = target,[0m[0m
+           .optimize = optimize,[0m[0m
+       }),[0m[0m
+   });[0m[0m
+   integration_deploy.root_module.link_libc = true;[0m[0m
+   const run_deploy_test = b.addRunArtifact(integration_deploy);[0m[0m
+   run_deploy_test.step.dependOn(b.getInstallStep());[0m[0m
+   run_deploy_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));[0m[0m
+   integration_step.dependOn(&run_deploy_test.step);[0m[0m
 [0m[0m
    // Cross-compilation targets[0m[0m
    const cross_targets: []const struct { []const u8, std.Target.Cpu.Arch, std.Target.Os.Tag } = &.{[0m[0m

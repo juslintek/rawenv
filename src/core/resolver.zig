@@ -39,6 +39,11 @@ pub const available_packages = [_][]const u8{
     "python",
     "php",
     "meilisearch",
+    "mariadb",
+    // `mysql` resolves to MariaDB binaries (a drop-in MySQL replacement); see
+    // resolveMariadb. Kept as a distinct name so store paths match the config
+    // key emitted by the detector for `mysql:*` compose images.
+    "mysql",
 };
 
 const PlatformKey = struct {
@@ -91,6 +96,8 @@ pub fn resolve(allocator: std.mem.Allocator, package_name: []const u8, version: 
         return resolvePhp(allocator, version);
     } else if (std.mem.eql(u8, package_name, "meilisearch")) {
         return resolveMeilisearch(allocator, version);
+    } else if (std.mem.eql(u8, package_name, "mariadb") or std.mem.eql(u8, package_name, "mysql")) {
+        return resolveMariadb(allocator, package_name, version);
     }
     return ResolveError.UnknownPackage;
 }
@@ -383,6 +390,55 @@ fn meilisearchAsset(p: PlatformKey) ?[]const u8 {
     return null;
 }
 
+// ---------------------------------------------------------------------------
+// mariadb / mysql — prebuilt "systemd" binary tarballs from the MariaDB
+// Foundation archives (archive.mariadb.org). Each release ships a published
+// sha256sums.txt sidecar, so the checksum is pinned (never compute-on-download)
+// and no compilation is required. MariaDB is a drop-in MySQL replacement, so a
+// requested `mysql` package resolves to the same MariaDB binaries.
+//
+// The Foundation only publishes x86_64 Linux binary tarballs — there are no
+// official macOS or ARM tarballs — so every other platform is UnsupportedPlatform.
+// ---------------------------------------------------------------------------
+const MARIADB_VERSION = "11.4.7";
+// sha256 of mariadb-11.4.7-linux-systemd-x86_64.tar.gz, from the upstream
+// sha256sums.txt sidecar in the bintar-linux-systemd-x86_64 directory.
+const MARIADB_SHA256_LINUX_X64 = "805e953042fd2383139f3f7174bee412a21b7d0c57ee69a4c9732989dccd42d3";
+
+fn resolveMariadb(allocator: std.mem.Allocator, package_name: []const u8, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
+    const full_version = mariadbFullVersion(package_name, version) orelse return ResolveError.UnknownVersion;
+
+    const platform = try getPlatform();
+    // MariaDB Foundation only publishes x86_64 Linux binary tarballs.
+    if (!isPlatform(platform, "linux", "x64")) return ResolveError.UnsupportedPlatform;
+
+    const url = try std.fmt.allocPrint(
+        allocator,
+        "https://archive.mariadb.org/mariadb-{s}/bintar-linux-systemd-x86_64/mariadb-{s}-linux-systemd-x86_64.tar.gz",
+        .{ full_version, full_version },
+    );
+
+    // Preserve the requested name ("mariadb" or "mysql") so the store path lines
+    // up with the config key the detector emits for the corresponding image.
+    return .{ .name = package_name, .version = full_version, .url = url, .sha256 = MARIADB_SHA256_LINUX_X64, .archive_type = .tar_gz };
+}
+
+/// Map a short mariadb/mysql version to the pinned MariaDB release. MariaDB
+/// supplies the engine for both names, so MySQL-style versions (8, 8.0, 8.4)
+/// and MariaDB-style versions (11, 11.4) resolve to the same release.
+fn mariadbFullVersion(package_name: []const u8, version: []const u8) ?[]const u8 {
+    if (std.mem.eql(u8, package_name, "mysql")) {
+        if (std.mem.eql(u8, version, "8") or
+            std.mem.eql(u8, version, "8.0") or
+            std.mem.eql(u8, version, "8.4")) return MARIADB_VERSION;
+    }
+    // Accept MariaDB-style versions for both names.
+    if (std.mem.eql(u8, version, "11") or
+        std.mem.eql(u8, version, "11.4") or
+        std.mem.eql(u8, version, MARIADB_VERSION)) return MARIADB_VERSION;
+    return null;
+}
+
 /// Map a short version (e.g. "22") to its pinned full version (e.g. "22.15.0")
 /// without fetching a URL/SHA256. Mirrors the version logic in `resolve` so
 /// store paths stay consistent. Returns the input unchanged if unknown.
@@ -408,6 +464,8 @@ fn fullVersion(package_name: []const u8, version: []const u8) ?[]const u8 {
         if (std.mem.eql(u8, version, "8.4")) return "8.4.11";
     } else if (std.mem.eql(u8, package_name, "meilisearch")) {
         if (std.mem.eql(u8, version, "1.12")) return "1.12.0";
+    } else if (std.mem.eql(u8, package_name, "mariadb") or std.mem.eql(u8, package_name, "mysql")) {
+        return mariadbFullVersion(package_name, version);
     }
     return null;
 }
@@ -429,6 +487,10 @@ pub fn availableVersions(package_name: []const u8) []const []const u8 {
         return &.{ "8.1", "8.2", "8.3", "8.4" };
     } else if (std.mem.eql(u8, package_name, "meilisearch")) {
         return &.{"1.12"};
+    } else if (std.mem.eql(u8, package_name, "mariadb")) {
+        return &.{ "11", "11.4" };
+    } else if (std.mem.eql(u8, package_name, "mysql")) {
+        return &.{ "8", "8.4" };
     }
     return &.{};
 }
@@ -595,6 +657,53 @@ test "resolve meilisearch@1.12 (github prebuilt binary)" {
     try std.testing.expectEqualStrings(COMPUTE_ON_DOWNLOAD, pkg.sha256);
 }
 
+test "resolve mariadb@11 (prebuilt from MariaDB Foundation archives)" {
+    const result = resolve(std.testing.allocator, "mariadb", "11");
+    if (result) |pkg| {
+        defer std.testing.allocator.free(pkg.url);
+        try std.testing.expectEqualStrings("mariadb", pkg.name);
+        try std.testing.expectEqualStrings("11.4.7", pkg.version);
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "archive.mariadb.org") != null);
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "bintar-linux-systemd-x86_64") != null);
+        // Must be a prebuilt binary tarball, never the source distribution.
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "/source/") == null);
+        try std.testing.expect(pkg.archive_type == .tar_gz);
+        // MariaDB publishes checksums, so this must never be the sentinel.
+        try std.testing.expect(!std.mem.eql(u8, pkg.sha256, COMPUTE_ON_DOWNLOAD));
+        try std.testing.expectEqual(@as(usize, 64), pkg.sha256.len);
+    } else |err| {
+        // MariaDB only ships x86_64 Linux binary tarballs; every other
+        // platform legitimately resolves to UnsupportedPlatform.
+        try std.testing.expectEqual(ResolveError.UnsupportedPlatform, err);
+    }
+}
+
+test "resolve mysql alias resolves to MariaDB binaries" {
+    inline for (.{ "8", "8.0", "8.4" }) |v| {
+        const result = resolve(std.testing.allocator, "mysql", v);
+        if (result) |pkg| {
+            defer std.testing.allocator.free(pkg.url);
+            // Name is preserved so the store path matches the `mysql` config key.
+            try std.testing.expectEqualStrings("mysql", pkg.name);
+            try std.testing.expectEqualStrings("11.4.7", pkg.version);
+            try std.testing.expect(std.mem.indexOf(u8, pkg.url, "archive.mariadb.org") != null);
+            try std.testing.expectEqual(@as(usize, 64), pkg.sha256.len);
+        } else |err| {
+            try std.testing.expectEqual(ResolveError.UnsupportedPlatform, err);
+        }
+    }
+}
+
+test "resolve mariadb unknown version" {
+    const result = resolve(std.testing.allocator, "mariadb", "5.5");
+    try std.testing.expectError(ResolveError.UnknownVersion, result);
+}
+
+test "mariadb and mysql are known packages" {
+    try std.testing.expect(isKnownPackage("mariadb"));
+    try std.testing.expect(isKnownPackage("mysql"));
+}
+
 test "resolve unknown package" {
     const result = resolve(std.testing.allocator, "unknown", "1.0");
     try std.testing.expectError(ResolveError.UnknownPackage, result);
@@ -630,6 +739,10 @@ test "resolveVersion maps short to full and is consistent with resolve" {
     try std.testing.expectEqualStrings("8.2.31", resolveVersion("php", "8.2"));
     try std.testing.expectEqualStrings("8.3.31", resolveVersion("php", "8.3"));
     try std.testing.expectEqualStrings("1.12.0", resolveVersion("meilisearch", "1.12"));
+    try std.testing.expectEqualStrings("11.4.7", resolveVersion("mariadb", "11"));
+    try std.testing.expectEqualStrings("11.4.7", resolveVersion("mariadb", "11.4"));
+    try std.testing.expectEqualStrings("11.4.7", resolveVersion("mysql", "8"));
+    try std.testing.expectEqualStrings("11.4.7", resolveVersion("mysql", "8.4"));
     // Unknown stays unchanged.
     try std.testing.expectEqualStrings("9.9", resolveVersion("node", "9.9"));
 }
