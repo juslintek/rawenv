@@ -1,0 +1,17 @@
+# Port-mapping docker-compose fixture used by E2E-102.
+# Exercises the three port-spec forms the importer must resolve to the *host*
+# (published) port: "host:container", "ip:host:container", and a protocol
+# suffix. The host port — not the container port — must land in rawenv.toml.
+services:
+  db:
+    image: postgres:16
+    ports:
+      - "15432:5432"
+  cache:
+    image: redis:7
+    ports:
+      - "127.0.0.1:16379:6379"
+  search:
+    image: getmeili/meilisearch:1.6
+    ports:
+      - "7700:7700/tcp"

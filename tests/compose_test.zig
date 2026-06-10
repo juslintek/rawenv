@@ -69,6 +69,40 @@ test "untagged image falls back to default version" {
 }
 
 // ---------------------------------------------------------------------------
+// MSSQL / azure-sql-edge mapping (QF-002)
+// ---------------------------------------------------------------------------
+
+test "azure-sql-edge image maps to [services.mssql]" {
+    const yaml =
+        \\services:
+        \\  db:
+        \\    image: 'mcr.microsoft.com/azure-sql-edge:latest'
+        \\    ports:
+        \\      - "1433:1433"
+    ;
+    var result = try compose.importCompose(testing.allocator, yaml, "p");
+    defer result.deinit(testing.allocator);
+    try expectContains(result.toml, "[services.mssql]");
+    try expectContains(result.toml, "version = \"2022\""); // 'latest' -> default
+    try expectContains(result.toml, "port = 1433");
+    try testing.expectEqual(@as(usize, 1), result.mapped_count);
+}
+
+test "mcr.microsoft.com/mssql/server image maps to mssql with version from tag" {
+    const yaml =
+        \\services:
+        \\  db:
+        \\    image: mcr.microsoft.com/mssql/server:2022-latest
+        \\    ports:
+        \\      - "1433:1433"
+    ;
+    var result = try compose.importCompose(testing.allocator, yaml, "p");
+    defer result.deinit(testing.allocator);
+    try expectContains(result.toml, "[services.mssql]");
+    try expectContains(result.toml, "version = \"2022\"");
+}
+
+// ---------------------------------------------------------------------------
 // Warnings (unsupported features must not fail the import)
 // ---------------------------------------------------------------------------
 

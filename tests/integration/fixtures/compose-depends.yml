@@ -1,0 +1,23 @@
+# depends_on docker-compose fixture used by E2E-102.
+# A Node API that depends on Postgres and Redis. The importer must carry the
+# dependency edges into rawenv.toml as `depends_on = [...]` so `rawenv
+# connections` can reconstruct the service dependency map.
+services:
+  api:
+    image: node:22
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - redis
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: api
+      POSTGRES_PASSWORD: secret
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
