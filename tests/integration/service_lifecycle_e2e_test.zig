@@ -247,7 +247,9 @@ fn runServiceLifecycle(c: ServiceCase, available_catalog: []const u8) !void {
     {
         const r = try run(&.{ rawenvBin(), "up" }, tmp.dir);
         defer r.deinit();
-        try testing.expect(r.exitedWith(0));
+        // QF-012: exit 0 when the service is skipped or becomes ready; exit 1 if
+        // it starts but fails its readiness gate.
+        try testing.expect(r.exitedWith(0) or (r.exitedWith(1) and r.outContains("failed to start")));
         // The service must be considered by name — either started or skipped.
         try testing.expect(r.outContains(c.name));
         // Installed services are reported started (▶ … started). Uninstalled

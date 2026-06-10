@@ -99,6 +99,29 @@ pub const HealthResult = enum {
     skipped,
 };
 
+/// Outcome of attempting to launch a single service process.
+pub const StartResult = enum {
+    /// The service process was launched successfully.
+    started,
+    /// The launch attempt failed (bad binary, service manager rejected it, …).
+    failed,
+    /// Service management is not supported on this platform (e.g. Windows).
+    unsupported,
+};
+
+/// Aggregate result of `up` so the caller can pick an exit code. A non-zero
+/// `failed` count means at least one configured service could not be brought
+/// up (start failure or readiness timeout); the caller should exit non-zero.
+pub const UpOutcome = struct {
+    /// Services that started and passed their readiness gate.
+    started: usize = 0,
+    /// Services that failed to start or never became ready.
+    failed: usize = 0,
+    /// Services intentionally not started (uninstalled, user-managed app,
+    /// unsupported platform). These do not count as failures.
+    skipped: usize = 0,
+};
+
 /// Sleep for `ms` milliseconds using poll(2) with no descriptors. Avoids
 /// depending on the reworked std time/Io APIs while staying POSIX-portable.
 fn sleepMs(ms: c_int) void {
@@ -600,10 +623,10 @@ pub fn stopServiceLinux(allocator: std.mem.Allocator, name: []const u8) !void {
 
 /// Start a service (platform-dispatched). Data is stored in an isolated,
 /// per-project directory: ~/.rawenv/data/{project-name-hash}/{name}
-pub fn startService(allocator: std.mem.Allocator, project: []const u8, name: []const u8, version: []const u8, stdout: anytype) !void {
+pub fn startService(allocator: std.mem.Allocator, project: []const u8, name: []const u8, version: []const u8, stdout: anytype) !StartResult {
     const home = getHome() orelse {
         try stdout.writeAll("Error: HOME not set\n");
-        return;
+        return .failed;
     };
 
     const store_path = try buildStorePath(allocator, home, name, version);
@@ -619,20 +642,20 @@ pub fn startService(allocator: std.mem.Allocator, project: []const u8, name: []c
             try stdout.writeAll("  ✗ ");
             try stdout.writeAll(name);
             try stdout.writeAll(" failed to start\n");
-            return;
+            return .failed;
         };
     } else if (comptime builtin.os.tag == .linux) {
         startServiceLinux(allocator, name, binary_path, data_dir) catch {
             try stdout.writeAll("  ✗ ");
             try stdout.writeAll(name);
             try stdout.writeAll(" failed to start\n");
-            return;
+            return .failed;
         };
     } else {
         try stdout.writeAll("  ⚠ ");
         try stdout.writeAll(name);
         try stdout.writeAll(" — service management not supported on Windows\n");
-        return;
+        return .unsupported;
     }
 
     try stdout.writeAll("  ▶ ");
@@ -640,6 +663,7 @@ pub fn startService(allocator: std.mem.Allocator, project: []const u8, name: []c
     try stdout.writeAll("@");
     try stdout.writeAll(version);
     try stdout.writeAll(" started\n");
+    return .started;
 }
 
 /// Stop a service (platform-dispatched). On both platforms the OS service
@@ -979,10 +1003,11 @@ pub fn startOrder(allocator: std.mem.Allocator, services: []const config.Config.
 }
 
 /// Activate all configured runtimes by creating symlinks in ~/.rawenv/bin/
-pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !void {
+pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !UpOutcome {
+    var outcome: UpOutcome = .{};
     const home = getHome() orelse {
         try stdout.writeAll("Error: HOME not set\n");
-        return;
+        return outcome;
     };
 
     const bin_path = try buildBinPath(allocator, home);
@@ -1050,22 +1075,41 @@ pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !vo
         // than reporting a missing binary or routing it through the installer.
         if (svc.is_app) {
             try stdout.print("  {s} — your application (managed by you), skipping\n", .{svc.name});
+            outcome.skipped += 1;
             continue;
         }
-        // Skip services whose runtime isn't installed yet — mirrors the runtime
-        // behavior above and avoids blocking on a readiness gate that can never
-        // pass.
+        // Skip services whose binary isn't installed yet. We check the actual
+        // executable (not just the store dir) so an uninstalled service is
+        // skipped immediately — we never launch it and then block on a
+        // readiness gate that can never pass (the 30s-per-service hang).
         const base = baseTypeOf(svc.name);
         const store_path = try buildStorePath(allocator, home, base, svc.version);
         defer allocator.free(store_path);
-        if (!accessPath(allocator, store_path)) {
-            try stdout.print("  {s}@{s} — not installed, skipping\n", .{ svc.name, svc.version });
+        const binary_path = try std.fs.path.join(allocator, &.{ store_path, "bin", base });
+        defer allocator.free(binary_path);
+        if (!accessPath(allocator, binary_path)) {
+            try stdout.print("  {s}@{s} — not installed, skipping (run `rawenv add {s}@{s}`)\n", .{ svc.name, svc.version, base, svc.version });
+            outcome.skipped += 1;
             continue;
         }
 
-        try startService(allocator, cfg.project_name, svc.name, svc.version, stdout);
-        try gateReadiness(allocator, svc, stdout);
+        switch (try startService(allocator, cfg.project_name, svc.name, svc.version, stdout)) {
+            .started => {
+                if (try gateReadiness(allocator, svc, stdout)) {
+                    outcome.started += 1;
+                } else {
+                    outcome.failed += 1;
+                }
+            },
+            // A launch failure has already printed ✗; don't gate readiness on a
+            // service that never started (avoids the per-service timeout block).
+            .failed => outcome.failed += 1,
+            // Platform can't manage services — not a failure, just unsupported.
+            .unsupported => outcome.skipped += 1,
+        }
     }
+
+    return outcome;
 }
 
 /// Stop all configured services in reverse dependency order — dependents are
@@ -1112,11 +1156,15 @@ pub fn baseTypeOf(name: []const u8) []const u8 {
 
 /// Resolve a service's probe strategy, poll until ready, print a clear status
 /// line, and stop the service if it never became ready (so nothing dangles).
-fn gateReadiness(allocator: std.mem.Allocator, svc: ServiceInfo, stdout: anytype) !void {
+fn gateReadiness(allocator: std.mem.Allocator, svc: ServiceInfo, stdout: anytype) !bool {
     var kind = svc.health.kind;
     const base = baseTypeOf(svc.name);
     if (kind == .auto) kind = defaultHealthKind(base);
-    if (kind == .none) return; // readiness gating disabled for this service
+    if (kind == .none) {
+        // Readiness gating disabled — a started service is considered up.
+        try stdout.print("    \u{2713} {s} started (health check disabled)\n", .{svc.name});
+        return true;
+    }
 
     const probe_port = if (svc.health.port != 0) svc.health.port else svc.port;
     const timeout = svc.health.timeout_secs;
@@ -1129,10 +1177,11 @@ fn gateReadiness(allocator: std.mem.Allocator, svc: ServiceInfo, stdout: anytype
         .skipped => {},
     }
 
-    if (result != .ready) {
-        // Surface failure and tear down so we don't leave a half-started service.
-        try stopService(allocator, svc.name, stdout);
-    }
+    if (result == .ready or result == .skipped) return true;
+
+    // Surface failure and tear down so we don't leave a half-started service.
+    try stopService(allocator, svc.name, stdout);
+    return false;
 }
 
 /// List configured runtimes/services with status

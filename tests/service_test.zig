@@ -4,6 +4,11 @@ const testing = std.testing;
 const service = @import("service");
 const shell = @import("shell");
 
+// libc env setters (not surfaced by std.c in this Zig version) used to point
+// `service.getHome()` at an isolated HOME for the QF-012 `up` tests below.
+extern "c" fn setenv(name: [*:0]const u8, value: [*:0]const u8, overwrite: c_int) c_int;
+extern "c" fn unsetenv(name: [*:0]const u8) c_int;
+
 test "ServiceStatus enum values" {
     try testing.expect(@intFromEnum(service.ServiceStatus.running) == 0);
     try testing.expect(@intFromEnum(service.ServiceStatus.stopped) == 1);
@@ -618,6 +623,81 @@ test "down on circular dependency surfaces the error" {
     );
     buf = aw.toArrayList();
 }
+
+// QF-012: `up` must skip uninstalled services immediately (no 30s readiness
+// hang) and report them as skipped — not as started, not as failed.
+test "up skips uninstalled services immediately and counts them as skipped" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+    const config = @import("config");
+
+    // Isolated, empty HOME → the configured service has no installed binary.
+    // A path relative to the test's cwd is fine: std.c.access (used by the skip
+    // check) resolves it against cwd, and the tmp dir is cleaned up afterward.
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const home = try std.fs.path.join(testing.allocator, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    defer testing.allocator.free(home);
+    const home_z = try testing.allocator.dupeZ(u8, home);
+    defer testing.allocator.free(home_z);
+
+    const prev_home = std.c.getenv("HOME");
+    _ = setenv("HOME", home_z.ptr, 1);
+    defer {
+        if (prev_home) |p| {
+            _ = setenv("HOME", p, 1);
+        } else {
+            _ = unsetenv("HOME");
+        }
+    }
+
+    var services = [_]config.Config.Entry{
+        .{ .key = "postgres", .value = "16", .service_type = "postgres" },
+    };
+    var cfg = config.Config{
+        .project_name = "qf012",
+        .runtimes = &.{},
+        .services = &services,
+    };
+    _ = &cfg;
+
+    var buf: std.ArrayList(u8) = .empty;
+    defer buf.deinit(testing.allocator);
+    var aw: std.Io.Writer.Allocating = .fromArrayList(testing.allocator, &buf);
+
+    const outcome = try service.up(testing.allocator, cfg, &aw.writer);
+    buf = aw.toArrayList();
+
+    // Skipped immediately (uninstalled) — never started, never readiness-gated,
+    // so the 30s-per-service hang can't occur. Skips are not failures.
+    try testing.expectEqual(@as(usize, 1), outcome.skipped);
+    try testing.expectEqual(@as(usize, 0), outcome.started);
+    try testing.expectEqual(@as(usize, 0), outcome.failed);
+    try testing.expect(std.mem.indexOf(u8, buf.items, "not installed") != null);
+}
+
+// QF-012: a runtimes-only / empty-service project brings nothing "up" and
+// reports zero failures (so `rawenv up` exits 0).
+test "up with no services yields a zero-failure outcome" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+    const config = @import("config");
+    var cfg = config.Config{
+        .project_name = "empty",
+        .runtimes = &.{},
+        .services = &.{},
+    };
+    _ = &cfg;
+
+    var buf: std.ArrayList(u8) = .empty;
+    defer buf.deinit(testing.allocator);
+    var aw: std.Io.Writer.Allocating = .fromArrayList(testing.allocator, &buf);
+    const outcome = try service.up(testing.allocator, cfg, &aw.writer);
+    buf = aw.toArrayList();
+
+    try testing.expectEqual(@as(usize, 0), outcome.failed);
+    try testing.expectEqual(@as(usize, 0), outcome.started);
+    try testing.expectEqual(@as(usize, 0), outcome.skipped);
+}
+
 
 test "isProjectApp: explicit app flag wins" {
     const config = @import("config");

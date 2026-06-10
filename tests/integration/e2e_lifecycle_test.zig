@@ -155,13 +155,17 @@ fn runStackLifecycle(c: StackCase, port: u16) !void {
     {
         const r = try run(&.{ rawenvBin(), "up" }, tmp.dir);
         defer r.deinit();
-        try testing.expect(r.exitedWith(0));
 
         // `up` either starts an installed service (which then gets readiness-gated
         // and torn down on failure) or reports it as not installed and skips.
         const started = std.mem.containsAtLeast(u8, r.stdout, 1, "started");
         const skipped = std.mem.containsAtLeast(u8, r.stdout, 1, "not installed");
         try testing.expect(started or skipped);
+
+        // QF-012: exit 0 when every service is skipped or becomes ready; exit 1
+        // when an installed service starts but fails its readiness gate.
+        const failed = std.mem.containsAtLeast(u8, r.stdout, 1, "failed to start");
+        try testing.expect(r.exitedWith(0) or (r.exitedWith(1) and failed));
 
         // If a real service was started, tear it down via destroy so nothing dangles.
         if (started) {

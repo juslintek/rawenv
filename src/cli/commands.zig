@@ -52,6 +52,10 @@ pub const ExitCode = struct {
     pub const ok: u8 = 0;
     pub const user: u8 = 1;
     pub const system: u8 = 2;
+    /// One or more services failed to start (or never became ready). Distinct
+    /// constant for clarity; shares the value 1 so callers/scripts can treat any
+    /// non-zero exit as failure.
+    pub const failure: u8 = 1;
 };
 
 /// Write the comma-separated list of installable package names.
@@ -382,7 +386,7 @@ pub fn runUp(allocator: std.mem.Allocator, stdout: anytype) !u8 {
     var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
-    service.up(allocator, result.cfg, stdout) catch |err| switch (err) {
+    const outcome = service.up(allocator, result.cfg, stdout) catch |err| switch (err) {
         // The circular-dependency message is already printed by service.up.
         error.CircularDependency => return ExitCode.user,
         else => {
@@ -395,6 +399,14 @@ pub fn runUp(allocator: std.mem.Allocator, stdout: anytype) !u8 {
     // a networking hiccup (no sudo, no Caddy) must not fail an otherwise
     // successful `up` — instead we persist configs and print next steps.
     setupNetwork(allocator, result.cfg, stdout) catch {};
+
+    // Surface a non-zero exit if any configured service failed to start or
+    // never became ready, so scripts and CI can detect the failure. Uninstalled
+    // or user-managed services are skipped (not failures) and don't trip this.
+    if (outcome.failed > 0) {
+        try stdout.print("\n{d} service(s) failed to start. Run `rawenv status` for details.\n", .{outcome.failed});
+        return ExitCode.failure;
+    }
     return ExitCode.ok;
 }
 
