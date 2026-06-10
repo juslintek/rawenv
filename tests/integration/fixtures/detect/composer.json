@@ -1,0 +1,8 @@
+{
+  "name": "vendor/app",
+  "description": "PHP app fixture for detector coverage",
+  "require": {
+    "php": "^8.2",
+    "laravel/framework": "^11.0"
+  }
+}
