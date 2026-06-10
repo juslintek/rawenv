@@ -227,6 +227,10 @@ test "detect empty directory" {
     cleanFile(dir, "composer.json");
     cleanFile(dir, ".env");
     cleanFile(dir, "docker-compose.yml");
+    cleanFile(dir, "pyproject.toml");
+    cleanFile(dir, "uv.lock");
+    cleanFile(dir, "requirements.txt");
+    cleanFile(dir, "setup.py");
 
     var result = try detector.detect(testing.allocator, dir);
     defer result.deinit(testing.allocator);
@@ -274,6 +278,163 @@ test "config generate with no runtimes or services" {
     try testing.expectEqual(0, cfg.runtimes.len);
     try testing.expectEqual(0, cfg.services.len);
     try testing.expectEqual(true, cfg.auto_detect);
+}
+
+test "detect pyproject.toml with requires-python" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "pyproject.toml");
+    cleanFile(dir, "package.json");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+    cleanFile(dir, "docker-compose.yml");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "pyproject.toml",
+        .data =
+        \\[project]
+        \\name = "demo"
+        \\requires-python = ">=3.11"
+        ,
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("python", result.runtimes[0].key);
+    try testing.expectEqualStrings("3.11", result.runtimes[0].value);
+}
+
+test "detect pyproject.toml without requires-python defaults to 3.12" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "pyproject.toml");
+    cleanFile(dir, "package.json");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+    cleanFile(dir, "docker-compose.yml");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "pyproject.toml",
+        .data =
+        \\[project]
+        \\name = "demo"
+        ,
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("python", result.runtimes[0].key);
+    try testing.expectEqualStrings("3.12", result.runtimes[0].value);
+}
+
+test "detect pyproject.toml with patch version in requires-python" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "pyproject.toml");
+    cleanFile(dir, "package.json");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+    cleanFile(dir, "docker-compose.yml");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "pyproject.toml",
+        .data =
+        \\[project]
+        \\requires-python = "==3.13.1"
+        ,
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("python", result.runtimes[0].key);
+    try testing.expectEqualStrings("3.13", result.runtimes[0].value);
+}
+
+test "detect uv.lock as python indicator" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "uv.lock");
+    cleanFile(dir, "pyproject.toml");
+    cleanFile(dir, "package.json");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+    cleanFile(dir, "docker-compose.yml");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "uv.lock",
+        .data = "version = 1\n",
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("python", result.runtimes[0].key);
+    try testing.expectEqualStrings("3.12", result.runtimes[0].value);
+}
+
+test "detect setup.py as python indicator" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "setup.py");
+    cleanFile(dir, "pyproject.toml");
+    cleanFile(dir, "uv.lock");
+    cleanFile(dir, "requirements.txt");
+    cleanFile(dir, "package.json");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+    cleanFile(dir, "docker-compose.yml");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "setup.py",
+        .data = "from setuptools import setup\nsetup(name='demo')\n",
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("python", result.runtimes[0].key);
+    try testing.expectEqualStrings("3.12", result.runtimes[0].value);
+}
+
+test "detect requirements.txt still works and is not duplicated by pyproject" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "requirements.txt");
+    defer cleanFile(dir, "pyproject.toml");
+    cleanFile(dir, "uv.lock");
+    cleanFile(dir, "package.json");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+    cleanFile(dir, "docker-compose.yml");
+
+    // pyproject.toml present alongside requirements.txt → single python entry,
+    // version taken from pyproject.toml.
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "requirements.txt",
+        .data = "flask==3.0\n",
+    });
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "pyproject.toml",
+        .data =
+        \\[project]
+        \\requires-python = ">=3.10"
+        ,
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("python", result.runtimes[0].key);
+    try testing.expectEqualStrings("3.10", result.runtimes[0].value);
 }
 
 test "detect composer.json with php version" {

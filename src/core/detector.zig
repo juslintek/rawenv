@@ -50,9 +50,12 @@ pub fn detect(allocator: std.mem.Allocator, dir: std.Io.Dir) !DetectionResult {
         try runtimes.append(allocator, .{ .key = "go", .value = "1.22" });
     }
 
-    if (readFile(allocator, dir, "requirements.txt")) |data| {
-        defer allocator.free(data);
-        try runtimes.append(allocator, .{ .key = "python", .value = "3.12" });
+    // Python: detect from any of the common project markers. Modern projects
+    // use pyproject.toml (+ uv.lock); legacy ones use requirements.txt /
+    // setup.py. Only add the runtime once, preferring an explicit version from
+    // pyproject.toml's `requires-python`.
+    if (detectPythonVersion(allocator, dir)) |py_version| {
+        try runtimes.append(allocator, .{ .key = "python", .value = py_version });
     }
 
     if (readFile(allocator, dir, "Gemfile")) |data| {
@@ -148,6 +151,70 @@ fn matchMajorMinor(raw: []const u8) ?[]const u8 {
     while (i < raw.len and (std.ascii.isDigit(raw[i]) or raw[i] == '.')) : (i += 1) {}
     var ver = raw[start..i];
     if (ver.len > 0 and ver[ver.len - 1] == '.') ver = ver[0 .. ver.len - 1];
+    for (versions) |v| {
+        if (std.mem.eql(u8, ver, v)) return v;
+    }
+    return null;
+}
+
+/// Detect a Python runtime version by inspecting the common project markers.
+/// Returns a static "major.minor" literal, or null if no Python markers exist.
+/// pyproject.toml's `requires-python` is preferred for the version; other
+/// markers (uv.lock, requirements.txt, setup.py, setup.cfg, Pipfile) only act
+/// as presence indicators and fall back to the default version.
+fn detectPythonVersion(allocator: std.mem.Allocator, dir: std.Io.Dir) ?[]const u8 {
+    const default_version = "3.12";
+    var found = false;
+    var version: []const u8 = default_version;
+
+    if (readFile(allocator, dir, "pyproject.toml")) |data| {
+        defer allocator.free(data);
+        found = true;
+        if (parseRequiresPython(data)) |v| version = v;
+    }
+
+    const markers = [_][]const u8{ "uv.lock", "requirements.txt", "setup.py", "setup.cfg", "Pipfile" };
+    for (markers) |marker| {
+        if (found) break;
+        if (readFile(allocator, dir, marker)) |data| {
+            allocator.free(data);
+            found = true;
+        }
+    }
+
+    return if (found) version else null;
+}
+
+/// Extract a static "major.minor" Python version from a pyproject.toml's
+/// `requires-python` constraint (e.g. `>=3.11`, `==3.12.*`, `>=3.9,<4.0`).
+fn parseRequiresPython(data: []const u8) ?[]const u8 {
+    var it = std.mem.splitScalar(u8, data, '\n');
+    while (it.next()) |line| {
+        const trimmed = std.mem.trim(u8, line, &std.ascii.whitespace);
+        if (trimmed.len == 0 or trimmed[0] == '#') continue;
+        if (!std.mem.startsWith(u8, trimmed, "requires-python")) continue;
+        const eq = std.mem.indexOfScalar(u8, trimmed, '=') orelse continue;
+        return matchPythonVersion(trimmed[eq + 1 ..]);
+    }
+    return null;
+}
+
+/// Map a constraint string to a static Python "major.minor" literal.
+fn matchPythonVersion(raw: []const u8) ?[]const u8 {
+    const versions = [_][]const u8{ "3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14" };
+    var i: usize = 0;
+    while (i < raw.len and !std.ascii.isDigit(raw[i])) : (i += 1) {}
+    if (i >= raw.len) return null;
+    const start = i;
+    while (i < raw.len and (std.ascii.isDigit(raw[i]) or raw[i] == '.')) : (i += 1) {}
+    var ver = raw[start..i];
+    if (ver.len > 0 and ver[ver.len - 1] == '.') ver = ver[0 .. ver.len - 1];
+    // Reduce a "major.minor.patch" to "major.minor".
+    if (std.mem.indexOfScalar(u8, ver, '.')) |first_dot| {
+        if (std.mem.indexOfScalarPos(u8, ver, first_dot + 1, '.')) |second_dot| {
+            ver = ver[0..second_dot];
+        }
+    }
     for (versions) |v| {
         if (std.mem.eql(u8, ver, v)) return v;
     }
