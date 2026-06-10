@@ -40,6 +40,7 @@ const help =
     \\  detect           Detect runtimes/services (use --json); writes no files
     \\  add <pkg>@<ver>  Install a package (e.g. rawenv add node@22)
     \\  up               Activate all configured runtimes
+    \\  down             Stop all services (reverse dependency order)
     \\  services ls      List configured runtimes/services with status
     \\  shell            Enter rawenv shell with modified PATH
     \\  dns              Generate /etc/hosts entries for project
@@ -133,6 +134,9 @@ fn run(init: std.process.Init) !u8 {
         }
         if (std.mem.eql(u8, arg, "up")) {
             return try commands.runUp(allocator, stdout);
+        }
+        if (std.mem.eql(u8, arg, "down")) {
+            return try commands.runDown(allocator, stdout);
         }
         if (std.mem.eql(u8, arg, "services")) {
             const sub = if (i + 1 < args.len) args[i + 1] else "";

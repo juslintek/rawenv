@@ -732,6 +732,70 @@ pub fn autoConfigure(allocator: std.mem.Allocator, store_name: []const u8, versi
     }
 }
 
+/// Error returned when services form a dependency cycle, which makes a valid
+/// start order impossible.
+pub const DependencyError = error{CircularDependency};
+
+/// DFS visit state used by the topological sort in `startOrder`.
+const DfsState = enum(u8) { unvisited, visiting, done };
+
+/// Shared state for the recursive depends_on topological sort.
+const OrderCtx = struct {
+    services: []const config.Config.Entry,
+    state: []DfsState,
+    order: []usize,
+    len: usize = 0,
+
+    /// Depth-first post-order visit. Appends `i` to `order` only after all of
+    /// its dependencies have been emitted, yielding dependencies-before-
+    /// dependents ordering. Re-entering a node still on the stack means a cycle.
+    fn visit(self: *OrderCtx, i: usize) DependencyError!void {
+        switch (self.state[i]) {
+            .done => return,
+            .visiting => return DependencyError.CircularDependency,
+            .unvisited => {},
+        }
+        self.state[i] = .visiting;
+
+        for (self.services[i].depends_on) |dep| {
+            // A dependency name matches another service by full key
+            // ("redis.cache") or by base type ("redis"). Self-matches are
+            // skipped so depending on one's own base type isn't a false cycle.
+            for (self.services, 0..) |svc, j| {
+                if (j == i) continue;
+                if (std.mem.eql(u8, svc.key, dep) or std.mem.eql(u8, svc.baseType(), dep)) {
+                    try self.visit(j);
+                }
+            }
+        }
+
+        self.state[i] = .done;
+        self.order[self.len] = i;
+        self.len += 1;
+    }
+};
+
+/// Compute a service start order that honors `depends_on`: every dependency
+/// appears before the services that depend on it. Returns a newly allocated
+/// slice of indices into `services` (caller frees). Detects dependency cycles
+/// and returns `error.CircularDependency`. Services with no declared deps keep
+/// their original relative order.
+pub fn startOrder(allocator: std.mem.Allocator, services: []const config.Config.Entry) ![]usize {
+    const n = services.len;
+    const order = try allocator.alloc(usize, n);
+    errdefer allocator.free(order);
+
+    const state = try allocator.alloc(DfsState, n);
+    defer allocator.free(state);
+    @memset(state, .unvisited);
+
+    var ctx = OrderCtx{ .services = services, .state = state, .order = order };
+    var i: usize = 0;
+    while (i < n) : (i += 1) try ctx.visit(i);
+
+    return order;
+}
+
 /// Activate all configured runtimes by creating symlinks in ~/.rawenv/bin/
 pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !void {
     const home = getHome() orelse {
@@ -784,7 +848,21 @@ pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !vo
     // resolved (non-conflicting) port and per-service health policy.
     const services = try listServices(allocator, cfg);
     defer freeServices(allocator, services);
-    for (services) |svc| {
+
+    // Resolve start order from depends_on so dependencies come up (and pass
+    // their readiness gate) before the services that need them. listServices
+    // preserves cfg.services order, so these indices apply to both arrays.
+    const order = startOrder(allocator, cfg.services) catch |err| switch (err) {
+        DependencyError.CircularDependency => {
+            try stdout.writeAll("Error: circular dependency detected in service depends_on (check rawenv.toml).\n");
+            return err;
+        },
+        else => return err,
+    };
+    defer allocator.free(order);
+
+    for (order) |idx| {
+        const svc = services[idx];
         // Skip services whose runtime isn't installed yet — mirrors the runtime
         // behavior above and avoids blocking on a readiness gate that can never
         // pass.
@@ -798,6 +876,33 @@ pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !vo
 
         try startService(allocator, cfg.project_name, svc.name, svc.version, stdout);
         try gateReadiness(allocator, svc, stdout);
+    }
+}
+
+/// Stop all configured services in reverse dependency order — dependents are
+/// stopped before the services they rely on. Mirrors `up`'s ordering. Returns
+/// `error.CircularDependency` if depends_on forms a cycle.
+pub fn down(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !void {
+    const order = startOrder(allocator, cfg.services) catch |err| switch (err) {
+        DependencyError.CircularDependency => {
+            try stdout.writeAll("Error: circular dependency detected in service depends_on (check rawenv.toml).\n");
+            return err;
+        },
+        else => return err,
+    };
+    defer allocator.free(order);
+
+    if (cfg.services.len == 0) {
+        try stdout.writeAll("No services configured.\n");
+        return;
+    }
+
+    // Reverse of start order: stop a service before its dependencies go down.
+    var i: usize = order.len;
+    while (i > 0) {
+        i -= 1;
+        const svc = cfg.services[order[i]];
+        stopService(allocator, svc.key, stdout) catch {};
     }
 }
 

@@ -32,6 +32,13 @@ pub const Config = struct {
         port: u16 = 0,
         service_type: []const u8 = "",
         health: HealthCheck = .{},
+        /// Names of services this entry depends on, configured via
+        /// `depends_on = ["postgres", "redis"]` under `[services.X]`. Each name
+        /// matches another service by full key or by base type. `rawenv up`
+        /// starts dependencies first; `rawenv down` stops them last. The slice
+        /// elements are borrowed from the parsed input; the outer array is
+        /// owned and freed by `deinit`.
+        depends_on: []const []const u8 = &.{},
 
         /// Base service type: the part before the first '.', or the whole key.
         pub fn baseType(self: Entry) []const u8 {
@@ -54,7 +61,12 @@ pub fn parse(allocator: std.mem.Allocator, input: []const u8) !Config {
     var runtimes: std.ArrayList(Config.Entry) = .empty;
     errdefer runtimes.deinit(allocator);
     var services: std.ArrayList(Config.Entry) = .empty;
-    errdefer services.deinit(allocator);
+    errdefer {
+        for (services.items) |svc| {
+            if (svc.depends_on.len > 0) allocator.free(svc.depends_on);
+        }
+        services.deinit(allocator);
+    }
     var section: SectionKind = .none;
     var current_item_name: []const u8 = "";
 
@@ -144,6 +156,10 @@ pub fn parse(allocator: std.mem.Allocator, input: []const u8) !Config {
                     last.value = stripQuotes(val_raw) orelse return ParseError.InvalidToml;
                 } else if (std.mem.eql(u8, key, "port")) {
                     last.port = std.fmt.parseInt(u16, val_raw, 10) catch return ParseError.InvalidToml;
+                } else if (std.mem.eql(u8, key, "depends_on")) {
+                    // depends_on = ["postgres", "redis"] — start-ordering hints.
+                    if (last.depends_on.len > 0) allocator.free(last.depends_on);
+                    last.depends_on = try parseStringArray(allocator, val_raw);
                 }
             },
             .service_health => {
@@ -198,6 +214,33 @@ fn stripQuotes(s: []const u8) ?[]const u8 {
     return null;
 }
 
+/// Parse a TOML inline array of quoted strings, e.g. `["postgres", "redis"]`.
+/// Returns an owned slice whose elements borrow from `raw` (no copies). An
+/// empty array yields a non-owned empty slice. Caller frees the slice when
+/// non-empty (see `deinit`).
+fn parseStringArray(allocator: std.mem.Allocator, raw: []const u8) ![]const []const u8 {
+    const open = std.mem.indexOfScalar(u8, raw, '[') orelse return ParseError.InvalidToml;
+    const close = std.mem.lastIndexOfScalar(u8, raw, ']') orelse return ParseError.InvalidToml;
+    if (close < open) return ParseError.InvalidToml;
+
+    var items: std.ArrayList([]const u8) = .empty;
+    errdefer items.deinit(allocator);
+
+    var it = std.mem.splitScalar(u8, raw[open + 1 .. close], ',');
+    while (it.next()) |part| {
+        const trimmed = std.mem.trim(u8, part, &std.ascii.whitespace);
+        if (trimmed.len == 0) continue;
+        const val = stripQuotes(trimmed) orelse return ParseError.InvalidToml;
+        try items.append(allocator, val);
+    }
+
+    if (items.items.len == 0) {
+        items.deinit(allocator);
+        return &.{};
+    }
+    return items.toOwnedSlice(allocator);
+}
+
 pub fn generate(allocator: std.mem.Allocator, project_name: []const u8, runtimes: []const Config.Entry, services: []const Config.Entry) ![]const u8 {
     var buf: std.ArrayList(u8) = .empty;
     errdefer buf.deinit(allocator);
@@ -249,6 +292,9 @@ pub fn generate(allocator: std.mem.Allocator, project_name: []const u8, runtimes
 }
 
 pub fn deinit(allocator: std.mem.Allocator, cfg: *Config) void {
+    for (cfg.services) |svc| {
+        if (svc.depends_on.len > 0) allocator.free(svc.depends_on);
+    }
     allocator.free(cfg.runtimes);
     allocator.free(cfg.services);
     cfg.* = .{};

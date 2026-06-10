@@ -356,3 +356,116 @@ test "writeRedisConf writes an idempotent config into a temp data dir" {
     const dz = std.fmt.bufPrintZ(&pathz, "{s}", .{data_dir}) catch return;
     _ = std.c.rmdir(dz.ptr);
 }
+
+test "startOrder places dependencies before dependents" {
+    const config = @import("config");
+    const services = [_]config.Config.Entry{
+        .{ .key = "app", .value = "22", .service_type = "app", .depends_on = &.{ "postgres", "redis" } },
+        .{ .key = "postgres", .value = "16", .service_type = "postgres" },
+        .{ .key = "redis", .value = "7", .service_type = "redis" },
+    };
+    const order = try service.startOrder(testing.allocator, &services);
+    defer testing.allocator.free(order);
+
+    try testing.expectEqual(3, order.len);
+
+    // Find each service's position in the start order.
+    var pos_app: usize = 0;
+    var pos_pg: usize = 0;
+    var pos_redis: usize = 0;
+    for (order, 0..) |idx, p| {
+        if (std.mem.eql(u8, services[idx].key, "app")) pos_app = p;
+        if (std.mem.eql(u8, services[idx].key, "postgres")) pos_pg = p;
+        if (std.mem.eql(u8, services[idx].key, "redis")) pos_redis = p;
+    }
+    // Both dependencies must start before the app.
+    try testing.expect(pos_pg < pos_app);
+    try testing.expect(pos_redis < pos_app);
+}
+
+test "startOrder with no dependencies preserves original order" {
+    const config = @import("config");
+    const services = [_]config.Config.Entry{
+        .{ .key = "postgres", .value = "16", .service_type = "postgres" },
+        .{ .key = "redis", .value = "7", .service_type = "redis" },
+    };
+    const order = try service.startOrder(testing.allocator, &services);
+    defer testing.allocator.free(order);
+
+    try testing.expectEqual(2, order.len);
+    try testing.expectEqual(0, order[0]);
+    try testing.expectEqual(1, order[1]);
+}
+
+test "startOrder handles transitive dependencies" {
+    const config = @import("config");
+    // app -> api -> db, declared out of order.
+    const services = [_]config.Config.Entry{
+        .{ .key = "app", .value = "1", .service_type = "app", .depends_on = &.{"api"} },
+        .{ .key = "api", .value = "1", .service_type = "api", .depends_on = &.{"db"} },
+        .{ .key = "db", .value = "16", .service_type = "db" },
+    };
+    const order = try service.startOrder(testing.allocator, &services);
+    defer testing.allocator.free(order);
+
+    var pos_app: usize = 0;
+    var pos_api: usize = 0;
+    var pos_db: usize = 0;
+    for (order, 0..) |idx, p| {
+        if (std.mem.eql(u8, services[idx].key, "app")) pos_app = p;
+        if (std.mem.eql(u8, services[idx].key, "api")) pos_api = p;
+        if (std.mem.eql(u8, services[idx].key, "db")) pos_db = p;
+    }
+    try testing.expect(pos_db < pos_api);
+    try testing.expect(pos_api < pos_app);
+}
+
+test "startOrder detects a direct circular dependency" {
+    const config = @import("config");
+    const services = [_]config.Config.Entry{
+        .{ .key = "a", .value = "1", .service_type = "a", .depends_on = &.{"b"} },
+        .{ .key = "b", .value = "1", .service_type = "b", .depends_on = &.{"a"} },
+    };
+    try testing.expectError(
+        service.DependencyError.CircularDependency,
+        service.startOrder(testing.allocator, &services),
+    );
+}
+
+test "startOrder detects a transitive circular dependency" {
+    const config = @import("config");
+    const services = [_]config.Config.Entry{
+        .{ .key = "a", .value = "1", .service_type = "a", .depends_on = &.{"b"} },
+        .{ .key = "b", .value = "1", .service_type = "b", .depends_on = &.{"c"} },
+        .{ .key = "c", .value = "1", .service_type = "c", .depends_on = &.{"a"} },
+    };
+    try testing.expectError(
+        service.DependencyError.CircularDependency,
+        service.startOrder(testing.allocator, &services),
+    );
+}
+
+test "startOrder matches dependency by base type for instances" {
+    const config = @import("config");
+    // app depends on "redis"; the actual service is the instance "redis.cache".
+    const services = [_]config.Config.Entry{
+        .{ .key = "app", .value = "1", .service_type = "app", .depends_on = &.{"redis"} },
+        .{ .key = "redis.cache", .value = "7", .service_type = "redis" },
+    };
+    const order = try service.startOrder(testing.allocator, &services);
+    defer testing.allocator.free(order);
+
+    var pos_app: usize = 0;
+    var pos_redis: usize = 0;
+    for (order, 0..) |idx, p| {
+        if (std.mem.eql(u8, services[idx].key, "app")) pos_app = p;
+        if (std.mem.eql(u8, services[idx].key, "redis.cache")) pos_redis = p;
+    }
+    try testing.expect(pos_redis < pos_app);
+}
+
+test "startOrder on empty services returns empty order" {
+    const order = try service.startOrder(testing.allocator, &.{});
+    defer testing.allocator.free(order);
+    try testing.expectEqual(0, order.len);
+}

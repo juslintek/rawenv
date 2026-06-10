@@ -304,9 +304,28 @@ pub fn runUp(allocator: std.mem.Allocator, stdout: anytype) !u8 {
     var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
     defer allocator.free(result.toml);
     defer config.deinit(allocator, &result.cfg);
-    service.up(allocator, result.cfg, stdout) catch {
-        try stdout.writeAll("Error: failed to activate runtimes. Run `rawenv add` for any missing packages, then try again.\n");
-        return ExitCode.system;
+    service.up(allocator, result.cfg, stdout) catch |err| switch (err) {
+        // The circular-dependency message is already printed by service.up.
+        error.CircularDependency => return ExitCode.user,
+        else => {
+            try stdout.writeAll("Error: failed to activate runtimes. Run `rawenv add` for any missing packages, then try again.\n");
+            return ExitCode.system;
+        },
+    };
+    return ExitCode.ok;
+}
+
+pub fn runDown(allocator: std.mem.Allocator, stdout: anytype) !u8 {
+    var result = (try loadConfig(allocator, stdout)) orelse return ExitCode.user;
+    defer allocator.free(result.toml);
+    defer config.deinit(allocator, &result.cfg);
+    service.down(allocator, result.cfg, stdout) catch |err| switch (err) {
+        // The circular-dependency message is already printed by service.down.
+        error.CircularDependency => return ExitCode.user,
+        else => {
+            try stdout.writeAll("Error: failed to stop services.\n");
+            return ExitCode.system;
+        },
     };
     return ExitCode.ok;
 }
