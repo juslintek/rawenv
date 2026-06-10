@@ -1,7 +1,19 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-pub const ArchiveType = enum { tar_gz, tar_xz, zip };
+pub const ArchiveType = enum {
+    tar_gz,
+    tar_xz,
+    zip,
+    /// A single, ready-to-run executable (no archive container).
+    binary,
+};
+
+/// Sentinel SHA256 value used when the upstream publisher does not provide a
+/// checksum for a prebuilt artifact. The integrity hash is computed at download
+/// time instead of being pinned ahead of time. This is an accepted fallback
+/// (see CLI-010) and is intentionally NOT the literal string "placeholder".
+pub const COMPUTE_ON_DOWNLOAD: []const u8 = "compute-on-download";
 
 pub const ResolvedPackage = struct {
     name: []const u8,
@@ -29,11 +41,15 @@ fn getPlatform() ResolveError!PlatformKey {
         else => return ResolveError.UnsupportedPlatform,
     };
     const arch: []const u8 = switch (builtin.cpu.arch) {
-        .aarch64 => if (std.mem.eql(u8, os, "darwin")) "arm64" else "arm64",
+        .aarch64 => "arm64",
         .x86_64 => "x64",
         else => return ResolveError.UnsupportedPlatform,
     };
     return .{ .os = os, .arch = arch };
+}
+
+fn isPlatform(p: PlatformKey, os: []const u8, arch: []const u8) bool {
+    return std.mem.eql(u8, p.os, os) and std.mem.eql(u8, p.arch, arch);
 }
 
 /// Resolve a package name + version to a download URL and SHA256.
@@ -54,6 +70,10 @@ pub fn resolve(allocator: std.mem.Allocator, package_name: []const u8, version: 
     return ResolveError.UnknownPackage;
 }
 
+// ---------------------------------------------------------------------------
+// node — official prebuilt binaries from nodejs.org (checksums published in
+// https://nodejs.org/dist/v<ver>/SHASUMS256.txt)
+// ---------------------------------------------------------------------------
 fn resolveNode(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
     const full_version = if (std.mem.eql(u8, version, "22") or std.mem.eql(u8, version, "22.15.0"))
         "22.15.0"
@@ -71,78 +91,6 @@ fn resolveNode(allocator: std.mem.Allocator, version: []const u8) (ResolveError 
     return .{ .name = "node", .version = full_version, .url = url, .sha256 = sha256, .archive_type = .tar_gz };
 }
 
-fn resolvePostgresql(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
-    const full_version = if (std.mem.eql(u8, version, "18") or std.mem.eql(u8, version, "18.2"))
-        "18.2"
-    else if (std.mem.eql(u8, version, "16"))
-        "16"
-    else
-        return ResolveError.UnknownVersion;
-
-    const platform = try getPlatform();
-    const url = try std.fmt.allocPrint(allocator, "https://ftp.postgresql.org/pub/source/v{s}/postgresql-{s}.tar.gz", .{
-        full_version, full_version,
-    });
-    _ = platform;
-
-    return .{ .name = "postgresql", .version = full_version, .url = url, .sha256 = "placeholder_sha256_postgresql", .archive_type = .tar_gz };
-}
-
-fn resolveRedis(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
-    const full_version = if (std.mem.eql(u8, version, "7") or std.mem.eql(u8, version, "7.4"))
-        "7.4"
-    else
-        return ResolveError.UnknownVersion;
-
-    const platform = try getPlatform();
-    const url = try std.fmt.allocPrint(allocator, "https://download.redis.io/releases/redis-{s}.tar.gz", .{full_version});
-    _ = platform;
-
-    return .{ .name = "redis", .version = full_version, .url = url, .sha256 = "placeholder_sha256_redis", .archive_type = .tar_gz };
-}
-
-fn resolvePython(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
-    const full_version = if (std.mem.eql(u8, version, "3.12") or std.mem.eql(u8, version, "3.12.0"))
-        "3.12.0"
-    else
-        return ResolveError.UnknownVersion;
-
-    const url = try std.fmt.allocPrint(allocator, "https://www.python.org/ftp/python/{s}/Python-{s}.tgz", .{ full_version, full_version });
-    return .{ .name = "python", .version = full_version, .url = url, .sha256 = "placeholder_sha256_python", .archive_type = .tar_gz };
-}
-
-fn resolvePhp(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
-    const full_version = if (std.mem.eql(u8, version, "8.4") or std.mem.eql(u8, version, "8.4.0"))
-        "8.4.0"
-    else
-        return ResolveError.UnknownVersion;
-
-    const url = try std.fmt.allocPrint(allocator, "https://www.php.net/distributions/php-{s}.tar.gz", .{full_version});
-    return .{ .name = "php", .version = full_version, .url = url, .sha256 = "placeholder_sha256_php", .archive_type = .tar_gz };
-}
-
-fn resolveMeilisearch(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
-    const full_version = if (std.mem.eql(u8, version, "1.14") or std.mem.eql(u8, version, "1.14.0"))
-        "1.14.0"
-    else
-        return ResolveError.UnknownVersion;
-
-    const platform = try getPlatform();
-    const platform_suffix: []const u8 = if (std.mem.eql(u8, platform.os, "darwin") and std.mem.eql(u8, platform.arch, "arm64"))
-        "macos-apple-silicon"
-    else if (std.mem.eql(u8, platform.os, "darwin") and std.mem.eql(u8, platform.arch, "x64"))
-        "macos-amd64"
-    else if (std.mem.eql(u8, platform.os, "linux") and std.mem.eql(u8, platform.arch, "x64"))
-        "linux-amd64"
-    else if (std.mem.eql(u8, platform.os, "linux") and std.mem.eql(u8, platform.arch, "arm64"))
-        "linux-aarch64"
-    else
-        return ResolveError.UnsupportedPlatform;
-
-    const url = try std.fmt.allocPrint(allocator, "https://github.com/meilisearch/meilisearch/releases/download/v{s}/meilisearch-{s}", .{ full_version, platform_suffix });
-    return .{ .name = "meilisearch", .version = full_version, .url = url, .sha256 = "placeholder_sha256_meilisearch", .archive_type = .tar_gz };
-}
-
 fn getNodeSha256(os: []const u8, arch: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, os, "darwin") and std.mem.eql(u8, arch, "arm64"))
         return "92eb58f54d172ed9dee320b8450f1390db629d4262c936d5c074b25a110fed02";
@@ -155,22 +103,222 @@ fn getNodeSha256(os: []const u8, arch: []const u8) ?[]const u8 {
     return null;
 }
 
-/// Resolve a short version to a full version without fetching URL/SHA256.
+// ---------------------------------------------------------------------------
+// postgresql — prebuilt binaries from theseus-rs/postgresql-binaries
+// (each .tar.gz ships a published .sha256 sidecar). No compilation required.
+// ---------------------------------------------------------------------------
+fn resolvePostgresql(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
+    const full_version: []const u8 = if (std.mem.eql(u8, version, "16") or std.mem.eql(u8, version, "16.9.0"))
+        "16.9.0"
+    else if (std.mem.eql(u8, version, "17") or std.mem.eql(u8, version, "17.5.0"))
+        "17.5.0"
+    else if (std.mem.eql(u8, version, "18") or std.mem.eql(u8, version, "18.4.0"))
+        "18.4.0"
+    else
+        return ResolveError.UnknownVersion;
+
+    const platform = try getPlatform();
+    const triple = postgresTriple(platform) orelse return ResolveError.UnsupportedPlatform;
+    const sha256 = getPostgresSha256(full_version, platform) orelse return ResolveError.UnsupportedPlatform;
+
+    const url = try std.fmt.allocPrint(
+        allocator,
+        "https://github.com/theseus-rs/postgresql-binaries/releases/download/{s}/postgresql-{s}-{s}.tar.gz",
+        .{ full_version, full_version, triple },
+    );
+
+    return .{ .name = "postgresql", .version = full_version, .url = url, .sha256 = sha256, .archive_type = .tar_gz };
+}
+
+fn postgresTriple(p: PlatformKey) ?[]const u8 {
+    if (isPlatform(p, "darwin", "arm64")) return "aarch64-apple-darwin";
+    if (isPlatform(p, "darwin", "x64")) return "x86_64-apple-darwin";
+    if (isPlatform(p, "linux", "x64")) return "x86_64-unknown-linux-gnu";
+    if (isPlatform(p, "linux", "arm64")) return "aarch64-unknown-linux-gnu";
+    return null;
+}
+
+fn getPostgresSha256(full_version: []const u8, p: PlatformKey) ?[]const u8 {
+    if (std.mem.eql(u8, full_version, "16.9.0")) {
+        if (isPlatform(p, "darwin", "arm64")) return "a5a8fbb272216607aa25d95772025a7e6b69679569a2726fb44664d00f0d5818";
+        if (isPlatform(p, "darwin", "x64")) return "8e2cd16adc2b127edf9013a07609de0620c81eb1a301c98f989354e853eac23a";
+        if (isPlatform(p, "linux", "x64")) return "ecfd3be18704dd9c5f1db8c3dc8d1f3de52df270ca47ad5f7cd07a5e9f288a7f";
+        if (isPlatform(p, "linux", "arm64")) return "39e451711fb0d6da0b11e787959042f97745893696c0796434d5c8bc31454e55";
+    } else if (std.mem.eql(u8, full_version, "17.5.0")) {
+        if (isPlatform(p, "darwin", "arm64")) return "182a002812c74f76961b6ae3072cdbbcc989e2a10897c855ee92c2e4e5447504";
+        if (isPlatform(p, "darwin", "x64")) return "cf2f3fdfbc56ce5d4de1c1c612e2513331d54d5f3453c0ce1effd3bde2ee69e0";
+        if (isPlatform(p, "linux", "x64")) return "3d4f6354553510e526c2f8883155c3d683a9e166cb4fd21c296c9bf01ac6b534";
+        if (isPlatform(p, "linux", "arm64")) return "477155b2c5cc692662d5f9147988f5c3903e421a6671f2f6ef8fcf9b18b328ea";
+    } else if (std.mem.eql(u8, full_version, "18.4.0")) {
+        if (isPlatform(p, "darwin", "arm64")) return "1b68828f524b638a24918e258b173d0f16773547a0d3b83d9ba74473b61649f2";
+        if (isPlatform(p, "darwin", "x64")) return "cbc38067a795d10bbddc730e61c835df0b351c36a7bd2544d388790fcf50aa4d";
+        if (isPlatform(p, "linux", "x64")) return "65c06cf318b9a57525d842d658d6d18cd461d12b3a89b57d6d8ed7cccbe2db53";
+        if (isPlatform(p, "linux", "arm64")) return "569984d426365c6ca3c197d2b3a999b73161ff1f3abc963824a8c3624620e5dd";
+    }
+    return null;
+}
+
+// ---------------------------------------------------------------------------
+// redis — official prebuilt redis-stack-server binaries from packages.redis.io
+// (each artifact ships a published .sha256 sidecar). macOS ships as .zip,
+// Linux as .tar.gz. No compilation required.
+// ---------------------------------------------------------------------------
+fn resolveRedis(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
+    const full_version = if (std.mem.eql(u8, version, "7") or std.mem.eql(u8, version, "7.4") or std.mem.eql(u8, version, "7.4.0"))
+        "7.4.0"
+    else
+        return ResolveError.UnknownVersion;
+
+    const platform = try getPlatform();
+    const variant = redisVariant(platform) orelse return ResolveError.UnsupportedPlatform;
+    const sha256 = getRedisSha256(platform) orelse return ResolveError.UnsupportedPlatform;
+    const archive_type: ArchiveType = if (std.mem.eql(u8, platform.os, "darwin")) .zip else .tar_gz;
+
+    const url = try std.fmt.allocPrint(
+        allocator,
+        "https://packages.redis.io/redis-stack/redis-stack-server-{s}-v3.{s}",
+        .{ full_version, variant },
+    );
+
+    return .{ .name = "redis", .version = full_version, .url = url, .sha256 = sha256, .archive_type = archive_type };
+}
+
+fn redisVariant(p: PlatformKey) ?[]const u8 {
+    if (isPlatform(p, "darwin", "arm64")) return "sonoma.arm64.zip";
+    if (isPlatform(p, "darwin", "x64")) return "ventura.x86_64.zip";
+    if (isPlatform(p, "linux", "x64")) return "jammy.x86_64.tar.gz";
+    if (isPlatform(p, "linux", "arm64")) return "jammy.arm64.tar.gz";
+    return null;
+}
+
+fn getRedisSha256(p: PlatformKey) ?[]const u8 {
+    if (isPlatform(p, "darwin", "arm64")) return "ee6d2e4390bcff249426a98a5b02a82e22707bf2953d8fdd97333decb65223f6";
+    if (isPlatform(p, "darwin", "x64")) return "ace130acb8f0dce77430e79281ea41dc454d1c407502c0f2b46d16aafe474feb";
+    if (isPlatform(p, "linux", "x64")) return "ddd4e59d657845f517b3a0080749b67738c057532343d8a60a0027d15e0d39ed";
+    if (isPlatform(p, "linux", "arm64")) return "448281a995665868561cfc8851adf3a432ca5cab1db6559278c7addfb8f8fa67";
+    return null;
+}
+
+// ---------------------------------------------------------------------------
+// python — prebuilt "install_only" binaries from astral-sh/python-build-standalone
+// (each .tar.gz ships a published .sha256 sidecar). No compilation required.
+// ---------------------------------------------------------------------------
+const PYTHON_BUILD_DATE = "20250612";
+
+fn resolvePython(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
+    const full_version = if (std.mem.eql(u8, version, "3.12") or std.mem.eql(u8, version, "3.12.11"))
+        "3.12.11"
+    else
+        return ResolveError.UnknownVersion;
+
+    const platform = try getPlatform();
+    const triple = pythonTriple(platform) orelse return ResolveError.UnsupportedPlatform;
+    const sha256 = getPythonSha256(platform) orelse return ResolveError.UnsupportedPlatform;
+
+    const url = try std.fmt.allocPrint(
+        allocator,
+        "https://github.com/astral-sh/python-build-standalone/releases/download/{s}/cpython-{s}+{s}-{s}-install_only.tar.gz",
+        .{ PYTHON_BUILD_DATE, full_version, PYTHON_BUILD_DATE, triple },
+    );
+
+    return .{ .name = "python", .version = full_version, .url = url, .sha256 = sha256, .archive_type = .tar_gz };
+}
+
+fn pythonTriple(p: PlatformKey) ?[]const u8 {
+    if (isPlatform(p, "darwin", "arm64")) return "aarch64-apple-darwin";
+    if (isPlatform(p, "darwin", "x64")) return "x86_64-apple-darwin";
+    if (isPlatform(p, "linux", "x64")) return "x86_64-unknown-linux-gnu";
+    if (isPlatform(p, "linux", "arm64")) return "aarch64-unknown-linux-gnu";
+    return null;
+}
+
+fn getPythonSha256(p: PlatformKey) ?[]const u8 {
+    if (isPlatform(p, "darwin", "arm64")) return "c6d4843e8af496f034176908ae3384556680284653a4bff45eff07e43fe4ae34";
+    if (isPlatform(p, "darwin", "x64")) return "7e3468bde68650fb8f63b663a24c56d0bb3353abd16158939b1de0ad60dab195";
+    if (isPlatform(p, "linux", "x64")) return "8e8bb0dbc815fb0b3912e0d8fc0a4f4aaac002bfc1f6cb0fcd278f2888f11bcf";
+    if (isPlatform(p, "linux", "arm64")) return "19e8d91b8c5cdb41c485e0d7daa726db6dd64c9a459029f738d5e55ad8da7c6f";
+    return null;
+}
+
+// ---------------------------------------------------------------------------
+// php — prebuilt static CLI binaries from static-php-cli (dl.static-php.dev).
+// Upstream does not publish per-file checksums, so the hash is computed on
+// download. No compilation required.
+// ---------------------------------------------------------------------------
+fn resolvePhp(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
+    const full_version = if (std.mem.eql(u8, version, "8.4") or std.mem.eql(u8, version, "8.4.11"))
+        "8.4.11"
+    else
+        return ResolveError.UnknownVersion;
+
+    const platform = try getPlatform();
+    const php_os: []const u8 = if (std.mem.eql(u8, platform.os, "darwin")) "macos" else "linux";
+    const php_arch: []const u8 = if (std.mem.eql(u8, platform.arch, "arm64")) "aarch64" else "x86_64";
+
+    const url = try std.fmt.allocPrint(
+        allocator,
+        "https://dl.static-php.dev/static-php-cli/common/php-{s}-cli-{s}-{s}.tar.gz",
+        .{ full_version, php_os, php_arch },
+    );
+
+    return .{ .name = "php", .version = full_version, .url = url, .sha256 = COMPUTE_ON_DOWNLOAD, .archive_type = .tar_gz };
+}
+
+// ---------------------------------------------------------------------------
+// meilisearch — official prebuilt binaries from GitHub releases (single
+// executables). Upstream does not publish checksums, so the hash is computed
+// on download. No compilation required.
+// ---------------------------------------------------------------------------
+fn resolveMeilisearch(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
+    const full_version = if (std.mem.eql(u8, version, "1.12") or std.mem.eql(u8, version, "1.12.0"))
+        "1.12.0"
+    else
+        return ResolveError.UnknownVersion;
+
+    const platform = try getPlatform();
+    const asset = meilisearchAsset(platform) orelse return ResolveError.UnsupportedPlatform;
+
+    const url = try std.fmt.allocPrint(
+        allocator,
+        "https://github.com/meilisearch/meilisearch/releases/download/v{s}/{s}",
+        .{ full_version, asset },
+    );
+
+    return .{ .name = "meilisearch", .version = full_version, .url = url, .sha256 = COMPUTE_ON_DOWNLOAD, .archive_type = .binary };
+}
+
+fn meilisearchAsset(p: PlatformKey) ?[]const u8 {
+    if (isPlatform(p, "darwin", "arm64")) return "meilisearch-macos-apple-silicon";
+    if (isPlatform(p, "darwin", "x64")) return "meilisearch-macos-amd64";
+    if (isPlatform(p, "linux", "x64")) return "meilisearch-linux-amd64";
+    if (isPlatform(p, "linux", "arm64")) return "meilisearch-linux-aarch64";
+    return null;
+}
+
+/// Map a short version (e.g. "22") to its pinned full version (e.g. "22.15.0")
+/// without fetching a URL/SHA256. Mirrors the version logic in `resolve` so
+/// store paths stay consistent. Returns the input unchanged if unknown.
 pub fn resolveVersion(package_name: []const u8, version: []const u8) []const u8 {
+    return fullVersion(package_name, version) orelse version;
+}
+
+fn fullVersion(package_name: []const u8, version: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, package_name, "node")) {
         if (std.mem.eql(u8, version, "22")) return "22.15.0";
     } else if (std.mem.eql(u8, package_name, "postgresql") or std.mem.eql(u8, package_name, "postgres")) {
-        if (std.mem.eql(u8, version, "18")) return "18.2";
+        if (std.mem.eql(u8, version, "16")) return "16.9.0";
+        if (std.mem.eql(u8, version, "17")) return "17.5.0";
+        if (std.mem.eql(u8, version, "18")) return "18.4.0";
     } else if (std.mem.eql(u8, package_name, "redis")) {
-        if (std.mem.eql(u8, version, "7")) return "7.4";
+        if (std.mem.eql(u8, version, "7") or std.mem.eql(u8, version, "7.4")) return "7.4.0";
     } else if (std.mem.eql(u8, package_name, "python")) {
-        if (std.mem.eql(u8, version, "3.12")) return "3.12.0";
+        if (std.mem.eql(u8, version, "3.12")) return "3.12.11";
     } else if (std.mem.eql(u8, package_name, "php")) {
-        if (std.mem.eql(u8, version, "8.4")) return "8.4.0";
+        if (std.mem.eql(u8, version, "8.4")) return "8.4.11";
     } else if (std.mem.eql(u8, package_name, "meilisearch")) {
-        if (std.mem.eql(u8, version, "1.14")) return "1.14.0";
+        if (std.mem.eql(u8, version, "1.12")) return "1.12.0";
     }
-    return version;
+    return null;
 }
 
 /// Parse a package spec like "node@22" into name and version.
@@ -205,22 +353,71 @@ test "resolve node@22" {
     try std.testing.expectEqualStrings("22.15.0", pkg.version);
     try std.testing.expect(std.mem.indexOf(u8, pkg.url, "nodejs.org") != null);
     try std.testing.expect(pkg.archive_type == .tar_gz);
+    // node publishes checksums, so this must never be the compute-on-download sentinel.
+    try std.testing.expect(!std.mem.eql(u8, pkg.sha256, COMPUTE_ON_DOWNLOAD));
+    try std.testing.expectEqual(@as(usize, 64), pkg.sha256.len);
 }
 
-test "resolve postgresql@18" {
-    const pkg = try resolve(std.testing.allocator, "postgresql", "18");
+test "resolve postgresql@17 (prebuilt, not source)" {
+    const pkg = try resolve(std.testing.allocator, "postgresql", "17");
     defer std.testing.allocator.free(pkg.url);
     try std.testing.expectEqualStrings("postgresql", pkg.name);
-    try std.testing.expectEqualStrings("18.2", pkg.version);
-    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "postgresql") != null);
+    try std.testing.expectEqualStrings("17.5.0", pkg.version);
+    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "theseus-rs/postgresql-binaries") != null);
+    // Must be a prebuilt binary archive, never the source distribution.
+    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "ftp.postgresql.org") == null);
+    try std.testing.expectEqual(@as(usize, 64), pkg.sha256.len);
 }
 
-test "resolve redis@7" {
+test "resolve postgres alias and versions" {
+    inline for (.{ "16", "17", "18" }) |v| {
+        const pkg = try resolve(std.testing.allocator, "postgres", v);
+        defer std.testing.allocator.free(pkg.url);
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "postgresql-binaries") != null);
+        try std.testing.expectEqual(@as(usize, 64), pkg.sha256.len);
+    }
+}
+
+test "resolve redis@7 (prebuilt, not source)" {
     const pkg = try resolve(std.testing.allocator, "redis", "7");
     defer std.testing.allocator.free(pkg.url);
     try std.testing.expectEqualStrings("redis", pkg.name);
-    try std.testing.expectEqualStrings("7.4", pkg.version);
-    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "redis") != null);
+    try std.testing.expectEqualStrings("7.4.0", pkg.version);
+    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "packages.redis.io") != null);
+    // Must NOT be the source tarball that requires compilation.
+    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "download.redis.io/releases") == null);
+    try std.testing.expectEqual(@as(usize, 64), pkg.sha256.len);
+}
+
+test "resolve python@3.12 (prebuilt standalone, not source)" {
+    const pkg = try resolve(std.testing.allocator, "python", "3.12");
+    defer std.testing.allocator.free(pkg.url);
+    try std.testing.expectEqualStrings("python", pkg.name);
+    try std.testing.expectEqualStrings("3.12.11", pkg.version);
+    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "python-build-standalone") != null);
+    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "install_only") != null);
+    try std.testing.expectEqual(@as(usize, 64), pkg.sha256.len);
+}
+
+test "resolve php@8.4 (prebuilt static, compute-on-download)" {
+    const pkg = try resolve(std.testing.allocator, "php", "8.4");
+    defer std.testing.allocator.free(pkg.url);
+    try std.testing.expectEqualStrings("php", pkg.name);
+    try std.testing.expectEqualStrings("8.4.11", pkg.version);
+    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "dl.static-php.dev") != null);
+    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "-cli-") != null);
+    // Upstream publishes no checksum for these artifacts.
+    try std.testing.expectEqualStrings(COMPUTE_ON_DOWNLOAD, pkg.sha256);
+}
+
+test "resolve meilisearch@1.12 (github prebuilt binary)" {
+    const pkg = try resolve(std.testing.allocator, "meilisearch", "1.12");
+    defer std.testing.allocator.free(pkg.url);
+    try std.testing.expectEqualStrings("meilisearch", pkg.name);
+    try std.testing.expectEqualStrings("1.12.0", pkg.version);
+    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "github.com/meilisearch/meilisearch/releases") != null);
+    try std.testing.expect(pkg.archive_type == .binary);
+    try std.testing.expectEqualStrings(COMPUTE_ON_DOWNLOAD, pkg.sha256);
 }
 
 test "resolve unknown package" {
@@ -233,26 +430,31 @@ test "resolve unknown version" {
     try std.testing.expectError(ResolveError.UnknownVersion, result);
 }
 
-test "resolve python@3.12" {
-    const pkg = try resolve(std.testing.allocator, "python", "3.12");
-    defer std.testing.allocator.free(pkg.url);
-    try std.testing.expectEqualStrings("python", pkg.name);
-    try std.testing.expectEqualStrings("3.12.0", pkg.version);
-    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "python.org") != null);
+test "resolveVersion maps short to full and is consistent with resolve" {
+    try std.testing.expectEqualStrings("22.15.0", resolveVersion("node", "22"));
+    try std.testing.expectEqualStrings("17.5.0", resolveVersion("postgres", "17"));
+    try std.testing.expectEqualStrings("7.4.0", resolveVersion("redis", "7"));
+    try std.testing.expectEqualStrings("7.4.0", resolveVersion("redis", "7.4"));
+    try std.testing.expectEqualStrings("3.12.11", resolveVersion("python", "3.12"));
+    try std.testing.expectEqualStrings("8.4.11", resolveVersion("php", "8.4"));
+    try std.testing.expectEqualStrings("1.12.0", resolveVersion("meilisearch", "1.12"));
+    // Unknown stays unchanged.
+    try std.testing.expectEqualStrings("9.9", resolveVersion("node", "9.9"));
 }
 
-test "resolve php@8.4" {
-    const pkg = try resolve(std.testing.allocator, "php", "8.4");
-    defer std.testing.allocator.free(pkg.url);
-    try std.testing.expectEqualStrings("php", pkg.name);
-    try std.testing.expectEqualStrings("8.4.0", pkg.version);
-    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "php.net") != null);
-}
-
-test "resolve meilisearch@1.14" {
-    const pkg = try resolve(std.testing.allocator, "meilisearch", "1.14");
-    defer std.testing.allocator.free(pkg.url);
-    try std.testing.expectEqualStrings("meilisearch", pkg.name);
-    try std.testing.expectEqualStrings("1.14.0", pkg.version);
-    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "meilisearch") != null);
+test "no source-compilation URLs are produced" {
+    // Guards against regressing to source tarballs that require compilation.
+    const cases = [_]struct { name: []const u8, version: []const u8 }{
+        .{ .name = "redis", .version = "7" },
+        .{ .name = "postgresql", .version = "17" },
+        .{ .name = "python", .version = "3.12" },
+        .{ .name = "php", .version = "8.4" },
+    };
+    inline for (cases) |c| {
+        const pkg = try resolve(std.testing.allocator, c.name, c.version);
+        defer std.testing.allocator.free(pkg.url);
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "/source/") == null);
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "www.php.net/distributions") == null);
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "www.python.org/ftp") == null);
+    }
 }
