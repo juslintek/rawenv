@@ -641,6 +641,21 @@ pub fn build(b: *std.Build) void {
     run_migration_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
     integration_step.dependOn(&run_migration_test.step);
 
+    // Error handling + edge cases E2E (unknown package/version, missing/corrupt
+    // config, invalid args — all exit cleanly with user-friendly messages).
+    const integration_errors = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/errors_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_errors.root_module.link_libc = true;
+    const run_errors_test = b.addRunArtifact(integration_errors);
+    run_errors_test.step.dependOn(b.getInstallStep());
+    run_errors_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_errors_test.step);
+
     // Cross-compilation targets
     const cross_targets: []const struct { []const u8, std.Target.Cpu.Arch, std.Target.Os.Tag } = &.{
         .{ "aarch64-macos", .aarch64, .macos },

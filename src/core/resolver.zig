@@ -346,6 +346,27 @@ fn fullVersion(package_name: []const u8, version: []const u8) ?[]const u8 {
     return null;
 }
 
+/// Supported short version aliases for a package, used to build user-facing
+/// "Available versions: ..." hints when an unknown version is requested.
+/// Returns an empty slice for unknown packages. Keep in sync with the version
+/// dispatch in `resolve` / `fullVersion`.
+pub fn availableVersions(package_name: []const u8) []const []const u8 {
+    if (std.mem.eql(u8, package_name, "node")) {
+        return &.{"22"};
+    } else if (std.mem.eql(u8, package_name, "postgresql") or std.mem.eql(u8, package_name, "postgres")) {
+        return &.{ "16", "17", "18" };
+    } else if (std.mem.eql(u8, package_name, "redis")) {
+        return &.{ "7", "7.4" };
+    } else if (std.mem.eql(u8, package_name, "python")) {
+        return &.{"3.12"};
+    } else if (std.mem.eql(u8, package_name, "php")) {
+        return &.{"8.4"};
+    } else if (std.mem.eql(u8, package_name, "meilisearch")) {
+        return &.{"1.12"};
+    }
+    return &.{};
+}
+
 /// Parse a package spec like "node@22" into name and version.
 pub fn parsePackageSpec(spec: []const u8) ?struct { name: []const u8, version: []const u8 } {
     const idx = std.mem.indexOfScalar(u8, spec, '@') orelse return null;
@@ -479,6 +500,26 @@ test "resolveVersion maps short to full and is consistent with resolve" {
     try std.testing.expectEqualStrings("1.12.0", resolveVersion("meilisearch", "1.12"));
     // Unknown stays unchanged.
     try std.testing.expectEqualStrings("9.9", resolveVersion("node", "9.9"));
+}
+
+test "availableVersions lists only resolvable versions" {
+    // Every advertised version must resolve (or fail only on platform), never
+    // UnknownVersion. Guards the "Available versions: ..." hint against drift.
+    for (available_packages) |name| {
+        const versions = availableVersions(name);
+        try std.testing.expect(versions.len > 0);
+        for (versions) |v| {
+            const result = resolve(std.testing.allocator, name, v);
+            if (result) |pkg| {
+                std.testing.allocator.free(pkg.url);
+            } else |err| {
+                try std.testing.expect(err != ResolveError.UnknownVersion);
+                try std.testing.expect(err != ResolveError.UnknownPackage);
+            }
+        }
+    }
+    // Unknown package → empty list.
+    try std.testing.expectEqual(@as(usize, 0), availableVersions("nonexistent").len);
 }
 
 test "no source-compilation URLs are produced" {

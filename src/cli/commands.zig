@@ -261,9 +261,18 @@ pub fn runAdd(allocator: std.mem.Allocator, stdout: anytype, package_spec: []con
             },
             error.UnknownVersion => {
                 try stdout.print(
-                    "Unknown version '{s}' for package '{s}'. Try a supported version (e.g. rawenv add {s}@<version>).\n",
-                    .{ parsed.version, parsed.name, parsed.name },
+                    "Unknown version '{s}' for package '{s}'. Available versions: ",
+                    .{ parsed.version, parsed.name },
                 );
+                const versions = resolver.availableVersions(parsed.name);
+                for (versions, 0..) |v, idx| {
+                    if (idx > 0) try stdout.writeAll(", ");
+                    try stdout.writeAll(v);
+                }
+                try stdout.print("\nExample: rawenv add {s}@{s}\n", .{
+                    parsed.name,
+                    if (versions.len > 0) versions[0] else "<version>",
+                });
                 return ExitCode.user;
             },
             error.UnsupportedPlatform => {
@@ -356,7 +365,7 @@ fn configureAfterAdd(allocator: std.mem.Allocator, pkg: resolver.ResolvedPackage
 
 fn loadConfig(allocator: std.mem.Allocator, stdout: anytype) !?struct { cfg: config.Config, toml: []const u8 } {
     const toml = readFileSimple(allocator, "rawenv.toml") orelse {
-        try stdout.writeAll("Error: rawenv.toml not found. Run `rawenv init` first.\n");
+        try stdout.writeAll("Error: No rawenv.toml found. Run `rawenv init` first.\n");
         return null;
     };
 
