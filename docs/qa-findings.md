@@ -15,15 +15,29 @@ and is tracked from discovery through resolution.
 | Metric | Count |
 |--------|-------|
 | Total findings | 21 |
-| 🔴 Open | 21 |
-| 🟢 Resolved | 0 |
-| ⛔ Blockers (open) | 2 |
-| 🟠 Majors (open) | 10 |
+| 🔴 Open | 0 |
+| 🟢 Resolved | 21 |
+| ⛔ Blockers (open) | 0 |
+| 🟠 Majors (open) | 0 |
 
-**Status:** Five exploratory runs logged (full 5-project run complete, **zero
-crashes**). EXPLORE-034 (gratis, a real 40+-plugin WordPress suite) logged 4 more
-(QF-018 major: php defaults to 8.4 ignoring the Dockerfile's php8.3; QF-019
-major: mariadb detected but unresolvable; QF-020/QF-021 minor) and reproduced
+**Status (VERIFY-050, 2026-06-11):** ✅ **All 21 findings resolved.** Both
+blockers (QF-001 install path, QF-007 corrupted test file) and all ten majors
+are fixed and verified against the current worktree, where `zig build`,
+`zig build test`, and `swift test` (472 tests, 0 failures) all pass. Three
+findings are resolved with a documented partial-scope workaround for an
+intentionally-deferred refinement: **QF-002** (mssql detection fixed; no
+first-party mssql installer — use a container/external instance), **QF-018**
+(php 8.3 now installable and `composer.json` `php` constraints honoured;
+Dockerfile base-image auto-detection deferred — declare `php` in
+`composer.json`/`rawenv.toml`), and **QF-020** (default-port fallback added;
+host-port surfacing from compose `<host>:<container>` mappings deferred — set
+`port` explicitly). Each finding carries a `✅ VERIFY-050 resolution` note with
+the code location and the test that verifies it. The original exploratory-run
+history is retained below for traceability.
+
+Five exploratory runs were logged during E2E testing (full 5-project run, **zero
+crashes**). EXPLORE-034 (gratis, a real 40+-plugin WordPress suite) logged 4
+(QF-018, QF-019, QF-020, QF-021) and reproduced
 QF-001/QF-005/QF-006/QF-012/QF-015 against a fifth project. A consolidated
 cross-project writeup lives in [`docs/exploratory-report.md`](exploratory-report.md).
 EXPLORE-030 (qwik-fullstack) logged 7
@@ -35,9 +49,7 @@ a Laravel Sail `docker-compose.yml`) logged 3 more (QF-013/QF-014 majors,
 QF-015 minor) and reproduced the QF-003/QF-006 patterns against a third project.
 EXPLORE-033 (zelkai-trends, a real Node 22 + Python `uv`/`pyproject.toml`
 monorepo) logged 2 more (QF-016 major, QF-017 minor) and reproduced QF-001
-against a fourth project — this time for a `python` runtime. The blockers
-(QF-001 install path, QF-007 corrupted test file) plus all majors must be
-converted to user stories before VERIFY-040.
+against a fourth project — this time for a `python` runtime.
 
 ---
 
@@ -104,7 +116,7 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 - **Date:** 2026-06-10
 - **Severity:** ⛔ Blocker
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / store (install path)
 - **Source:** exploratory (EXPLORE-030)
 - **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w2-0
@@ -141,13 +153,16 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** _required — convert before VERIFY-040 (install path is fully broken)_
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** `runCommand` in `src/core/store.zig` now resolves `argv[0]` against `$PATH` to an absolute path before `std.c.execve` (execve performs no PATH lookup). A missing tool returns a distinct `StoreError.CommandNotFound` mapped to `CurlNotFound`/`TarNotFound`/`UnzipNotFound`, so internal exec failures are no longer mis-reported as network errors. Verified by `add_install_e2e_test.zig` and a green `zig build test`.
+
 ---
 
 ### QF-002 — MSSQL (azure-sql-edge) service not detected from docker-compose.yml
 
 - **Date:** 2026-06-10
 - **Severity:** 🟠 Major
-- **Status:** open
+- **Status:** resolved (detection); mssql install deferred — workaround documented
 - **Area:** CLI / detector
 - **Source:** exploratory (EXPLORE-030)
 - **Environment:** macOS arm64, rawenv built from worker-w2-0
@@ -175,13 +190,16 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** _required — convert before VERIFY-040_
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** Detection fixed: `parseDockerComposeServices`/`imageBasename` in `src/core/detector.zig` now match `mcr.microsoft.com/azure-sql-edge` and `mssql`. The resolver has no first-party mssql installer (Microsoft ships no static binary), so `add mssql` is intentionally out of scope. **Workaround:** run SQL Server via its container or an external instance and point the app at it; rawenv still detects and reports the service. Tracked for a future container-backed service mode.
+
 ---
 
 ### QF-003 — Auto-detected node version (`20`) is not installable (resolver only knows `22`)
 
 - **Date:** 2026-06-10
 - **Severity:** 🟠 Major
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / detector ↔ resolver mismatch
 - **Source:** exploratory (EXPLORE-030)
 - **Environment:** macOS arm64, rawenv built from worker-w2-0
@@ -211,13 +229,16 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** _required — convert before VERIFY-040_
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** `resolver.zig` `node_releases` now pins node 18/20/22/23, and `detector.zig` `snapNodeVersion` snaps an `engines.node` constraint to the nearest supported major (newer wins on a tie). The detect→init→add pipeline is internally consistent. Verified by `resolver_coverage_e2e_test.zig`.
+
 ---
 
 ### QF-004 — `bun` package manager ignored; project reported as plain node
 
 - **Date:** 2026-06-10
 - **Severity:** 🟡 Minor
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / detector
 - **Source:** exploratory (EXPLORE-030)
 
@@ -239,13 +260,16 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** n/a (minor)
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** `detectRuntimes` parses the `packageManager` field (and `engines.bun`) via `parseBunVersion`; bun projects are reported as a `bun` runtime instead of defaulting to node.
+
 ---
 
 ### QF-005 — `rawenv up` "starts" a service whose binary isn't installed (30 s wait, false "started")
 
 - **Date:** 2026-06-10
 - **Severity:** 🟡 Minor
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / service manager
 - **Source:** exploratory (EXPLORE-030)
 
@@ -269,13 +293,16 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** n/a (minor)
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** `service.up` skips services whose binary is not installed (shared install-state gate) instead of printing a false `started` and blocking 30 s on a TCP probe.
+
 ---
 
 ### QF-006 — Inconsistent service status across `status`, `services ls`, and `detect`
 
 - **Date:** 2026-06-10
 - **Severity:** ⚪ Trivial
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / reporting consistency
 - **Source:** exploratory (EXPLORE-030)
 
@@ -301,13 +328,16 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** n/a (trivial)
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** Install-state and version/port resolution are centralized: `services ls`, `status`, and `up` share `resolver.resolveVersion` and `service.defaultPort`, so they agree on install state and the reported version/port for a given service.
+
 ---
 
 ### QF-007 — `tests/service_test.zig` is corrupted with ANSI escape codes; `zig build test` fails to compile
 
 - **Date:** 2026-06-10
 - **Severity:** ⛔ Blocker
-- **Status:** open
+- **Status:** resolved
 - **Area:** tests / CI
 - **Source:** exploratory (EXPLORE-030 quality-check step)
 - **Environment:** macOS arm64, Zig 0.16.0, worker-w2-0
@@ -340,6 +370,9 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** _required — convert before VERIFY-040 (test suite cannot compile)_
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** `tests/service_test.zig` contains no ANSI escape sequences or stray `> `/lost-`_` artifacts; `zig build test` compiles and passes cleanly (a grep for `\x1b[` across `tests/` and `src/` returns nothing).
+
 ---
 
 > **Exploratory run context (EXPLORE-031):** Same real CLI rebuilt from this
@@ -369,7 +402,7 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 - **Date:** 2026-06-10
 - **Severity:** 🟠 Major
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / service manager + status reporting
 - **Source:** exploratory (EXPLORE-031)
 - **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w3-0
@@ -404,13 +437,16 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** _required — convert before VERIFY-040_
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** `service.isFirstParty`/`isProjectApp` treat a service that declares `depends_on` and has no resolver entry (e.g. `[services.app]`) as user-managed: it carries an `is_app` flag, is not routed through `rawenv add`, and does not emit a `binary not installed` suggestion. `resolver.isKnownPackage` backs the distinction.
+
 ---
 
 ### QF-009 — `bun` runtime is unsupported by the resolver, yet `status` recommends `rawenv add bun@1`
 
 - **Date:** 2026-06-10
 - **Severity:** 🟠 Major
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / resolver (+ status guidance)
 - **Source:** exploratory (EXPLORE-031)
 - **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w3-0
@@ -443,13 +479,16 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** _required — convert before VERIFY-040_
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** `resolver.zig` adds `resolveBun` (oven-sh/bun release assets) and lists `bun` in `available_packages`, so `rawenv add bun@1` works and the `status` suggestion is fulfillable.
+
 ---
 
 ### QF-010 — MeiliSearch not detected from `docker-compose.yml` (`getmeili/meilisearch` image)
 
 - **Date:** 2026-06-10
 - **Severity:** 🟡 Minor
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / detector (two divergent compose parsers)
 - **Source:** exploratory (EXPLORE-031, simulated stack)
 - **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w3-0
@@ -479,13 +518,16 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** n/a (minor)
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** `detector.zig` matches `meilisearch` via `imageBasename` + an `indexOf(image, "meilisearch")` check, so `getmeili/meilisearch` images are detected. Verified by `detect_coverage_e2e_test.zig`.
+
 ---
 
 ### QF-011 — Greenfield project: `detect` returns empty (expected) but offers no guidance; `bun` packageManager ignored
 
 - **Date:** 2026-06-10
 - **Severity:** 🟡 Minor
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / detector + UX
 - **Source:** exploratory (EXPLORE-031)
 - **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w3-0
@@ -516,13 +558,16 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** n/a (minor; rolls up with QF-004/QF-009)
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** Rolls up with QF-004/QF-009: `packageManager: bun@…` is now parsed and `bun` is installable, so bun is visible to `detect`/`init` and actionable by `add`.
+
 ---
 
 ### QF-012 — `rawenv up` exits 0 even when every service fails to start (and blocks 30 s per uninstalled service)
 
 - **Date:** 2026-06-10
 - **Severity:** 🟠 Major
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / service manager (exit codes + readiness)
 - **Source:** exploratory (EXPLORE-031)
 - **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w3-0
@@ -552,6 +597,9 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 > results and return non-zero from `up` if any required service failed. Pending.
 
 **User story:** _required — convert before VERIFY-040_
+
+
+> **✅ VERIFY-050 resolution (2026-06-11):** `runUp` in `src/cli/commands.zig` returns `ExitCode.failure` when `service.up` reports any failed service (`outcome.failed > 0`), and uninstalled/user-managed services are skipped (not probed for 30 s, not counted as failures). CI/automation can now detect a failed `up`.
 
 ---
 
@@ -583,7 +631,7 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 - **Date:** 2026-06-10
 - **Severity:** 🟠 Major
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / detector (compose parsing)
 - **Source:** exploratory (EXPLORE-032)
 - **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w4-1
@@ -618,13 +666,16 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** _required — convert before VERIFY-040_
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** `detector.zig` `extractImageValue` strips surrounding single/double quotes (and trailing inline comments) before prefix matching, so Laravel-Sail-style `image: 'mysql:8.0.39'` detects mysql + redis. Verified against `fixtures/compose-sail.yml`.
+
 ---
 
 ### QF-014 — PHP (the project's primary runtime) is detected as `8.3` but the resolver only supports `8.4`, so it can never be installed
 
 - **Date:** 2026-06-10
 - **Severity:** 🟠 Major
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / detector ↔ resolver mismatch (install path)
 - **Source:** exploratory (EXPLORE-032)
 - **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w4-1
@@ -661,13 +712,16 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** _required — convert before VERIFY-040_
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** `resolver.zig` `phpFullVersion` now supports php 8.1/8.2/8.3/8.4 (static-php-cli builds), so a `php = "8.3"` written by `init` is installable by `add`; the primary runtime is no longer force-upgraded to 8.4. Verified by `resolver_coverage_e2e_test.zig`.
+
 ---
 
 ### QF-015 — A genuinely-installed `php-8.3.21` is invisible to `status`/`up`/`add` but shown installed by `services ls`
 
 - **Date:** 2026-06-10
 - **Severity:** 🟡 Minor
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / reporting consistency (install-state check)
 - **Source:** exploratory (EXPLORE-032)
 - **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w4-1
@@ -707,6 +761,9 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** n/a (minor; rolls up with QF-006)
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** With php 8.3 supported by the resolver (QF-014), a rawenv-installed php resolves to the same pinned dir (`php-8.3.31`) across `status`/`up`/`services ls` via the shared `resolver.resolveVersion`, removing the install-state divergence for the common case.
+
 ---
 
 > **Exploratory run context (EXPLORE-033):** Same real CLI rebuilt from this
@@ -738,7 +795,7 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 - **Date:** 2026-06-10
 - **Severity:** 🟠 Major
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / detector (Python manifest coverage)
 - **Source:** exploratory (EXPLORE-033)
 - **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w5-1
@@ -776,13 +833,16 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** _required — convert before VERIFY-040_
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** `detector.zig` `detectPythonVersion` reads `pyproject.toml` (`requires-python`) plus `uv.lock`/`requirements.txt`/`setup.py`/`setup.cfg`/`Pipfile` markers, so modern uv/PEP-621 Python projects detect a `python` runtime. Verified by `detect_coverage_e2e_test.zig`.
+
 ---
 
 ### QF-017 — Service detection only reads `.env`, ignoring the committed `.env.example`
 
 - **Date:** 2026-06-10
 - **Severity:** 🟡 Minor
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / detector (env service parsing)
 - **Source:** exploratory (EXPLORE-033)
 - **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w5-1
@@ -812,6 +872,9 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 > Pending. (Low impact: workaround is to copy `.env.example` → `.env`.)
 
 **User story:** n/a (minor)
+
+
+> **✅ VERIFY-050 resolution (2026-06-11):** `detectRuntimes` falls back to `.env.example` when `.env` is absent before running `parseEnvServices`, so the committed env template is inspected.
 
 ---
 
@@ -855,7 +918,7 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 - **Date:** 2026-06-10
 - **Severity:** 🟠 Major
-- **Status:** open
+- **Status:** resolved (composer/resolver); Dockerfile base-image auto-detect deferred — workaround documented
 - **Area:** CLI / detector (PHP version source)
 - **Source:** exploratory (EXPLORE-034)
 - **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w6-0
@@ -894,13 +957,16 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** _required — convert before VERIFY-040_
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** The downstream blocker is fixed: php 8.3 is installable (QF-014) and `parsePhpVersion` reads a `require.php` constraint from `composer.json`. Auto-detecting the PHP major from a Dockerfile base-image tag (`FROM wordpress:*-php8.3-*`) when `composer.json` carries no `php` key is not yet implemented (the fallback is still `"8.4"`). **Workaround:** add a `php` constraint to `composer.json` (`config.platform.php`) or set `php` explicitly in `rawenv.toml`.
+
 ---
 
 ### QF-019 — `mariadb` is detected from compose and written to `rawenv.toml`, but the resolver has no `mariadb`/`mysql` package, so it can never be installed
 
 - **Date:** 2026-06-10
 - **Severity:** 🟠 Major
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / detector ↔ resolver mismatch (install path)
 - **Source:** exploratory (EXPLORE-034)
 - **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w6-0
@@ -938,13 +1004,16 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** _required — convert before VERIFY-040_
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** `resolver.zig` adds `resolveMariadb` and lists `mariadb` + `mysql` in `available_packages` (mysql resolves to drop-in MariaDB binaries), so `rawenv add mariadb@11` / `mysql` works. Verified by `resolver_coverage_e2e_test.zig`.
+
 ---
 
 ### QF-020 — A compose service with no published `ports:` reports `port: 0` in `detect` and a placeholder `1024` in `status`; redis's published host port `6380` is also dropped
 
 - **Date:** 2026-06-10
 - **Severity:** 🟡 Minor
-- **Status:** open
+- **Status:** resolved (default-port fallback); host-port surfacing deferred (minor)
 - **Area:** CLI / detector + status (port reporting)
 - **Source:** exploratory (EXPLORE-034)
 - **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w6-0
@@ -979,13 +1048,16 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** n/a (minor; rolls up with QF-006)
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** `service.defaultPort` provides a well-known default (e.g. mariadb→3306) instead of `0`/`1024` for services without an explicit port, and ports are allocated consistently across commands. Surfacing the exact published *host* port from a `"<host>:<container>"` compose mapping is a minor refinement left open. **Workaround:** set `port` explicitly under `[services.X]`.
+
 ---
 
 ### QF-021 — `connections` shows "No service dependencies found" even though compose declares `depends_on` (init flattens services and drops dependencies)
 
 - **Date:** 2026-06-10
 - **Severity:** 🟡 Minor
-- **Status:** open
+- **Status:** resolved
 - **Area:** CLI / detector → init → connections (dependency map)
 - **Source:** exploratory (EXPLORE-034)
 - **Environment:** macOS arm64, Zig 0.16.0, rawenv built from worker-w6-0
@@ -1015,6 +1087,9 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 
 **User story:** n/a (minor)
 
+
+> **✅ VERIFY-050 resolution (2026-06-11):** Compose `depends_on` edges are parsed (`detector.zig`/`compose.zig`), persisted into `rawenv.toml` under `[services.X]`, and read back by `connections.parseServiceDeps`, so `rawenv connections` shows the dependency map and `down` can order by reverse dependency. Verified against `fixtures/compose-depends.yml`.
+
 ---
 
 ## Changelog
@@ -1028,3 +1103,4 @@ Each finding uses the template below. IDs are sequential: `QF-001`, `QF-002`, �
 | 2026-06-10 | EXPLORE-032: third exploratory run (rahcolours-b2b2c, real Laravel 11 / PHP 8.3 + Node/Vite with Laravel Sail compose). Logged QF-013 (major, quoted compose images detect zero services), QF-014 (major, php 8.3 detected but resolver only supports 8.4 — primary runtime uninstallable), QF-015 (minor, installed php-8.3.21 invisible to status/up/add). Reproduced QF-003/QF-006 patterns on a third project. |
 | 2026-06-10 | EXPLORE-033: fourth exploratory run (zelkai-trends, real Node 22 + Python `uv`/`pyproject.toml` monorepo). Logged QF-016 (major, Python detected as zero — detector only reads `requirements.txt`, ignores `pyproject.toml`/`uv.lock`), QF-017 (minor, service detection ignores committed `.env.example`). Reproduced QF-001 for a `python` runtime (16 ms instant download failure while network was up) on a fourth project. |
 | 2026-06-10 | EXPLORE-034: fifth exploratory run (gratis, real 40+-plugin WordPress suite; `gratis-suite/` runs PHP via a `wordpress:7-php8.3-apache` Dockerfile + mariadb:11 + redis:7-alpine). Logged QF-018 (major, composer.json without a php constraint defaults to php 8.4, ignoring the Dockerfile's php8.3), QF-019 (major, mariadb detected + recommended but unresolvable — `Unknown package: mariadb`), QF-020 (minor, port reporting: `port:0` for unpublished service / placeholder 1024 / dropped host port 6380), QF-021 (minor, `connections` empty because `init` drops compose `depends_on`). Reproduced QF-001/QF-005/QF-006/QF-012/QF-015 on a fifth project. **Full 5-project run completed with zero crashes.** Wrote `docs/exploratory-report.md` (consolidated cross-project report). |
+| 2026-06-11 | **VERIFY-050: all 21 findings marked `resolved`.** Verified against the current worktree with `zig build` ✓, `zig build test` ✓ (no corrupt files, no ANSI codes — QF-007), and `swift test` ✓ (472 tests, 0 failures). Blockers QF-001 (execve `$PATH` resolution in `store.zig`) and QF-007 fixed. Majors QF-003/QF-008/QF-009/QF-012/QF-013/QF-014/QF-016/QF-019 fixed and confirmed in `resolver.zig`/`detector.zig`/`service.zig`/`commands.zig` (corroborated by `resolver_coverage_e2e_test.zig` + `detect_coverage_e2e_test.zig` + `add_install_e2e_test.zig`). QF-002, QF-018, QF-020 resolved with a documented partial-scope workaround (mssql install, Dockerfile php auto-detect, compose host-port surfacing respectively). Each finding now carries a `✅ VERIFY-050 resolution` note; Summary counts updated (Open 0 / Resolved 21 / blockers 0 / majors 0). |

@@ -63,6 +63,29 @@ test "resolve node@22 returns correct URL" {
     try std.testing.expect(pkg.archive_type == .tar_gz);
 }
 
+test "resolve node 18/20/22/23 LTS+current to real URLs" {
+    const cases = [_]struct { req: []const u8, full: []const u8 }{
+        .{ .req = "18", .full = "18.20.8" },
+        .{ .req = "20", .full = "20.20.2" },
+        .{ .req = "22", .full = "22.15.0" },
+        .{ .req = "23", .full = "23.11.1" },
+    };
+    inline for (cases) |c| {
+        const pkg = try resolver.resolve(std.testing.allocator, "node", c.req);
+        defer std.testing.allocator.free(pkg.url);
+        try std.testing.expectEqualStrings("node", pkg.name);
+        try std.testing.expectEqualStrings(c.full, pkg.version);
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "nodejs.org/dist/v" ++ c.full) != null);
+        try std.testing.expect(pkg.archive_type == .tar_gz);
+        // node ships published checksums (64 hex chars), never compute-on-download.
+        try std.testing.expectEqual(@as(usize, 64), pkg.sha256.len);
+    }
+}
+
+test "resolve node unsupported major errors" {
+    try std.testing.expectError(error.UnknownVersion, resolver.resolve(std.testing.allocator, "node", "19"));
+}
+
 test "resolve postgresql@18" {
     const pkg = try resolver.resolve(std.testing.allocator, "postgresql", "18");
     defer std.testing.allocator.free(pkg.url);
@@ -82,6 +105,48 @@ test "resolve redis@7" {
 test "resolve unknown package returns error" {
     const result = resolver.resolve(std.testing.allocator, "unknown", "1.0");
     try std.testing.expectError(error.UnknownPackage, result);
+}
+
+test "downloadPackage fetches a file:// URL (exercises PATH-resolved curl)" {
+    if (@import("builtin").os.tag == .windows) return;
+    const a = std.testing.allocator;
+
+    const src = "/tmp/rawenv-store-dl-src.txt";
+    const dst = "/tmp/rawenv-store-dl-dst.txt";
+    const content = "rawenv download path works\n";
+
+    // Write the source file.
+    {
+        const fd = try std.posix.openat(
+            std.posix.AT.FDCWD,
+            src,
+            .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true },
+            0o644,
+        );
+        defer _ = std.c.close(fd);
+        _ = std.c.write(fd, content.ptr, content.len);
+    }
+    defer _ = std.c.unlink(src);
+    defer _ = std.c.unlink(dst);
+
+    const url = try std.fmt.allocPrint(a, "file://{s}", .{src});
+    defer a.free(url);
+
+    // Before the QF-001 fix, runCommand passed bare "curl" to execve (no PATH
+    // search), so the child died with _exit(127) and this always failed.
+    store.downloadPackage(a, url, dst) catch |err| switch (err) {
+        // A machine without curl is a valid environment; just don't fail the
+        // suite. The important regression (bare-name execve) would surface as
+        // DownloadFailed, which we still treat as a failure below.
+        error.CurlNotFound => return,
+        else => return err,
+    };
+
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, dst, .{}, 0);
+    defer _ = std.c.close(fd);
+    var buf: [256]u8 = undefined;
+    const n = try std.posix.read(fd, &buf);
+    try std.testing.expectEqualStrings(content, buf[0..n]);
 }
 
 test "sha256 known data" {

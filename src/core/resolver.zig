@@ -34,11 +34,17 @@ pub const ResolveError = error{
 /// Keep in sync with the dispatch in `resolve`.
 pub const available_packages = [_][]const u8{
     "node",
+    "bun",
     "postgres",
     "redis",
     "python",
     "php",
     "meilisearch",
+    "mariadb",
+    // `mysql` resolves to MariaDB binaries (a drop-in MySQL replacement); see
+    // resolveMariadb. Kept as a distinct name so store paths match the config
+    // key emitted by the detector for `mysql:*` compose images.
+    "mysql",
 };
 
 const PlatformKey = struct {
@@ -64,10 +70,25 @@ fn isPlatform(p: PlatformKey, os: []const u8, arch: []const u8) bool {
     return std.mem.eql(u8, p.os, os) and std.mem.eql(u8, p.arch, arch);
 }
 
+/// True when `name` (a base service/runtime type) maps to a package that
+/// rawenv can download and install. Returns false for the project's own
+/// application and for images rawenv has no installer for — callers use this
+/// to avoid routing first-party/unsupported entries through `rawenv add`.
+/// Keep in sync with the dispatch in `resolve`.
+pub fn isKnownPackage(name: []const u8) bool {
+    if (std.mem.eql(u8, name, "postgresql") or std.mem.eql(u8, name, "postgres")) return true;
+    for (available_packages) |p| {
+        if (std.mem.eql(u8, name, p)) return true;
+    }
+    return false;
+}
+
 /// Resolve a package name + version to a download URL and SHA256.
 pub fn resolve(allocator: std.mem.Allocator, package_name: []const u8, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
     if (std.mem.eql(u8, package_name, "node")) {
         return resolveNode(allocator, version);
+    } else if (std.mem.eql(u8, package_name, "bun")) {
+        return resolveBun(allocator, version);
     } else if (std.mem.eql(u8, package_name, "postgresql") or std.mem.eql(u8, package_name, "postgres")) {
         return resolvePostgresql(allocator, version);
     } else if (std.mem.eql(u8, package_name, "redis")) {
@@ -78,6 +99,8 @@ pub fn resolve(allocator: std.mem.Allocator, package_name: []const u8, version: 
         return resolvePhp(allocator, version);
     } else if (std.mem.eql(u8, package_name, "meilisearch")) {
         return resolveMeilisearch(allocator, version);
+    } else if (std.mem.eql(u8, package_name, "mariadb") or std.mem.eql(u8, package_name, "mysql")) {
+        return resolveMariadb(allocator, package_name, version);
     }
     return ResolveError.UnknownPackage;
 }
@@ -87,13 +110,10 @@ pub fn resolve(allocator: std.mem.Allocator, package_name: []const u8, version: 
 // https://nodejs.org/dist/v<ver>/SHASUMS256.txt)
 // ---------------------------------------------------------------------------
 fn resolveNode(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
-    const full_version = if (std.mem.eql(u8, version, "22") or std.mem.eql(u8, version, "22.15.0"))
-        "22.15.0"
-    else
-        return ResolveError.UnknownVersion;
+    const full_version = nodeFullVersion(version) orelse return ResolveError.UnknownVersion;
 
     const platform = try getPlatform();
-    const sha256 = getNodeSha256(platform.os, platform.arch) orelse
+    const sha256 = getNodeSha256(full_version, platform.os, platform.arch) orelse
         return ResolveError.UnsupportedPlatform;
 
     const url = try std.fmt.allocPrint(allocator, "https://nodejs.org/dist/v{s}/node-v{s}-{s}-{s}.tar.gz", .{
@@ -103,15 +123,115 @@ fn resolveNode(allocator: std.mem.Allocator, version: []const u8) (ResolveError 
     return .{ .name = "node", .version = full_version, .url = url, .sha256 = sha256, .archive_type = .tar_gz };
 }
 
-fn getNodeSha256(os: []const u8, arch: []const u8) ?[]const u8 {
-    if (std.mem.eql(u8, os, "darwin") and std.mem.eql(u8, arch, "arm64"))
-        return "92eb58f54d172ed9dee320b8450f1390db629d4262c936d5c074b25a110fed02";
-    if (std.mem.eql(u8, os, "darwin") and std.mem.eql(u8, arch, "x64"))
-        return "f7f42bee60d602783d3a842f0a02a2ecd9cb9d7f6f3088686c79295b0222facf";
-    if (std.mem.eql(u8, os, "linux") and std.mem.eql(u8, arch, "x64"))
-        return "29d1c60c5b64ccdb0bc4e5495135e68e08a872e0ae91f45d9ec34fc135a17981";
-    if (std.mem.eql(u8, os, "linux") and std.mem.eql(u8, arch, "arm64"))
-        return "c3582722db988ed1eaefd590b877b86aaace65f68746726c1f8c79d26e5cc7de";
+/// Supported node majors and the full version each one pins to. node ships
+/// official prebuilt binaries with checksums published in
+/// https://nodejs.org/dist/v<ver>/SHASUMS256.txt — keep these in sync.
+const NodeRelease = struct {
+    major: []const u8,
+    full: []const u8,
+    darwin_arm64: []const u8,
+    darwin_x64: []const u8,
+    linux_x64: []const u8,
+    linux_arm64: []const u8,
+};
+
+const node_releases = [_]NodeRelease{
+    .{
+        .major = "18",
+        .full = "18.20.8",
+        .darwin_arm64 = "bae4965d29d29bd32f96364eefbe3bca576a03e917ddbb70b9330d75f2cacd76",
+        .darwin_x64 = "ed2554677188f4afc0d050ecd8bd56effb2572d6518f8da6d40321ede6698509",
+        .linux_x64 = "27a9f3f14d5e99ad05a07ed3524ba3ee92f8ff8b6db5ff80b00f9feb5ec8097a",
+        .linux_arm64 = "2e3dfc51154e6fea9fc86a90c4ea8f3ecb8b60acaf7367c4b76691da192571c1",
+    },
+    .{
+        .major = "20",
+        .full = "20.20.2",
+        .darwin_arm64 = "466e05f3477c20dfb723054dfebffe55bc74660ee77f612166fca121dacb65b6",
+        .darwin_x64 = "8be6f5e4bb128c82774f8a0b8d7a1cc1365a7977d9657cece0ca647b3fe04e61",
+        .linux_x64 = "19e56f0825510207dd904f087fe52faa0a4eb6b2aab5f0ea7a33830d04888b8b",
+        .linux_arm64 = "47ef73d543ecf6eb19435f6c03a0ac4809b3bf0dd6b26c7c571efc2a6572a74d",
+    },
+    .{
+        .major = "22",
+        .full = "22.15.0",
+        .darwin_arm64 = "92eb58f54d172ed9dee320b8450f1390db629d4262c936d5c074b25a110fed02",
+        .darwin_x64 = "f7f42bee60d602783d3a842f0a02a2ecd9cb9d7f6f3088686c79295b0222facf",
+        .linux_x64 = "29d1c60c5b64ccdb0bc4e5495135e68e08a872e0ae91f45d9ec34fc135a17981",
+        .linux_arm64 = "c3582722db988ed1eaefd590b877b86aaace65f68746726c1f8c79d26e5cc7de",
+    },
+    .{
+        .major = "23",
+        .full = "23.11.1",
+        .darwin_arm64 = "255509d2c4fe8e1d6fefb950ad8db285ed75ba543e18744d83dc139f978e404d",
+        .darwin_x64 = "7e384a0cfa8b44ee4833b3823485baad78bf258e54f47020d2d2b4b75e9275d3",
+        .linux_x64 = "a2029c2b0cb05d10248e887c5df3f8547b7ab4aaa4e63b8e4da03e72f478140e",
+        .linux_arm64 = "277316a0b0ae3f50eb2cd57b74fa8a07f4d17fe0433468a790e6e47da297a9f6",
+    },
+};
+
+/// Map a node version request (short major like "20" or pinned full like
+/// "20.20.2") to its pinned full version. Returns null for unsupported.
+fn nodeFullVersion(version: []const u8) ?[]const u8 {
+    for (node_releases) |r| {
+        if (std.mem.eql(u8, version, r.major) or std.mem.eql(u8, version, r.full)) return r.full;
+    }
+    return null;
+}
+
+fn getNodeSha256(full_version: []const u8, os: []const u8, arch: []const u8) ?[]const u8 {
+    for (node_releases) |r| {
+        if (!std.mem.eql(u8, full_version, r.full)) continue;
+        if (std.mem.eql(u8, os, "darwin") and std.mem.eql(u8, arch, "arm64")) return r.darwin_arm64;
+        if (std.mem.eql(u8, os, "darwin") and std.mem.eql(u8, arch, "x64")) return r.darwin_x64;
+        if (std.mem.eql(u8, os, "linux") and std.mem.eql(u8, arch, "x64")) return r.linux_x64;
+        if (std.mem.eql(u8, os, "linux") and std.mem.eql(u8, arch, "arm64")) return r.linux_arm64;
+        return null;
+    }
+    return null;
+}
+
+// ---------------------------------------------------------------------------
+// bun — official prebuilt binaries from GitHub releases (oven-sh/bun). Each
+// release ships per-platform .zip archives, each containing a single ready-to-
+// run `bun` executable. Upstream publishes a SHASUMS256.txt sidecar, but the
+// hash is computed on download to stay platform-agnostic (see CLI-010). No
+// compilation required.
+// ---------------------------------------------------------------------------
+const BUN_VERSION = "1.3.14";
+
+/// Map a bun version request (short major "1", "1.3", or pinned full
+/// "1.3.14") to its pinned full version. Returns null for unsupported.
+fn bunFullVersion(version: []const u8) ?[]const u8 {
+    if (std.mem.eql(u8, version, "1") or
+        std.mem.eql(u8, version, "1.3") or
+        std.mem.eql(u8, version, BUN_VERSION)) return BUN_VERSION;
+    return null;
+}
+
+fn resolveBun(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
+    const full_version = bunFullVersion(version) orelse return ResolveError.UnknownVersion;
+
+    const platform = try getPlatform();
+    const target = bunTarget(platform) orelse return ResolveError.UnsupportedPlatform;
+
+    const url = try std.fmt.allocPrint(
+        allocator,
+        "https://github.com/oven-sh/bun/releases/download/bun-v{s}/bun-{s}.zip",
+        .{ full_version, target },
+    );
+
+    return .{ .name = "bun", .version = full_version, .url = url, .sha256 = COMPUTE_ON_DOWNLOAD, .archive_type = .zip };
+}
+
+/// bun release asset target slug (e.g. "darwin-aarch64"). bun ships glibc
+/// Linux builds and standard (AVX2) x64 builds — the slug omits the baseline
+/// suffix, matching the default binary the upstream install script selects.
+fn bunTarget(p: PlatformKey) ?[]const u8 {
+    if (isPlatform(p, "darwin", "arm64")) return "darwin-aarch64";
+    if (isPlatform(p, "darwin", "x64")) return "darwin-x64";
+    if (isPlatform(p, "linux", "x64")) return "linux-x64";
+    if (isPlatform(p, "linux", "arm64")) return "linux-aarch64";
     return null;
 }
 
@@ -257,11 +377,21 @@ fn getPythonSha256(p: PlatformKey) ?[]const u8 {
 // Upstream does not publish per-file checksums, so the hash is computed on
 // download. No compilation required.
 // ---------------------------------------------------------------------------
+
+/// Map a PHP version (short "8.3" or full "8.3.31") to a pinned full version
+/// that has a published static-php-cli binary across every supported platform.
+/// Patch levels are pinned to the latest build available on dl.static-php.dev
+/// at the time of writing. Keep in sync with `fullVersion` / `availableVersions`.
+fn phpFullVersion(version: []const u8) ?[]const u8 {
+    if (std.mem.eql(u8, version, "8.1") or std.mem.eql(u8, version, "8.1.34")) return "8.1.34";
+    if (std.mem.eql(u8, version, "8.2") or std.mem.eql(u8, version, "8.2.31")) return "8.2.31";
+    if (std.mem.eql(u8, version, "8.3") or std.mem.eql(u8, version, "8.3.31")) return "8.3.31";
+    if (std.mem.eql(u8, version, "8.4") or std.mem.eql(u8, version, "8.4.11")) return "8.4.11";
+    return null;
+}
+
 fn resolvePhp(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
-    const full_version = if (std.mem.eql(u8, version, "8.4") or std.mem.eql(u8, version, "8.4.11"))
-        "8.4.11"
-    else
-        return ResolveError.UnknownVersion;
+    const full_version = phpFullVersion(version) orelse return ResolveError.UnknownVersion;
 
     const platform = try getPlatform();
     const php_os: []const u8 = if (std.mem.eql(u8, platform.os, "darwin")) "macos" else "linux";
@@ -307,6 +437,55 @@ fn meilisearchAsset(p: PlatformKey) ?[]const u8 {
     return null;
 }
 
+// ---------------------------------------------------------------------------
+// mariadb / mysql — prebuilt "systemd" binary tarballs from the MariaDB
+// Foundation archives (archive.mariadb.org). Each release ships a published
+// sha256sums.txt sidecar, so the checksum is pinned (never compute-on-download)
+// and no compilation is required. MariaDB is a drop-in MySQL replacement, so a
+// requested `mysql` package resolves to the same MariaDB binaries.
+//
+// The Foundation only publishes x86_64 Linux binary tarballs — there are no
+// official macOS or ARM tarballs — so every other platform is UnsupportedPlatform.
+// ---------------------------------------------------------------------------
+const MARIADB_VERSION = "11.4.7";
+// sha256 of mariadb-11.4.7-linux-systemd-x86_64.tar.gz, from the upstream
+// sha256sums.txt sidecar in the bintar-linux-systemd-x86_64 directory.
+const MARIADB_SHA256_LINUX_X64 = "805e953042fd2383139f3f7174bee412a21b7d0c57ee69a4c9732989dccd42d3";
+
+fn resolveMariadb(allocator: std.mem.Allocator, package_name: []const u8, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
+    const full_version = mariadbFullVersion(package_name, version) orelse return ResolveError.UnknownVersion;
+
+    const platform = try getPlatform();
+    // MariaDB Foundation only publishes x86_64 Linux binary tarballs.
+    if (!isPlatform(platform, "linux", "x64")) return ResolveError.UnsupportedPlatform;
+
+    const url = try std.fmt.allocPrint(
+        allocator,
+        "https://archive.mariadb.org/mariadb-{s}/bintar-linux-systemd-x86_64/mariadb-{s}-linux-systemd-x86_64.tar.gz",
+        .{ full_version, full_version },
+    );
+
+    // Preserve the requested name ("mariadb" or "mysql") so the store path lines
+    // up with the config key the detector emits for the corresponding image.
+    return .{ .name = package_name, .version = full_version, .url = url, .sha256 = MARIADB_SHA256_LINUX_X64, .archive_type = .tar_gz };
+}
+
+/// Map a short mariadb/mysql version to the pinned MariaDB release. MariaDB
+/// supplies the engine for both names, so MySQL-style versions (8, 8.0, 8.4)
+/// and MariaDB-style versions (11, 11.4) resolve to the same release.
+fn mariadbFullVersion(package_name: []const u8, version: []const u8) ?[]const u8 {
+    if (std.mem.eql(u8, package_name, "mysql")) {
+        if (std.mem.eql(u8, version, "8") or
+            std.mem.eql(u8, version, "8.0") or
+            std.mem.eql(u8, version, "8.4")) return MARIADB_VERSION;
+    }
+    // Accept MariaDB-style versions for both names.
+    if (std.mem.eql(u8, version, "11") or
+        std.mem.eql(u8, version, "11.4") or
+        std.mem.eql(u8, version, MARIADB_VERSION)) return MARIADB_VERSION;
+    return null;
+}
+
 /// Map a short version (e.g. "22") to its pinned full version (e.g. "22.15.0")
 /// without fetching a URL/SHA256. Mirrors the version logic in `resolve` so
 /// store paths stay consistent. Returns the input unchanged if unknown.
@@ -316,7 +495,9 @@ pub fn resolveVersion(package_name: []const u8, version: []const u8) []const u8 
 
 fn fullVersion(package_name: []const u8, version: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, package_name, "node")) {
-        if (std.mem.eql(u8, version, "22")) return "22.15.0";
+        return nodeFullVersion(version);
+    } else if (std.mem.eql(u8, package_name, "bun")) {
+        return bunFullVersion(version);
     } else if (std.mem.eql(u8, package_name, "postgresql") or std.mem.eql(u8, package_name, "postgres")) {
         if (std.mem.eql(u8, version, "16")) return "16.9.0";
         if (std.mem.eql(u8, version, "17")) return "17.5.0";
@@ -326,11 +507,43 @@ fn fullVersion(package_name: []const u8, version: []const u8) ?[]const u8 {
     } else if (std.mem.eql(u8, package_name, "python")) {
         if (std.mem.eql(u8, version, "3.12")) return "3.12.11";
     } else if (std.mem.eql(u8, package_name, "php")) {
+        if (std.mem.eql(u8, version, "8.1")) return "8.1.34";
+        if (std.mem.eql(u8, version, "8.2")) return "8.2.31";
+        if (std.mem.eql(u8, version, "8.3")) return "8.3.31";
         if (std.mem.eql(u8, version, "8.4")) return "8.4.11";
     } else if (std.mem.eql(u8, package_name, "meilisearch")) {
         if (std.mem.eql(u8, version, "1.12")) return "1.12.0";
+    } else if (std.mem.eql(u8, package_name, "mariadb") or std.mem.eql(u8, package_name, "mysql")) {
+        return mariadbFullVersion(package_name, version);
     }
     return null;
+}
+
+/// Supported short version aliases for a package, used to build user-facing
+/// "Available versions: ..." hints when an unknown version is requested.
+/// Returns an empty slice for unknown packages. Keep in sync with the version
+/// dispatch in `resolve` / `fullVersion`.
+pub fn availableVersions(package_name: []const u8) []const []const u8 {
+    if (std.mem.eql(u8, package_name, "node")) {
+        return &.{ "18", "20", "22", "23" };
+    } else if (std.mem.eql(u8, package_name, "bun")) {
+        return &.{ "1", "1.3" };
+    } else if (std.mem.eql(u8, package_name, "postgresql") or std.mem.eql(u8, package_name, "postgres")) {
+        return &.{ "16", "17", "18" };
+    } else if (std.mem.eql(u8, package_name, "redis")) {
+        return &.{ "7", "7.4" };
+    } else if (std.mem.eql(u8, package_name, "python")) {
+        return &.{"3.12"};
+    } else if (std.mem.eql(u8, package_name, "php")) {
+        return &.{ "8.1", "8.2", "8.3", "8.4" };
+    } else if (std.mem.eql(u8, package_name, "meilisearch")) {
+        return &.{"1.12"};
+    } else if (std.mem.eql(u8, package_name, "mariadb")) {
+        return &.{ "11", "11.4" };
+    } else if (std.mem.eql(u8, package_name, "mysql")) {
+        return &.{ "8", "8.4" };
+    }
+    return &.{};
 }
 
 /// Parse a package spec like "node@22" into name and version.
@@ -370,6 +583,80 @@ test "resolve node@22" {
     try std.testing.expectEqual(@as(usize, 64), pkg.sha256.len);
 }
 
+test "resolve node 18/20/22/23 to real download URLs" {
+    const cases = [_]struct { req: []const u8, full: []const u8 }{
+        .{ .req = "18", .full = "18.20.8" },
+        .{ .req = "20", .full = "20.20.2" },
+        .{ .req = "22", .full = "22.15.0" },
+        .{ .req = "23", .full = "23.11.1" },
+    };
+    inline for (cases) |c| {
+        const pkg = try resolve(std.testing.allocator, "node", c.req);
+        defer std.testing.allocator.free(pkg.url);
+        try std.testing.expectEqualStrings("node", pkg.name);
+        try std.testing.expectEqualStrings(c.full, pkg.version);
+        // URL must point at the real nodejs.org dist for the pinned version.
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "nodejs.org/dist/v" ++ c.full) != null);
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "node-v" ++ c.full ++ "-") != null);
+        try std.testing.expect(pkg.archive_type == .tar_gz);
+        // node publishes real checksums — never the compute-on-download sentinel.
+        try std.testing.expect(!std.mem.eql(u8, pkg.sha256, COMPUTE_ON_DOWNLOAD));
+        try std.testing.expectEqual(@as(usize, 64), pkg.sha256.len);
+        // resolving the pinned full version directly must agree with the short alias.
+        const pkg_full = try resolve(std.testing.allocator, "node", c.full);
+        defer std.testing.allocator.free(pkg_full.url);
+        try std.testing.expectEqualStrings(pkg.url, pkg_full.url);
+        try std.testing.expectEqualStrings(pkg.sha256, pkg_full.sha256);
+    }
+}
+
+test "resolveVersion maps every supported node major" {
+    try std.testing.expectEqualStrings("18.20.8", resolveVersion("node", "18"));
+    try std.testing.expectEqualStrings("20.20.2", resolveVersion("node", "20"));
+    try std.testing.expectEqualStrings("22.15.0", resolveVersion("node", "22"));
+    try std.testing.expectEqualStrings("23.11.1", resolveVersion("node", "23"));
+}
+
+test "resolve node unsupported major" {
+    // A major rawenv doesn't pin must fail explicitly, not silently resolve.
+    try std.testing.expectError(ResolveError.UnknownVersion, resolve(std.testing.allocator, "node", "19"));
+    try std.testing.expectError(ResolveError.UnknownVersion, resolve(std.testing.allocator, "node", "16"));
+}
+
+
+test "resolve bun@1 (github prebuilt binary)" {
+    const pkg = try resolve(std.testing.allocator, "bun", "1");
+    defer std.testing.allocator.free(pkg.url);
+    try std.testing.expectEqualStrings("bun", pkg.name);
+    try std.testing.expectEqualStrings("1.3.14", pkg.version);
+    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "github.com/oven-sh/bun/releases") != null);
+    // URL must point at the real release tag for the pinned version.
+    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "bun-v1.3.14") != null);
+    // Asset is a per-platform .zip containing a single executable.
+    try std.testing.expect(std.mem.endsWith(u8, pkg.url, ".zip"));
+    try std.testing.expect(pkg.archive_type == .zip);
+    // Upstream publishes no per-asset checksum we pin, so hash is computed on download.
+    try std.testing.expectEqualStrings(COMPUTE_ON_DOWNLOAD, pkg.sha256);
+}
+
+test "resolve bun short and full versions agree" {
+    inline for (.{ "1", "1.3", "1.3.14" }) |v| {
+        const pkg = try resolve(std.testing.allocator, "bun", v);
+        defer std.testing.allocator.free(pkg.url);
+        try std.testing.expectEqualStrings("bun", pkg.name);
+        try std.testing.expectEqualStrings("1.3.14", pkg.version);
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "bun-v1.3.14") != null);
+    }
+}
+
+test "resolve bun unknown version" {
+    try std.testing.expectError(ResolveError.UnknownVersion, resolve(std.testing.allocator, "bun", "2"));
+    try std.testing.expectError(ResolveError.UnknownVersion, resolve(std.testing.allocator, "bun", "0.6"));
+}
+
+test "bun is a known package" {
+    try std.testing.expect(isKnownPackage("bun"));
+}
 test "resolve postgresql@17 (prebuilt, not source)" {
     const pkg = try resolve(std.testing.allocator, "postgresql", "17");
     defer std.testing.allocator.free(pkg.url);
@@ -422,6 +709,29 @@ test "resolve php@8.4 (prebuilt static, compute-on-download)" {
     try std.testing.expectEqualStrings(COMPUTE_ON_DOWNLOAD, pkg.sha256);
 }
 
+test "resolve php@8.1 8.2 8.3 8.4 (prebuilt static binaries)" {
+    const cases = [_]struct { short: []const u8, full: []const u8 }{
+        .{ .short = "8.1", .full = "8.1.34" },
+        .{ .short = "8.2", .full = "8.2.31" },
+        .{ .short = "8.3", .full = "8.3.31" },
+        .{ .short = "8.4", .full = "8.4.11" },
+    };
+    inline for (cases) |c| {
+        // Short alias and explicit full version both resolve to the same artifact.
+        inline for (.{ c.short, c.full }) |v| {
+            const pkg = try resolve(std.testing.allocator, "php", v);
+            defer std.testing.allocator.free(pkg.url);
+            try std.testing.expectEqualStrings("php", pkg.name);
+            try std.testing.expectEqualStrings(c.full, pkg.version);
+            try std.testing.expect(std.mem.indexOf(u8, pkg.url, "dl.static-php.dev") != null);
+            try std.testing.expect(std.mem.indexOf(u8, pkg.url, c.full) != null);
+            try std.testing.expect(std.mem.indexOf(u8, pkg.url, "-cli-") != null);
+            try std.testing.expect(pkg.archive_type == .tar_gz);
+            try std.testing.expectEqualStrings(COMPUTE_ON_DOWNLOAD, pkg.sha256);
+        }
+    }
+}
+
 test "resolve meilisearch@1.12 (github prebuilt binary)" {
     const pkg = try resolve(std.testing.allocator, "meilisearch", "1.12");
     defer std.testing.allocator.free(pkg.url);
@@ -430,6 +740,53 @@ test "resolve meilisearch@1.12 (github prebuilt binary)" {
     try std.testing.expect(std.mem.indexOf(u8, pkg.url, "github.com/meilisearch/meilisearch/releases") != null);
     try std.testing.expect(pkg.archive_type == .binary);
     try std.testing.expectEqualStrings(COMPUTE_ON_DOWNLOAD, pkg.sha256);
+}
+
+test "resolve mariadb@11 (prebuilt from MariaDB Foundation archives)" {
+    const result = resolve(std.testing.allocator, "mariadb", "11");
+    if (result) |pkg| {
+        defer std.testing.allocator.free(pkg.url);
+        try std.testing.expectEqualStrings("mariadb", pkg.name);
+        try std.testing.expectEqualStrings("11.4.7", pkg.version);
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "archive.mariadb.org") != null);
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "bintar-linux-systemd-x86_64") != null);
+        // Must be a prebuilt binary tarball, never the source distribution.
+        try std.testing.expect(std.mem.indexOf(u8, pkg.url, "/source/") == null);
+        try std.testing.expect(pkg.archive_type == .tar_gz);
+        // MariaDB publishes checksums, so this must never be the sentinel.
+        try std.testing.expect(!std.mem.eql(u8, pkg.sha256, COMPUTE_ON_DOWNLOAD));
+        try std.testing.expectEqual(@as(usize, 64), pkg.sha256.len);
+    } else |err| {
+        // MariaDB only ships x86_64 Linux binary tarballs; every other
+        // platform legitimately resolves to UnsupportedPlatform.
+        try std.testing.expectEqual(ResolveError.UnsupportedPlatform, err);
+    }
+}
+
+test "resolve mysql alias resolves to MariaDB binaries" {
+    inline for (.{ "8", "8.0", "8.4" }) |v| {
+        const result = resolve(std.testing.allocator, "mysql", v);
+        if (result) |pkg| {
+            defer std.testing.allocator.free(pkg.url);
+            // Name is preserved so the store path matches the `mysql` config key.
+            try std.testing.expectEqualStrings("mysql", pkg.name);
+            try std.testing.expectEqualStrings("11.4.7", pkg.version);
+            try std.testing.expect(std.mem.indexOf(u8, pkg.url, "archive.mariadb.org") != null);
+            try std.testing.expectEqual(@as(usize, 64), pkg.sha256.len);
+        } else |err| {
+            try std.testing.expectEqual(ResolveError.UnsupportedPlatform, err);
+        }
+    }
+}
+
+test "resolve mariadb unknown version" {
+    const result = resolve(std.testing.allocator, "mariadb", "5.5");
+    try std.testing.expectError(ResolveError.UnknownVersion, result);
+}
+
+test "mariadb and mysql are known packages" {
+    try std.testing.expect(isKnownPackage("mariadb"));
+    try std.testing.expect(isKnownPackage("mysql"));
 }
 
 test "resolve unknown package" {
@@ -458,14 +815,43 @@ test "resolve unknown version" {
 
 test "resolveVersion maps short to full and is consistent with resolve" {
     try std.testing.expectEqualStrings("22.15.0", resolveVersion("node", "22"));
+    try std.testing.expectEqualStrings("1.3.14", resolveVersion("bun", "1"));
+    try std.testing.expectEqualStrings("1.3.14", resolveVersion("bun", "1.3"));
     try std.testing.expectEqualStrings("17.5.0", resolveVersion("postgres", "17"));
     try std.testing.expectEqualStrings("7.4.0", resolveVersion("redis", "7"));
     try std.testing.expectEqualStrings("7.4.0", resolveVersion("redis", "7.4"));
     try std.testing.expectEqualStrings("3.12.11", resolveVersion("python", "3.12"));
     try std.testing.expectEqualStrings("8.4.11", resolveVersion("php", "8.4"));
+    try std.testing.expectEqualStrings("8.1.34", resolveVersion("php", "8.1"));
+    try std.testing.expectEqualStrings("8.2.31", resolveVersion("php", "8.2"));
+    try std.testing.expectEqualStrings("8.3.31", resolveVersion("php", "8.3"));
     try std.testing.expectEqualStrings("1.12.0", resolveVersion("meilisearch", "1.12"));
+    try std.testing.expectEqualStrings("11.4.7", resolveVersion("mariadb", "11"));
+    try std.testing.expectEqualStrings("11.4.7", resolveVersion("mariadb", "11.4"));
+    try std.testing.expectEqualStrings("11.4.7", resolveVersion("mysql", "8"));
+    try std.testing.expectEqualStrings("11.4.7", resolveVersion("mysql", "8.4"));
     // Unknown stays unchanged.
     try std.testing.expectEqualStrings("9.9", resolveVersion("node", "9.9"));
+}
+
+test "availableVersions lists only resolvable versions" {
+    // Every advertised version must resolve (or fail only on platform), never
+    // UnknownVersion. Guards the "Available versions: ..." hint against drift.
+    for (available_packages) |name| {
+        const versions = availableVersions(name);
+        try std.testing.expect(versions.len > 0);
+        for (versions) |v| {
+            const result = resolve(std.testing.allocator, name, v);
+            if (result) |pkg| {
+                std.testing.allocator.free(pkg.url);
+            } else |err| {
+                try std.testing.expect(err != ResolveError.UnknownVersion);
+                try std.testing.expect(err != ResolveError.UnknownPackage);
+            }
+        }
+    }
+    // Unknown package → empty list.
+    try std.testing.expectEqual(@as(usize, 0), availableVersions("nonexistent").len);
 }
 
 test "no source-compilation URLs are produced" {

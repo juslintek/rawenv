@@ -69,6 +69,85 @@ test "untagged image falls back to default version" {
 }
 
 // ---------------------------------------------------------------------------
+// Published host port vs container port (QF-020)
+// ---------------------------------------------------------------------------
+
+test "uses published host port (left of ':'), not the container port" {
+    // 6380:6379 publishes the container's 6379 on host port 6380. rawenv.toml
+    // must record 6380 (the host port), never 6379 or 0.
+    const yaml =
+        \\services:
+        \\  cache:
+        \\    image: redis:7
+        \\    ports:
+        \\      - "6380:6379"
+    ;
+    var result = try compose.importCompose(testing.allocator, yaml, "p");
+    defer result.deinit(testing.allocator);
+
+    try expectContains(result.toml, "[services.redis]");
+    try expectContains(result.toml, "port = 6380");
+    // The container port must not leak through as the host port.
+    if (std.mem.indexOf(u8, result.toml, "port = 6379") != null) return error.ContainerPortLeaked;
+
+    // Round-trips through the config parser with the host port preserved.
+    var cfg = try config.parse(testing.allocator, result.toml);
+    defer config.deinit(testing.allocator, &cfg);
+    try testing.expectEqual(@as(usize, 1), cfg.services.len);
+    try testing.expectEqual(@as(u16, 6380), cfg.services[0].port);
+}
+
+test "service without published ports omits port (auto-allocated at runtime)" {
+    // No ports → the importer writes no `port = ` line (0 = auto). Runtime
+    // allocation then assigns a real, conflict-checked port — never 0 or 1024.
+    const yaml =
+        \\services:
+        \\  cache:
+        \\    image: redis:7
+    ;
+    var result = try compose.importCompose(testing.allocator, yaml, "p");
+    defer result.deinit(testing.allocator);
+
+    try expectContains(result.toml, "[services.redis]");
+    if (std.mem.indexOf(u8, result.toml, "port = 0") != null) return error.ZeroPortWritten;
+    if (std.mem.indexOf(u8, result.toml, "port = 1024") != null) return error.FallbackPortWritten;
+}
+
+// ---------------------------------------------------------------------------
+// MSSQL / azure-sql-edge mapping (QF-002)
+// ---------------------------------------------------------------------------
+
+test "azure-sql-edge image maps to [services.mssql]" {
+    const yaml =
+        \\services:
+        \\  db:
+        \\    image: 'mcr.microsoft.com/azure-sql-edge:latest'
+        \\    ports:
+        \\      - "1433:1433"
+    ;
+    var result = try compose.importCompose(testing.allocator, yaml, "p");
+    defer result.deinit(testing.allocator);
+    try expectContains(result.toml, "[services.mssql]");
+    try expectContains(result.toml, "version = \"2022\""); // 'latest' -> default
+    try expectContains(result.toml, "port = 1433");
+    try testing.expectEqual(@as(usize, 1), result.mapped_count);
+}
+
+test "mcr.microsoft.com/mssql/server image maps to mssql with version from tag" {
+    const yaml =
+        \\services:
+        \\  db:
+        \\    image: mcr.microsoft.com/mssql/server:2022-latest
+        \\    ports:
+        \\      - "1433:1433"
+    ;
+    var result = try compose.importCompose(testing.allocator, yaml, "p");
+    defer result.deinit(testing.allocator);
+    try expectContains(result.toml, "[services.mssql]");
+    try expectContains(result.toml, "version = \"2022\"");
+}
+
+// ---------------------------------------------------------------------------
 // Warnings (unsupported features must not fail the import)
 // ---------------------------------------------------------------------------
 

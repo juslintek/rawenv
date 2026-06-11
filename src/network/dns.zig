@@ -176,15 +176,67 @@ fn applyHostsEntries(allocator: std.mem.Allocator, project: []const u8, new_entr
     try writeFilePrivileged(allocator, hosts_path, new_content.items, interactive);
 }
 
-pub fn teardownDNS(allocator: std.mem.Allocator) !void {
-    // TODO: remove project block from /etc/hosts
-    _ = allocator;
+/// Remove the `# rawenv:<project>` … `# end-rawenv:<project>` block from a
+/// hosts-file `content`, returning the remaining content. Pure (no I/O): the
+/// caller owns the returned slice. Lines inside the marker block (and the two
+/// marker lines themselves) are dropped; everything else is preserved. When the
+/// block is absent the original content is returned unchanged (as a copy).
+pub fn stripProjectBlock(allocator: std.mem.Allocator, content: []const u8, project: []const u8) ![]u8 {
+    const begin_marker = try std.fmt.allocPrint(allocator, "# rawenv:{s}", .{project});
+    defer allocator.free(begin_marker);
+    const end_marker = try std.fmt.allocPrint(allocator, "# end-rawenv:{s}", .{project});
+    defer allocator.free(end_marker);
+
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+
+    var it = std.mem.splitScalar(u8, content, '\n');
+    var in_block = false;
+    while (it.next()) |line| {
+        if (std.mem.indexOf(u8, line, begin_marker) != null) {
+            in_block = true;
+            continue;
+        }
+        if (std.mem.indexOf(u8, line, end_marker) != null) {
+            in_block = false;
+            continue;
+        }
+        if (!in_block) {
+            try out.appendSlice(allocator, line);
+            try out.append(allocator, '\n');
+        }
+    }
+    return out.toOwnedSlice(allocator);
+}
+
+/// Remove a project's rawenv block from /etc/hosts. Best-effort: reads the
+/// hosts file, strips the `# rawenv:<project>` … `# end-rawenv:<project>`
+/// block, and writes the result back via a privileged move. When `interactive`
+/// is false, privilege escalation uses `sudo -n` so automated callers
+/// (`rawenv destroy`) fail fast rather than blocking on a password prompt.
+/// No-op when the block is absent or the hosts file can't be read.
+pub fn removeHostsEntries(allocator: std.mem.Allocator, project: []const u8, interactive: bool) !void {
+    if (comptime builtin.os.tag == .windows) return;
+    const exec = @import("exec");
+
+    var buf: [64 * 1024]u8 = undefined;
+    const argv_cat = [_][*:0]const u8{ "cat", hosts_path };
+    const current_hosts = exec.runCapture(&argv_cat, &buf) catch return;
+
+    const begin_marker = try std.fmt.allocPrint(allocator, "# rawenv:{s}", .{project});
+    defer allocator.free(begin_marker);
+    // Nothing to remove — skip the privileged write entirely.
+    if (std.mem.indexOf(u8, current_hosts, begin_marker) == null) return;
+
+    const stripped = try stripProjectBlock(allocator, current_hosts, project);
+    defer allocator.free(stripped);
+    try writeFilePrivileged(allocator, hosts_path, stripped, interactive);
 }
 
 /// Alias for setupDNS (task-spec naming).
 pub const installDns = setupDNS;
-/// Alias for teardownDNS (task-spec naming).
-pub const removeDns = teardownDNS;
+/// Alias for removeHostsEntries (task-spec naming).
+pub const removeDns = removeHostsEntries;
 
 fn writeFilePrivileged(allocator: std.mem.Allocator, path: []const u8, content: []const u8, interactive: bool) !void {
     const exec = @import("exec");

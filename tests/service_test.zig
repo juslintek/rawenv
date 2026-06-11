@@ -4,6 +4,11 @@ const testing = std.testing;
 const service = @import("service");
 const shell = @import("shell");
 
+// libc env setters (not surfaced by std.c in this Zig version) used to point
+// `service.getHome()` at an isolated HOME for the QF-012 `up` tests below.
+extern "c" fn setenv(name: [*:0]const u8, value: [*:0]const u8, overwrite: c_int) c_int;
+extern "c" fn unsetenv(name: [*:0]const u8) c_int;
+
 test "ServiceStatus enum values" {
     try testing.expect(@intFromEnum(service.ServiceStatus.running) == 0);
     try testing.expect(@intFromEnum(service.ServiceStatus.stopped) == 1);
@@ -131,7 +136,38 @@ test "listServices honors explicit port override" {
     try testing.expectEqual(12345, services[0].port);
 }
 
-// --- Health check / readiness gate tests (CLI-013) ---
+test "defaultPort maps every known service to its canonical port (never 0)" {
+    try testing.expectEqual(@as(u16, 5432), service.defaultPort("postgres"));
+    try testing.expectEqual(@as(u16, 5432), service.defaultPort("postgresql"));
+    try testing.expectEqual(@as(u16, 6379), service.defaultPort("redis"));
+    try testing.expectEqual(@as(u16, 3306), service.defaultPort("mysql"));
+    try testing.expectEqual(@as(u16, 3306), service.defaultPort("mariadb"));
+    try testing.expectEqual(@as(u16, 27017), service.defaultPort("mongodb"));
+    try testing.expectEqual(@as(u16, 7700), service.defaultPort("meilisearch"));
+    try testing.expectEqual(@as(u16, 1433), service.defaultPort("mssql"));
+    try testing.expectEqual(@as(u16, 3000), service.defaultPort("node"));
+}
+
+test "listServices auto-allocates a non-zero, non-1024 port for a portless service" {
+    const config = @import("config");
+    const input =
+        \\name = "qf020"
+        \\
+        \\[services.mysql]
+        \\version = "8"
+    ;
+    var cfg = try config.parse(testing.allocator, input);
+    defer config.deinit(testing.allocator, &cfg);
+
+    const services = try service.listServices(testing.allocator, cfg);
+    defer service.freeServices(testing.allocator, services);
+
+    try testing.expectEqual(1, services.len);
+    // No explicit/published port → auto-allocated. Must be a real port, never
+    // 0 and never the old 1024 fallback (prefers mysql's canonical 3306).
+    try testing.expect(services[0].port != 0);
+    try testing.expect(services[0].port != 1024);
+}
 
 /// Open an ephemeral, listening TCP socket on 127.0.0.1 and return {fd, port}.
 /// Caller must close the fd. Used to exercise readiness probes deterministically.
@@ -586,4 +622,140 @@ test "down on circular dependency surfaces the error" {
         service.down(testing.allocator, cfg, &aw.writer),
     );
     buf = aw.toArrayList();
+}
+
+// QF-012: `up` must skip uninstalled services immediately (no 30s readiness
+// hang) and report them as skipped — not as started, not as failed.
+test "up skips uninstalled services immediately and counts them as skipped" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+    const config = @import("config");
+
+    // Isolated, empty HOME → the configured service has no installed binary.
+    // A path relative to the test's cwd is fine: std.c.access (used by the skip
+    // check) resolves it against cwd, and the tmp dir is cleaned up afterward.
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const home = try std.fs.path.join(testing.allocator, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    defer testing.allocator.free(home);
+    const home_z = try testing.allocator.dupeZ(u8, home);
+    defer testing.allocator.free(home_z);
+
+    const prev_home = std.c.getenv("HOME");
+    _ = setenv("HOME", home_z.ptr, 1);
+    defer {
+        if (prev_home) |p| {
+            _ = setenv("HOME", p, 1);
+        } else {
+            _ = unsetenv("HOME");
+        }
+    }
+
+    var services = [_]config.Config.Entry{
+        .{ .key = "postgres", .value = "16", .service_type = "postgres" },
+    };
+    var cfg = config.Config{
+        .project_name = "qf012",
+        .runtimes = &.{},
+        .services = &services,
+    };
+    _ = &cfg;
+
+    var buf: std.ArrayList(u8) = .empty;
+    defer buf.deinit(testing.allocator);
+    var aw: std.Io.Writer.Allocating = .fromArrayList(testing.allocator, &buf);
+
+    const outcome = try service.up(testing.allocator, cfg, &aw.writer);
+    buf = aw.toArrayList();
+
+    // Skipped immediately (uninstalled) — never started, never readiness-gated,
+    // so the 30s-per-service hang can't occur. Skips are not failures.
+    try testing.expectEqual(@as(usize, 1), outcome.skipped);
+    try testing.expectEqual(@as(usize, 0), outcome.started);
+    try testing.expectEqual(@as(usize, 0), outcome.failed);
+    try testing.expect(std.mem.indexOf(u8, buf.items, "not installed") != null);
+}
+
+// QF-012: a runtimes-only / empty-service project brings nothing "up" and
+// reports zero failures (so `rawenv up` exits 0).
+test "up with no services yields a zero-failure outcome" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+    const config = @import("config");
+    var cfg = config.Config{
+        .project_name = "empty",
+        .runtimes = &.{},
+        .services = &.{},
+    };
+    _ = &cfg;
+
+    var buf: std.ArrayList(u8) = .empty;
+    defer buf.deinit(testing.allocator);
+    var aw: std.Io.Writer.Allocating = .fromArrayList(testing.allocator, &buf);
+    const outcome = try service.up(testing.allocator, cfg, &aw.writer);
+    buf = aw.toArrayList();
+
+    try testing.expectEqual(@as(usize, 0), outcome.failed);
+    try testing.expectEqual(@as(usize, 0), outcome.started);
+    try testing.expectEqual(@as(usize, 0), outcome.skipped);
+}
+
+
+test "isProjectApp: explicit app flag wins" {
+    const config = @import("config");
+    const entry = config.Config.Entry{ .key = "app", .value = "1", .service_type = "app", .app = true };
+    try testing.expect(service.isProjectApp(entry));
+}
+
+test "isProjectApp: inferred from depends_on + non-installable base type" {
+    const config = @import("config");
+    const deps = [_][]const u8{ "postgres", "redis" };
+    const entry = config.Config.Entry{
+        .key = "app",
+        .value = "latest",
+        .service_type = "app",
+        .depends_on = &deps,
+    };
+    try testing.expect(service.isProjectApp(entry));
+}
+
+test "isProjectApp: installable services are never the app" {
+    const config = @import("config");
+    // Even with depends_on, a known installable package is an external service.
+    const deps = [_][]const u8{"redis"};
+    const pg = config.Config.Entry{ .key = "postgres", .value = "16", .service_type = "postgres", .depends_on = &deps };
+    try testing.expect(!service.isProjectApp(pg));
+
+    const redis = config.Config.Entry{ .key = "redis", .value = "7", .service_type = "redis" };
+    try testing.expect(!service.isProjectApp(redis));
+}
+
+test "isProjectApp: a bare unknown entry without deps is not flagged" {
+    const config = @import("config");
+    // Without an explicit flag or depends_on, we don't guess.
+    const entry = config.Config.Entry{ .key = "app", .value = "1", .service_type = "app" };
+    try testing.expect(!service.isProjectApp(entry));
+}
+
+test "listServices marks the project app" {
+    const config = @import("config");
+    const input =
+        \\name = "myapp"
+        \\
+        \\[services.postgres]
+        \\version = "16"
+        \\
+        \\[services.app]
+        \\version = "1"
+        \\depends_on = ["postgres"]
+    ;
+    var cfg = try config.parse(testing.allocator, input);
+    defer config.deinit(testing.allocator, &cfg);
+
+    const services = try service.listServices(testing.allocator, cfg);
+    defer service.freeServices(testing.allocator, services);
+
+    try testing.expectEqual(2, services.len);
+    try testing.expectEqualStrings("postgres", services[0].name);
+    try testing.expect(!services[0].is_app);
+    try testing.expectEqualStrings("app", services[1].name);
+    try testing.expect(services[1].is_app);
 }

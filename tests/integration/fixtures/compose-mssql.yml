@@ -1,0 +1,18 @@
+# MSSQL (azure-sql-edge) docker-compose fixture used by E2E-102.
+# Mirrors the qwik-fullstack exploratory project (EXPLORE-030 / QF-002): SQL
+# Server ships as the lightweight `azure-sql-edge` image under the
+# mcr.microsoft.com registry. The importer must recognise it and emit a
+# [services.mssql] section alongside redis.
+version: "3.8"
+services:
+  mssql:
+    image: 'mcr.microsoft.com/azure-sql-edge:latest'
+    ports:
+      - "1433:1433"
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Str0ng!Passw0rd"
+  cache:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"

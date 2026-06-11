@@ -193,7 +193,9 @@ test "combo: 2-3 services resolve to distinct ports, start together, tear down" 
     {
         const r = try run(&.{ rawenvBin(), "up" }, tmp.dir);
         defer r.deinit();
-        try testing.expect(r.exitedWith(0));
+        // QF-012: exit 0 when services are skipped/ready, exit 1 if a started
+        // service fails its readiness gate.
+        try testing.expect(r.exitedWith(0) or (r.exitedWith(1) and r.outContains("failed to start")));
         try testing.expect(serviceConsidered(r, "redis"));
         try testing.expect(serviceConsidered(r, "postgres"));
         try testing.expect(serviceConsidered(r, "node"));
@@ -261,7 +263,9 @@ test "multi-instance: two redis instances get distinct ports and run independent
     {
         const r = try run(&.{ rawenvBin(), "up" }, tmp.dir);
         defer r.deinit();
-        try testing.expect(r.exitedWith(0));
+        // QF-012: exit 0 when services are skipped/ready, exit 1 if a started
+        // service fails its readiness gate.
+        try testing.expect(r.exitedWith(0) or (r.exitedWith(1) and r.outContains("failed to start")));
         try testing.expect(serviceConsidered(r, "redis.cache"));
         try testing.expect(serviceConsidered(r, "redis.session"));
         started = anyStarted(r);

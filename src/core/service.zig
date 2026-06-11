@@ -68,7 +68,25 @@ pub const ServiceInfo = struct {
     status: ServiceStatus,
     data_dir: []const u8,
     health: config.Config.HealthCheck = .{},
+    /// True when this is the project's own application (see `isProjectApp`)
+    /// rather than an installable upstream service. The app is never routed
+    /// through the package resolver/installer.
+    is_app: bool = false,
 };
+
+/// True when a service entry represents the project's *own application* rather
+/// than an installable upstream service (postgres, redis, …). The project app
+/// has no downloadable artifact, so it must never be passed to the package
+/// resolver/installer (`rawenv add`), nor reported as a "missing binary".
+///
+/// An entry is treated as the project app when either:
+///   * it is explicitly marked `app = true` in rawenv.toml, or
+///   * it declares `depends_on` but its base type is not an installable
+///     package — e.g. `[services.app]` with `depends_on = ["postgres"]`.
+pub fn isProjectApp(entry: config.Config.Entry) bool {
+    if (entry.app) return true;
+    return entry.depends_on.len > 0 and !resolver.isKnownPackage(entry.baseType());
+}
 /// Outcome of a readiness probe for a single service.
 pub const HealthResult = enum {
     /// Service accepted a connection (TCP) or returned HTTP 200 within timeout.
@@ -79,6 +97,29 @@ pub const HealthResult = enum {
     failed,
     /// Health checking was explicitly disabled for the service.
     skipped,
+};
+
+/// Outcome of attempting to launch a single service process.
+pub const StartResult = enum {
+    /// The service process was launched successfully.
+    started,
+    /// The launch attempt failed (bad binary, service manager rejected it, …).
+    failed,
+    /// Service management is not supported on this platform (e.g. Windows).
+    unsupported,
+};
+
+/// Aggregate result of `up` so the caller can pick an exit code. A non-zero
+/// `failed` count means at least one configured service could not be brought
+/// up (start failure or readiness timeout); the caller should exit non-zero.
+pub const UpOutcome = struct {
+    /// Services that started and passed their readiness gate.
+    started: usize = 0,
+    /// Services that failed to start or never became ready.
+    failed: usize = 0,
+    /// Services intentionally not started (uninstalled, user-managed app,
+    /// unsupported platform). These do not count as failures.
+    skipped: usize = 0,
 };
 
 /// Sleep for `ms` milliseconds using poll(2) with no descriptors. Avoids
@@ -195,11 +236,24 @@ pub fn buildBinPath(allocator: std.mem.Allocator, home: []const u8) ![]const u8 
     return std.fs.path.join(allocator, &.{ home, ".rawenv", "bin" });
 }
 
-/// Default port for known services
+/// Default (preferred) port for a known service base type.
+///
+/// Used as the starting point for auto-allocation when a service has no
+/// explicit `port` and no published host port from a compose import. Every
+/// recognised service maps to its canonical port so the allocator never falls
+/// back to the generic 1024 base — a service without a published port still
+/// gets a meaningful, conflict-checked port (e.g. mysql → 3306, not 1024).
 pub fn defaultPort(name: []const u8) u16 {
     if (std.mem.eql(u8, name, "postgresql") or std.mem.eql(u8, name, "postgres")) return 5432;
-    if (std.mem.eql(u8, name, "redis")) return 6379;
+    if (std.mem.eql(u8, name, "redis") or std.mem.eql(u8, name, "valkey")) return 6379;
+    if (std.mem.eql(u8, name, "mysql")) return 3306;
+    if (std.mem.eql(u8, name, "mariadb")) return 3306;
+    if (std.mem.eql(u8, name, "mongodb") or std.mem.eql(u8, name, "mongo")) return 27017;
+    if (std.mem.eql(u8, name, "meilisearch")) return 7700;
+    if (std.mem.eql(u8, name, "mssql")) return 1433;
     if (std.mem.eql(u8, name, "node")) return 3000;
+    if (std.mem.eql(u8, name, "python")) return 8000;
+    if (std.mem.eql(u8, name, "php")) return 8000;
     return 0;
 }
 
@@ -245,8 +299,13 @@ pub const PortAllocator = struct {
 
     /// Claim a free port starting at `preferred`, skipping already-claimed and
     /// OS-bound ports. Returns 0 if none available.
+    ///
+    /// When `preferred` is 0 (an unrecognised service with no published port)
+    /// the scan starts in the IANA dynamic/ephemeral range rather than at 1024,
+    /// so auto-allocated ports are always meaningful (never 0 or the privileged
+    /// 1024 fallback).
     pub fn claim(self: *PortAllocator, preferred: u16) !u16 {
-        var p: u16 = if (preferred == 0) 1024 else preferred;
+        var p: u16 = if (preferred == 0) 49152 else preferred;
         while (p < 65535) : (p += 1) {
             if (self.used.contains(p)) continue;
             if (!isPortFree(p)) continue;
@@ -564,10 +623,10 @@ pub fn stopServiceLinux(allocator: std.mem.Allocator, name: []const u8) !void {
 
 /// Start a service (platform-dispatched). Data is stored in an isolated,
 /// per-project directory: ~/.rawenv/data/{project-name-hash}/{name}
-pub fn startService(allocator: std.mem.Allocator, project: []const u8, name: []const u8, version: []const u8, stdout: anytype) !void {
+pub fn startService(allocator: std.mem.Allocator, project: []const u8, name: []const u8, version: []const u8, stdout: anytype) !StartResult {
     const home = getHome() orelse {
         try stdout.writeAll("Error: HOME not set\n");
-        return;
+        return .failed;
     };
 
     const store_path = try buildStorePath(allocator, home, name, version);
@@ -583,20 +642,20 @@ pub fn startService(allocator: std.mem.Allocator, project: []const u8, name: []c
             try stdout.writeAll("  ✗ ");
             try stdout.writeAll(name);
             try stdout.writeAll(" failed to start\n");
-            return;
+            return .failed;
         };
     } else if (comptime builtin.os.tag == .linux) {
         startServiceLinux(allocator, name, binary_path, data_dir) catch {
             try stdout.writeAll("  ✗ ");
             try stdout.writeAll(name);
             try stdout.writeAll(" failed to start\n");
-            return;
+            return .failed;
         };
     } else {
         try stdout.writeAll("  ⚠ ");
         try stdout.writeAll(name);
         try stdout.writeAll(" — service management not supported on Windows\n");
-        return;
+        return .unsupported;
     }
 
     try stdout.writeAll("  ▶ ");
@@ -604,6 +663,7 @@ pub fn startService(allocator: std.mem.Allocator, project: []const u8, name: []c
     try stdout.writeAll("@");
     try stdout.writeAll(version);
     try stdout.writeAll(" started\n");
+    return .started;
 }
 
 /// Stop a service (platform-dispatched). On both platforms the OS service
@@ -661,6 +721,7 @@ pub fn listServices(allocator: std.mem.Allocator, cfg: config.Config) ![]Service
             .status = .stopped,
             .data_dir = data_dir,
             .health = svc.health,
+            .is_app = isProjectApp(svc),
         });
     }
     return list_arr.toOwnedSlice(allocator);
@@ -684,6 +745,89 @@ pub fn removeProjectData(allocator: std.mem.Allocator, project: []const u8) !boo
     // Absolute path: runCommand uses execve which does not search PATH.
     const exit_code = runCommand(allocator, &.{ "/bin/rm", "-rf", root }) catch return false;
     return exit_code == 0 and !accessPath(allocator, root);
+}
+
+/// Remove the network artifacts `rawenv up` generates for a project:
+///   * the Caddyfile at `~/.rawenv/proxy/<project>.Caddyfile`, and
+///   * the per-project TLS cert directory `~/.rawenv/certs/<project>/`
+///     (cert + key PEMs).
+///
+/// Best-effort and idempotent — a missing artifact is not an error. Returns
+/// true when at least one artifact existed and was successfully removed. The
+/// `/etc/hosts` DNS block is cleaned up separately (it requires privilege).
+/// No-op (returns false) on Windows, when HOME is unset, or for an empty
+/// project name.
+pub fn removeNetworkArtifacts(allocator: std.mem.Allocator, project: []const u8) bool {
+    if (comptime builtin.os.tag == .windows) return false;
+    if (project.len == 0) return false;
+    const home = getHome() orelse return false;
+    var removed = false;
+
+    // 1. Generated Caddyfile (unprivileged path — no sudo needed).
+    if (std.fmt.allocPrint(allocator, "{s}/.rawenv/proxy/{s}.Caddyfile", .{ home, project })) |caddy| {
+        defer allocator.free(caddy);
+        if (accessPath(allocator, caddy)) {
+            const code = runCommand(allocator, &.{ "/bin/rm", "-f", caddy }) catch 1;
+            if (code == 0 and !accessPath(allocator, caddy)) removed = true;
+        }
+    } else |_| {}
+
+    // 2. Per-project TLS cert directory (matches tls.certDir layout).
+    if (std.fmt.allocPrint(allocator, "{s}/.rawenv/certs/{s}", .{ home, project })) |certs| {
+        defer allocator.free(certs);
+        if (accessPath(allocator, certs)) {
+            const code = runCommand(allocator, &.{ "/bin/rm", "-rf", certs }) catch 1;
+            if (code == 0 and !accessPath(allocator, certs)) removed = true;
+        }
+    } else |_| {}
+
+    return removed;
+}
+
+/// Machine-wide uninstall cleanup (E2E-109). Removes every rawenv artifact:
+///   - Stops and removes all rawenv-managed OS services. On macOS this unloads
+///     and deletes every `~/Library/LaunchAgents/com.rawenv.*.plist`; on Linux
+///     it stops+disables and deletes every `~/.config/systemd/user/rawenv-*.service`
+///     (followed by `daemon-reload`).
+///   - Recursively removes `~/.rawenv` (store, bin symlinks, data dirs).
+///
+/// Best-effort: individual failures are ignored so one stuck service can't
+/// block the rest of the teardown. Returns true when `~/.rawenv` no longer
+/// exists afterwards. No-op (returns false) on Windows or when HOME is unset.
+///
+/// The cleanup runs in a single `/bin/sh` invocation. `home` is passed as a
+/// positional argument (`$1`) rather than interpolated into the script body, so
+/// it is never re-parsed by the shell (no glob/word-splitting/injection issues).
+pub fn uninstallAll(allocator: std.mem.Allocator, home: []const u8) bool {
+    if (comptime builtin.os.tag == .windows) return false;
+
+    const script = if (comptime builtin.os.tag == .macos)
+        \\home="$1"
+        \\for f in "$home"/Library/LaunchAgents/com.rawenv.*.plist; do
+        \\  [ -e "$f" ] || continue
+        \\  launchctl unload "$f" 2>/dev/null || true
+        \\  rm -f "$f"
+        \\done
+        \\rm -rf "$home/.rawenv"
+    else
+        \\home="$1"
+        \\for f in "$home"/.config/systemd/user/rawenv-*.service; do
+        \\  [ -e "$f" ] || continue
+        \\  unit=$(basename "$f")
+        \\  systemctl --user stop "$unit" 2>/dev/null || true
+        \\  systemctl --user disable "$unit" 2>/dev/null || true
+        \\  rm -f "$f"
+        \\done
+        \\systemctl --user daemon-reload 2>/dev/null || true
+        \\rm -rf "$home/.rawenv"
+    ;
+
+    // argv[0]="/bin/sh", then "-c", script, then "sh" ($0) and home ($1).
+    _ = runCommand(allocator, &.{ "/bin/sh", "-c", script, "sh", home }) catch return false;
+
+    const root = std.fs.path.join(allocator, &.{ home, ".rawenv" }) catch return false;
+    defer allocator.free(root);
+    return !accessPath(allocator, root);
 }
 
 /// ---------------------------------------------------------------------------
@@ -896,10 +1040,11 @@ pub fn startOrder(allocator: std.mem.Allocator, services: []const config.Config.
 }
 
 /// Activate all configured runtimes by creating symlinks in ~/.rawenv/bin/
-pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !void {
+pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !UpOutcome {
+    var outcome: UpOutcome = .{};
     const home = getHome() orelse {
         try stdout.writeAll("Error: HOME not set\n");
-        return;
+        return outcome;
     };
 
     const bin_path = try buildBinPath(allocator, home);
@@ -962,20 +1107,46 @@ pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !vo
 
     for (order) |idx| {
         const svc = services[idx];
-        // Skip services whose runtime isn't installed yet — mirrors the runtime
-        // behavior above and avoids blocking on a readiness gate that can never
-        // pass.
+        // The project's own application has no upstream artifact to install or
+        // launch on its behalf — surface it as user-managed and move on rather
+        // than reporting a missing binary or routing it through the installer.
+        if (svc.is_app) {
+            try stdout.print("  {s} — your application (managed by you), skipping\n", .{svc.name});
+            outcome.skipped += 1;
+            continue;
+        }
+        // Skip services whose binary isn't installed yet. We check the actual
+        // executable (not just the store dir) so an uninstalled service is
+        // skipped immediately — we never launch it and then block on a
+        // readiness gate that can never pass (the 30s-per-service hang).
         const base = baseTypeOf(svc.name);
         const store_path = try buildStorePath(allocator, home, base, svc.version);
         defer allocator.free(store_path);
-        if (!accessPath(allocator, store_path)) {
-            try stdout.print("  {s}@{s} — not installed, skipping\n", .{ svc.name, svc.version });
+        const binary_path = try std.fs.path.join(allocator, &.{ store_path, "bin", base });
+        defer allocator.free(binary_path);
+        if (!accessPath(allocator, binary_path)) {
+            try stdout.print("  {s}@{s} — not installed, skipping (run `rawenv add {s}@{s}`)\n", .{ svc.name, svc.version, base, svc.version });
+            outcome.skipped += 1;
             continue;
         }
 
-        try startService(allocator, cfg.project_name, svc.name, svc.version, stdout);
-        try gateReadiness(allocator, svc, stdout);
+        switch (try startService(allocator, cfg.project_name, svc.name, svc.version, stdout)) {
+            .started => {
+                if (try gateReadiness(allocator, svc, stdout)) {
+                    outcome.started += 1;
+                } else {
+                    outcome.failed += 1;
+                }
+            },
+            // A launch failure has already printed ✗; don't gate readiness on a
+            // service that never started (avoids the per-service timeout block).
+            .failed => outcome.failed += 1,
+            // Platform can't manage services — not a failure, just unsupported.
+            .unsupported => outcome.skipped += 1,
+        }
     }
+
+    return outcome;
 }
 
 /// Stop all configured services in reverse dependency order — dependents are
@@ -1022,11 +1193,15 @@ pub fn baseTypeOf(name: []const u8) []const u8 {
 
 /// Resolve a service's probe strategy, poll until ready, print a clear status
 /// line, and stop the service if it never became ready (so nothing dangles).
-fn gateReadiness(allocator: std.mem.Allocator, svc: ServiceInfo, stdout: anytype) !void {
+fn gateReadiness(allocator: std.mem.Allocator, svc: ServiceInfo, stdout: anytype) !bool {
     var kind = svc.health.kind;
     const base = baseTypeOf(svc.name);
     if (kind == .auto) kind = defaultHealthKind(base);
-    if (kind == .none) return; // readiness gating disabled for this service
+    if (kind == .none) {
+        // Readiness gating disabled — a started service is considered up.
+        try stdout.print("    \u{2713} {s} started (health check disabled)\n", .{svc.name});
+        return true;
+    }
 
     const probe_port = if (svc.health.port != 0) svc.health.port else svc.port;
     const timeout = svc.health.timeout_secs;
@@ -1039,10 +1214,11 @@ fn gateReadiness(allocator: std.mem.Allocator, svc: ServiceInfo, stdout: anytype
         .skipped => {},
     }
 
-    if (result != .ready) {
-        // Surface failure and tear down so we don't leave a half-started service.
-        try stopService(allocator, svc.name, stdout);
-    }
+    if (result == .ready or result == .skipped) return true;
+
+    // Surface failure and tear down so we don't leave a half-started service.
+    try stopService(allocator, svc.name, stdout);
+    return false;
 }
 
 /// List configured runtimes/services with status
@@ -1059,7 +1235,8 @@ pub fn list(_: std.mem.Allocator, cfg: config.Config, stdout: anytype) !void {
         try printEntry(stdout, rt.key, rt.value, "installed");
     }
     for (cfg.services) |svc| {
-        try printEntry(stdout, svc.key, svc.value, "stopped");
+        const status: []const u8 = if (isProjectApp(svc)) "your app" else "stopped";
+        try printEntry(stdout, svc.key, svc.value, status);
     }
 }
 

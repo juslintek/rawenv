@@ -51,6 +51,13 @@ pub const Config = struct {
         /// `[services.X.env]` table. The outer array is owned and freed by
         /// `deinit`; the element strings borrow from the parsed input.
         env: []const EnvVar = &.{},
+        /// True when this entry is the project's *own application* rather than
+        /// an installable upstream service. Set explicitly via `app = true`
+        /// under `[services.X]`. The project app has no downloadable artifact,
+        /// so it must never be routed through the package resolver/installer
+        /// (`rawenv add`) nor warned about as a missing binary. See
+        /// `service.isProjectApp`, which also infers this for unmarked entries.
+        app: bool = false,
 
         /// Base service type: the part before the first '.', or the whole key.
         pub fn baseType(self: Entry) []const u8 {
@@ -178,6 +185,10 @@ pub fn parse(allocator: std.mem.Allocator, input: []const u8) !Config {
                     // depends_on = ["postgres", "redis"] — start-ordering hints.
                     if (last.depends_on.len > 0) allocator.free(last.depends_on);
                     last.depends_on = try parseStringArray(allocator, val_raw);
+                } else if (std.mem.eql(u8, key, "app")) {
+                    // app = true marks the project's own application — a
+                    // first-party service that rawenv must not try to install.
+                    last.app = std.mem.eql(u8, val_raw, "true");
                 }
             },
             .service_health => {
@@ -302,7 +313,7 @@ pub fn generate(allocator: std.mem.Allocator, project_name: []const u8, runtimes
     if (services.len > 0) {
         var needs_sections = false;
         for (services) |svc| {
-            if (svc.port != 0 or std.mem.indexOfScalar(u8, svc.key, '.') != null) needs_sections = true;
+            if (svc.port != 0 or svc.app or svc.depends_on.len > 0 or std.mem.indexOfScalar(u8, svc.key, '.') != null) needs_sections = true;
         }
         if (needs_sections) {
             for (services) |svc| {
@@ -313,6 +324,19 @@ pub fn generate(allocator: std.mem.Allocator, project_name: []const u8, runtimes
                 try buf.appendSlice(allocator, "\"\n");
                 if (svc.port != 0) {
                     try buf.print(allocator, "port = {d}\n", .{svc.port});
+                }
+                if (svc.depends_on.len > 0) {
+                    try buf.appendSlice(allocator, "depends_on = [");
+                    for (svc.depends_on, 0..) |dep, i| {
+                        if (i > 0) try buf.appendSlice(allocator, ", ");
+                        try buf.appendSlice(allocator, "\"");
+                        try buf.appendSlice(allocator, dep);
+                        try buf.appendSlice(allocator, "\"");
+                    }
+                    try buf.appendSlice(allocator, "]\n");
+                }
+                if (svc.app) {
+                    try buf.appendSlice(allocator, "app = true\n");
                 }
             }
         } else {

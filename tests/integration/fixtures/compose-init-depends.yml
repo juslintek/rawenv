@@ -1,0 +1,14 @@
+# depends_on fixture for the `rawenv init` path (QF-021).
+#
+# Unlike the import path, `init` tracks application runtimes (node, php, …) as
+# runtimes rather than services, so only edges *between detected services* can
+# be anchored in rawenv.toml. Here the cache depends on the database — both map
+# to rawenv service packages, so `init` must carry the edge into rawenv.toml as
+# `depends_on = ["postgresql"]` and `rawenv connections` must reconstruct it.
+services:
+  cache:
+    image: redis:7
+    depends_on:
+      - db
+  db:
+    image: postgres:16
