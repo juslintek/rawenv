@@ -26,13 +26,31 @@ struct AIChatView: View {
             HStack {
                 Text("🤖 AI Assistant").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.textPrimary)
                 Spacer()
-                Picker("", selection: $viewModel.selectedProvider) {
+                Picker("", selection: Binding(
+                    get: { viewModel.selectedProvider },
+                    set: { viewModel.setProvider($0) }
+                )) {
                     ForEach(viewModel.providers, id: \.self) { p in Text(p).tag(p) }
                 }
                 .frame(width: 200)
                 .accessibilityIdentifier("ai_provider_picker")
             }
             .padding(.horizontal, 16).padding(.vertical, 8)
+
+            // Honest, provider-aware privacy notice (AI-3): the chat sends
+            // prompts to the selected provider — it never claimed otherwise.
+            HStack(spacing: 6) {
+                Image(systemName: viewModel.isLocalProvider ? "lock.shield" : "arrow.up.right.circle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(viewModel.isLocalProvider ? Color.success : Color.warning)
+                Text(viewModel.privacyNotice)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.textMuted)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 6)
+            .accessibilityIdentifier("ai_privacy_notice")
 
             Divider().background(Color.border)
 
@@ -113,9 +131,7 @@ private struct MessageBubble: View {
     var body: some View {
         HStack {
             if isUser { Spacer(minLength: 60) }
-            Text(message.text)
-                .font(.system(size: 13))
-                .foregroundStyle(Color.textPrimary)
+            MarkdownMessageView(text: message.text)
                 .padding(10)
                 .background(isUser ? Color.accent.opacity(0.25) : Color.bgSecondary)
                 .clipShape(RoundedRectangle(cornerRadius: 8))

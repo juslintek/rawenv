@@ -1,4 +1,4 @@
-[38;5;141m> [0m[38;5;10mimport Foundation
+import Foundation
 import Combine
 import AppKit
 
@@ -55,4 +55,3 @@ public final class ConnectionsViewModel: ObservableObject {
         NSPasteboard.general.setString(str, forType: .string)
     }
 }
-[0m

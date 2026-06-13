@@ -75,7 +75,7 @@ public final class TunnelVM: ObservableObject {
         if let persisted = settingsStore.load() {
             net = persisted.network
         } else if let repository {
-            net = await repository.fetchSettings().network
+            net = (try? await repository.fetchSettings())?.network
         } else {
             net = nil
         }
