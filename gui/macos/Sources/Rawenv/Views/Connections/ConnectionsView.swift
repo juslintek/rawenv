@@ -12,7 +12,7 @@ struct ConnectionsView: View {
                 ForEach(Array(viewModel.connections.indices), id: \.self) { idx in
                     ConnectionCard(connection: viewModel.connections[idx], mode: Binding(
                         get: { viewModel.connectionModes[viewModel.connections[idx].envVar] ?? viewModel.connections[idx].mode },
-                        set: { viewModel.connectionModes[viewModel.connections[idx].envVar] = $0 }
+                        set: { viewModel.setMode($0, for: viewModel.connections[idx].envVar) }
                     ))
                 }
             }

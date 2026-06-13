@@ -178,7 +178,9 @@ public struct ContentView: View {
         case .deploy:
             DeployView(viewModel: DeployViewModel(repository: appState.repository, projectPath: appState.activeProject?.path, deployEngine: appState.deployEngine))
         case .tunnel:
-            TunnelView()
+            TunnelView(viewModel: TunnelVM(
+                commandRunner: { TunnelVM.runRawenvTunnel(port: $0) },
+                repository: appState.repository))
         case .projects:
             ProjectsView(
                 viewModel: ProjectsViewModel(repository: appState.repository),

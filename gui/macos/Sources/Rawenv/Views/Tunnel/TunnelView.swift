@@ -2,9 +2,15 @@ import SwiftUI
 
 struct TunnelView: View {
     @StateObject var viewModel: TunnelVM
+    @State private var copied = false
 
     init(viewModel: TunnelVM = TunnelVM()) {
         _viewModel = StateObject(wrappedValue: viewModel)
+    }
+
+    /// Human-readable label for a provider id (uppercases the SSH option).
+    private func providerLabel(_ id: String) -> String {
+        id == "ssh" ? "SSH" : id
     }
 
     var body: some View {
@@ -25,7 +31,7 @@ struct TunnelView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Provider").font(.system(size: 11)).foregroundStyle(Color.textMuted)
                             Picker("", selection: $viewModel.provider) {
-                                ForEach(["bore", "cloudflared", "ngrok", "rathole"], id: \.self) { Text($0).tag($0) }
+                                ForEach(TunnelVM.providers, id: \.self) { Text(providerLabel($0)).tag($0) }
                             }.frame(width: 130).accessibilityIdentifier("tunnel_provider_picker")
                         }
                         VStack(alignment: .leading, spacing: 2) {
@@ -36,7 +42,12 @@ struct TunnelView: View {
                         Spacer()
                         Button("Create Tunnel") { viewModel.createTunnel() }
                             .buttonStyle(.borderedProminent).controlSize(.regular)
+                            .disabled(!viewModel.portIsValid)
                             .accessibilityIdentifier("tunnel_create_button")
+                    }
+                    if let portError = viewModel.portError {
+                        Text(portError).font(.system(size: 11)).foregroundStyle(Color.error)
+                            .accessibilityIdentifier("tunnel_port_error")
                     }
                 }
                 .padding(14).cardStyle()
@@ -69,8 +80,19 @@ struct TunnelView: View {
                     .accessibilityIdentifier("tunnel_install_prompt")
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("SSH Command").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.textMuted)
-                    Text(viewModel.sshCommand)
+                    HStack {
+                        Text("Tunnel Command").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.textMuted)
+                        Spacer()
+                        Button(copied ? "Copied!" : "Copy") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(viewModel.command, forType: .string)
+                            copied = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+                        }
+                        .buttonStyle(.bordered).controlSize(.mini)
+                        .accessibilityIdentifier("tunnel_command_copy")
+                    }
+                    Text(viewModel.command)
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundStyle(Color.textPrimary)
                         .padding(10)
@@ -80,6 +102,22 @@ struct TunnelView: View {
                         .textSelection(.enabled)
                 }
                 .accessibilityIdentifier("tunnel_command")
+
+                // Real output from the last `rawenv tunnel <port>` run.
+                if let output = viewModel.lastOutput, !output.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Output").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.textMuted)
+                        Text(output)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(Color.textPrimary)
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.bgSecondary)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .textSelection(.enabled)
+                    }
+                    .accessibilityIdentifier("tunnel_output")
+                }
 
                 // Active tunnels
                 VStack(alignment: .leading, spacing: 10) {
@@ -108,5 +146,6 @@ struct TunnelView: View {
         }
         .background(Color.bgPrimary)
         .accessibilityIdentifier("tunnel_view")
+        .task { await viewModel.load() }
     }
 }

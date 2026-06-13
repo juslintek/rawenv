@@ -128,8 +128,56 @@ public final class DataStore: DataRepository, @unchecked Sendable {
         struct CLIConn: Decodable { let from: String; let to: String }
         do {
             let conns: [CLIConn] = try await cli.runJSON(["connections"], as: [CLIConn].self, cwd: projectPath)
-            return conns.map { Connection(envVar: $0.from, original: $0.to, local: "localhost", mode: "local", badge: "Local", proxy: nil, alternative: nil) }
+            // The reverse-proxy routes (`<host> -> localhost:<port>`) generated
+            // by `rawenv proxy`, used to surface a real proxy URL per connection.
+            let routes = await fetchProxyRoutes()
+            return conns.map { conn in
+                Connection(envVar: conn.from, original: conn.to, local: "localhost",
+                           mode: "local", badge: "Local",
+                           proxy: Self.proxyURL(for: conn.to, in: routes), alternative: nil)
+            }
         } catch { return [] }
+    }
+
+    /// Parse `rawenv proxy`'s Caddyfile output into a `host -> localPort` map.
+    /// Each route looks like:
+    ///
+    ///     myapp.test {
+    ///         reverse_proxy localhost:5432
+    ///     }
+    private func fetchProxyRoutes() async -> [String: Int] {
+        guard let output = try? await cli.run(["proxy"], cwd: projectPath) else { return [:] }
+        var routes: [String: Int] = [:]
+        var currentHost: String?
+        for raw in output.components(separatedBy: "\n") {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasSuffix("{") {
+                currentHost = String(line.dropLast()).trimmingCharacters(in: .whitespaces)
+            } else if line.hasPrefix("reverse_proxy"), let host = currentHost {
+                if let portToken = line.split(separator: ":").last,
+                   let port = Int(portToken.trimmingCharacters(in: .whitespaces)) {
+                    routes[host] = port
+                }
+            } else if line == "}" {
+                currentHost = nil
+            }
+        }
+        return routes
+    }
+
+    /// The local proxy endpoint that fronts a dependency service, derived from
+    /// the parsed `rawenv proxy` routes. Matches a route whose host equals or
+    /// contains the service name. Returns `nil` when no proxy route applies.
+    static func proxyURL(for service: String, in routes: [String: Int]) -> String? {
+        let key = service.lowercased()
+        guard !key.isEmpty else { return nil }
+        for (host, port) in routes {
+            let h = host.lowercased()
+            if h == key || h.hasPrefix("\(key).") || h.contains(key) {
+                return "localhost:\(port)"
+            }
+        }
+        return nil
     }
 
     public func fetchProjects() async -> [Project] {
