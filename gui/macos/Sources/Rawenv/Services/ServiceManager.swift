@@ -57,6 +57,20 @@ public final class ServiceManager: ObservableObject, @unchecked Sendable {
         }
     }
 
+    /// Activates the whole project via `rawenv up`, then refreshes to reflect
+    /// the real post-activation status. Backs the dashboard "Start All" button.
+    public func up() async {
+        await backend.up()
+        await refresh()
+    }
+
+    /// Stops the whole project via `rawenv down`, then refreshes to reflect the
+    /// real stopped status. Backs the dashboard "Stop" button.
+    public func down() async {
+        await backend.down()
+        await refresh()
+    }
+
     // MARK: - Async operations
 
     // These perform the real launchctl side effect and then re-read the

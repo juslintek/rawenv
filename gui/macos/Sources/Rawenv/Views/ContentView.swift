@@ -102,12 +102,22 @@ public struct ContentView: View {
                 // Start/Stop buttons
                 Section {
                     HStack(spacing: 8) {
-                        Button("▶ Start All") {}
-                            .buttonStyle(.bordered)
-                            .accessibilityIdentifier("start_all_btn")
-                        Button("⏹ Stop") {}
-                            .buttonStyle(.bordered)
-                            .accessibilityIdentifier("stop_all_btn")
+                        Button("▶ Start All") {
+                            Task {
+                                await appState.serviceManager.up()
+                                sidebarServices = await appState.repository.fetchServices()
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("start_all_btn")
+                        Button("⏹ Stop") {
+                            Task {
+                                await appState.serviceManager.down()
+                                sidebarServices = await appState.repository.fetchServices()
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("stop_all_btn")
                     }
                 }
 

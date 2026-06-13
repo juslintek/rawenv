@@ -66,6 +66,22 @@ final class FakeServiceBackend: ServiceBackend, @unchecked Sendable {
                               pid: nil, cpu: s.cpu, mem: s.mem, uptime: s.uptime,
                               status: "stopped", icon: s.icon)
     }
+
+    func up() async {
+        services = services.map { s in
+            Service(name: s.name, port: s.port, version: s.version,
+                    pid: 4242, cpu: s.cpu, mem: s.mem, uptime: s.uptime,
+                    status: "running", icon: s.icon)
+        }
+    }
+
+    func down() async {
+        services = services.map { s in
+            Service(name: s.name, port: s.port, version: s.version,
+                    pid: nil, cpu: s.cpu, mem: s.mem, uptime: s.uptime,
+                    status: "stopped", icon: s.icon)
+        }
+    }
 }
 
 /// Deterministic AI provider for unit tests — returns canned responses.

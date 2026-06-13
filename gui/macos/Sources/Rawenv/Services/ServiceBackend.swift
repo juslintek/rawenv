@@ -17,6 +17,10 @@ public protocol ServiceBackend: Sendable {
     func start(_ name: String) async
     /// Stops the named service via `launchctl`.
     func stop(_ name: String) async
+    /// Activates every configured service for the project via `rawenv up`.
+    func up() async
+    /// Stops every running service for the project via `rawenv down`.
+    func down() async
 }
 
 /// Production backend: lists services via the rawenv CLI and starts/stops them
@@ -46,6 +50,17 @@ public struct LaunchctlServiceBackend: ServiceBackend {
 
     public func stop(_ name: String) async {
         await launchctl("stop", name)
+    }
+
+    /// Runs `rawenv up` to activate all configured services. The authoritative
+    /// status is re-read via `list()` by the caller afterwards.
+    public func up() async {
+        _ = try? await cli.run(["up"])
+    }
+
+    /// Runs `rawenv down` to stop all running services.
+    public func down() async {
+        _ = try? await cli.run(["down"])
     }
 
     private func launchctl(_ action: String, _ name: String) async {

@@ -17,7 +17,9 @@ struct DashboardView: View {
             // Service list
             List(viewModel.services, selection: Binding(
                 get: { viewModel.selectedService },
-                set: { viewModel.selectedService = $0 }
+                set: { newValue in
+                    Task { await viewModel.selectService(newValue) }
+                }
             )) { service in
                 let isSelected = viewModel.selectedService == service
                 HStack(spacing: 10) {
@@ -30,14 +32,12 @@ struct DashboardView: View {
                             .foregroundStyle(isSelected ? Color.accentColor.opacity(0.8) : Color.textMuted)
                     }
                     Spacer()
-                    if let cpu = service.cpu {
-                        Text(cpu).font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(isSelected ? Color.accentColor.opacity(0.8) : Color.textMuted)
-                    }
-                    if let mem = service.mem {
-                        Text(mem).font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(isSelected ? Color.accentColor.opacity(0.8) : Color.textMuted)
-                    }
+                    Text(service.cpu ?? "—").font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(isSelected ? Color.accentColor.opacity(0.8) : Color.textMuted)
+                        .accessibilityIdentifier("service_cpu_\(service.name)")
+                    Text(service.mem ?? "—").font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(isSelected ? Color.accentColor.opacity(0.8) : Color.textMuted)
+                        .accessibilityIdentifier("service_mem_\(service.name)")
                     StatusDot(isRunning: service.status == "running")
                     Text(service.status).font(.caption)
                         .foregroundStyle(isSelected ? Color.accentColor.opacity(0.8) : Color.textMuted)
@@ -90,24 +90,44 @@ struct DashboardView: View {
     private var tabContent: some View {
         switch viewModel.selectedTab {
         case .logs:
-            List(viewModel.logs) { log in
-                HStack(spacing: 8) {
-                    Text(log.time)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(Color.textMuted)
-                    Text(log.msg)
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundStyle(logColor(log.level))
+            if viewModel.logs.isEmpty {
+                Text("No logs yet")
+                    .foregroundStyle(Color.textMuted)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityIdentifier("logs_empty")
+            } else {
+                List(viewModel.logs) { log in
+                    HStack(spacing: 8) {
+                        Text(log.time)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(Color.textMuted)
+                        Text(log.msg)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(logColor(log.level))
+                    }
                 }
+                .scrollContentBackground(.hidden)
+                .background(Color.bgPrimary)
+                .accessibilityIdentifier("logs_list")
             }
-            .scrollContentBackground(.hidden)
-            .background(Color.bgPrimary)
-            .accessibilityIdentifier("logs_list")
         case .config:
-            Text("Configuration")
-                .foregroundStyle(Color.textPrimary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if viewModel.config.isEmpty {
+                Text("No configuration")
+                    .foregroundStyle(Color.textMuted)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityIdentifier("config_empty")
+            } else {
+                ScrollView {
+                    Text(viewModel.config)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(Color.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                        .padding(12)
+                }
+                .background(Color.bgPrimary)
                 .accessibilityIdentifier("config_tab")
+            }
         case .connection:
             Text("Connection Info")
                 .foregroundStyle(Color.textPrimary)
@@ -136,12 +156,14 @@ struct DashboardView: View {
 
     private var totalCPU: String {
         let values = viewModel.services.compactMap { $0.cpu }.compactMap { Double($0.replacingOccurrences(of: "%", with: "")) }
+        guard !values.isEmpty else { return "—" }
         let sum = values.reduce(0, +)
         return String(format: "%.0f%%", sum)
     }
 
     private var totalMem: String {
         let values = viewModel.services.compactMap { $0.mem }.compactMap { Double($0.replacingOccurrences(of: " MB", with: "").replacingOccurrences(of: "MB", with: "")) }
+        guard !values.isEmpty else { return "—" }
         let sum = values.reduce(0, +)
         return String(format: "%.0f MB", sum)
     }
