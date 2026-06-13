@@ -6,6 +6,80 @@ fn getHome() ?[]const u8 {
     return std.posix.getenv("HOME");
 }
 
+/// Fork+exec a command detached (does not wait). Uses absolute paths in
+/// `argv[0]`. Safe to call from a Cocoa process because the child execs
+/// immediately. Mirrors the fork/execve pattern used elsewhere in the tree.
+fn menuBarSpawnDetached(argv: []const []const u8) void {
+    if (comptime builtin.os.tag != .macos) return;
+    const a = std.heap.page_allocator;
+    const argv_z = a.alloc(?[*:0]const u8, argv.len + 1) catch return;
+    defer a.free(argv_z);
+    var built: usize = 0;
+    for (argv, 0..) |arg, i| {
+        argv_z[i] = (a.dupeZ(u8, arg) catch break).ptr;
+        built = i + 1;
+    }
+    if (built != argv.len) {
+        for (argv_z[0..built]) |p| if (p) |pp| a.free(std.mem.sliceTo(pp, 0));
+        return;
+    }
+    argv_z[argv.len] = null;
+    defer for (argv_z[0..argv.len]) |p| if (p) |pp| a.free(std.mem.sliceTo(pp, 0));
+
+    const pid = std.c.fork();
+    if (pid < 0) return;
+    if (pid == 0) {
+        const sentinel: [*:null]const ?[*:0]const u8 = @ptrCast(argv_z.ptr);
+        _ = std.c.execve(argv_z[0].?, sentinel, std.c.environ);
+        std.c._exit(127);
+    }
+}
+
+/// ObjC target/action handlers for the native menu bar's "Open TUI" / "Open
+/// GUI" items (MB-3). Registered as methods on a runtime-created NSObject
+/// subclass so the items perform real launches instead of being inert
+/// placeholders. IMPs are plain C callbacks and cannot capture state.
+const MenuBarHandlers = struct {
+    fn openTUI(_: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque) callconv(.c) void {
+        // A TUI needs a tty, so open a new Terminal window running `rawenv tui`.
+        // Terminal runs the command through the user's login shell, so `rawenv`
+        // resolves via PATH.
+        menuBarSpawnDetached(&.{
+            "/usr/bin/osascript",
+            "-e",
+            "tell application \"Terminal\" to do script \"rawenv tui\"",
+        });
+    }
+
+    fn openGUI(_: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque) callconv(.c) void {
+        // The GUI is its own windowed process; launch it via `env` so `rawenv`
+        // is resolved through PATH without needing an absolute path.
+        menuBarSpawnDetached(&.{ "/usr/bin/env", "rawenv", "gui" });
+    }
+};
+
+/// Best-effort check whether a rawenv-managed service is currently running,
+/// by querying launchd for its `com.rawenv.{name}` label. Used by the native
+/// menu bar so service rows and the header reflect real state rather than a
+/// hardcoded `0` (MB-2). Returns false on any error.
+fn menuBarServiceRunning(name: []const u8) bool {
+    if (comptime builtin.os.tag != .macos) return false;
+    var label_buf: [256]u8 = undefined;
+    const label = std.fmt.bufPrintZ(&label_buf, "com.rawenv.{s}", .{name}) catch return false;
+    var argv = [_:null]?[*:0]const u8{ "/bin/launchctl", "list", label.ptr };
+    const pid = std.c.fork();
+    if (pid < 0) return false;
+    if (pid == 0) {
+        const sentinel: [*:null]const ?[*:0]const u8 = @ptrCast(&argv);
+        _ = std.c.execve("/bin/launchctl", sentinel, std.c.environ);
+        std.c._exit(127);
+    }
+    var status: c_int = 0;
+    _ = std.c.waitpid(pid, &status, 0);
+    const code: u8 = @intCast(@as(c_uint, @bitCast(status)) >> 8 & 0xff);
+    return code == 0;
+}
+
 pub fn getDataDir(allocator: std.mem.Allocator) ![]const u8 {
     const home = getHome() orelse return error.HomeNotSet;
     return std.fs.path.join(allocator, &.{ home, "Library", "Application Support", "rawenv" });
@@ -214,10 +288,14 @@ pub fn runMenuBar(allocator: std.mem.Allocator) !void {
     const menu = msgSend(msgSend(cls.get("NSMenu"), sel.get("alloc")), sel.get("init"));
     const empty = nsString.from("");
 
-    // Header: "rawenv — N/M running"
+    // Header: "rawenv — N/M running" with the live running count (MB-2).
     const total = services.items.len;
+    var running_count: usize = 0;
+    for (services.items) |svc| {
+        if (menuBarServiceRunning(svc.name)) running_count += 1;
+    }
     var header_buf: [64]u8 = undefined;
-    const header_text = std.fmt.bufPrintZ(&header_buf, "rawenv \xe2\x80\x94 0/{d} running", .{total}) catch "rawenv";
+    const header_text = std.fmt.bufPrintZ(&header_buf, "rawenv \xe2\x80\x94 {d}/{d} running", .{ running_count, total }) catch "rawenv";
     const header_item = msgSend_3id(menu, sel.get("addItemWithTitle:action:keyEquivalent:"), nsString.from(header_text), null, empty);
     _ = msgSend_id(header_item, sel.get("setEnabled:"), @as(id, @ptrFromInt(0))); // disabled
 
@@ -226,10 +304,14 @@ pub fn runMenuBar(allocator: std.mem.Allocator) !void {
     const sep1 = msgSend(sep_class, sel.get("separatorItem"));
     _ = msgSend_id(menu, sel.get("addItem:"), sep1);
 
-    // Service entries
+    // Service entries — differentiated status glyph (● running / ○ stopped) and
+    // a trailing state word so rows are no longer an undifferentiated `●` (MB-2).
     for (services.items) |svc| {
-        var svc_buf: [128]u8 = undefined;
-        const svc_text = std.fmt.bufPrintZ(&svc_buf, "\xe2\x97\x8f {s}  v{s}", .{ svc.name, svc.version }) catch continue;
+        const is_running = menuBarServiceRunning(svc.name);
+        const glyph = if (is_running) "\xe2\x97\x8f" else "\xe2\x97\x8b"; // ● / ○
+        const state = if (is_running) "running" else "stopped";
+        var svc_buf: [160]u8 = undefined;
+        const svc_text = std.fmt.bufPrintZ(&svc_buf, "{s} {s}  v{s} \xc2\xb7 {s}", .{ glyph, svc.name, svc.version, state }) catch continue;
         _ = msgSend_3id(menu, sel.get("addItemWithTitle:action:keyEquivalent:"), nsString.from(svc_text), null, empty);
     }
 
@@ -237,9 +319,26 @@ pub fn runMenuBar(allocator: std.mem.Allocator) !void {
     const sep2 = msgSend(sep_class, sel.get("separatorItem"));
     _ = msgSend_id(menu, sel.get("addItem:"), sep2);
 
-    // Open TUI / Open GUI
-    _ = msgSend_3id(menu, sel.get("addItemWithTitle:action:keyEquivalent:"), nsString.from("Open TUI"), null, empty);
-    _ = msgSend_3id(menu, sel.get("addItemWithTitle:action:keyEquivalent:"), nsString.from("Open GUI"), null, empty);
+    // Open TUI / Open GUI — wired to a runtime-registered handler so they
+    // perform real launches rather than being inert placeholders (MB-3).
+    const NSObjectClass = cls.get("NSObject");
+    var handler_instance: id = null;
+    if (objc.objc_allocateClassPair(@ptrCast(NSObjectClass), "RawenvMenuBarHandler", 0)) |handler_class| {
+        const imp_tui: objc.IMP = @ptrCast(&MenuBarHandlers.openTUI);
+        const imp_gui: objc.IMP = @ptrCast(&MenuBarHandlers.openGUI);
+        _ = objc.class_addMethod(@ptrCast(handler_class), @ptrCast(sel.get("openTUI:")), imp_tui, "v@:@");
+        _ = objc.class_addMethod(@ptrCast(handler_class), @ptrCast(sel.get("openGUI:")), imp_gui, "v@:@");
+        objc.objc_registerClassPair(@ptrCast(handler_class));
+        handler_instance = msgSend(msgSend(@as(id, @ptrCast(handler_class)), sel.get("alloc")), sel.get("init"));
+    } else {
+        // Class already registered (re-entry): look it up.
+        handler_instance = msgSend(msgSend(cls.get("RawenvMenuBarHandler"), sel.get("alloc")), sel.get("init"));
+    }
+
+    const tui_item = msgSend_3id(menu, sel.get("addItemWithTitle:action:keyEquivalent:"), nsString.from("Open TUI"), sel.get("openTUI:"), empty);
+    _ = msgSend_id(tui_item, sel.get("setTarget:"), handler_instance);
+    const gui_item = msgSend_3id(menu, sel.get("addItemWithTitle:action:keyEquivalent:"), nsString.from("Open GUI"), sel.get("openGUI:"), empty);
+    _ = msgSend_id(gui_item, sel.get("setTarget:"), handler_instance);
 
     // Separator
     const sep3 = msgSend(sep_class, sel.get("separatorItem"));

@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(AppKit)
+import AppKit
+#endif
 
 public struct MenuBarView: View {
     @EnvironmentObject var appState: AppState
@@ -85,7 +88,10 @@ public struct MenuBarView: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("menubar_start_all")
 
-                Button(action: { appState.navigate(to: .dashboard) }) {
+                Button(action: {
+                    appState.navigate(to: .dashboard)
+                    MenuBarView.raiseMainWindow()
+                }) {
                     Text("Dashboard")
                         .font(.system(size: 11, weight: .medium))
                         .frame(maxWidth: .infinity)
@@ -114,5 +120,17 @@ public struct MenuBarView: View {
 
     private var runningCount: Int {
         appState.serviceManager.services.filter { $0.status == "running" }.count
+    }
+
+    /// Brings the app to the foreground and orders the main window front so the
+    /// dashboard becomes visible even if the window was hidden or minimized
+    /// (MB-1). On non-AppKit/test builds this is a safe no-op.
+    static func raiseMainWindow() {
+        #if canImport(AppKit)
+        NSApp.activate(ignoringOtherApps: true)
+        // Prefer the primary content window (skip the menu-bar extra popover).
+        let mainWindow = NSApp.windows.first { $0.canBecomeMain } ?? NSApp.windows.first
+        mainWindow?.makeKeyAndOrderFront(nil)
+        #endif
     }
 }

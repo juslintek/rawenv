@@ -6,21 +6,23 @@ struct AIChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Proactive suggestion banner
-            HStack(spacing: 8) {
-                Text("🤖")
-                Text("I detected PostgreSQL with 100 max_connections but only 3 active. Reduce to 20 to save ~40MB RAM?")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.textPrimary)
-                Spacer()
-                Button("Apply") { Task { viewModel.inputText = "optimize memory"; await viewModel.sendMessage() } }
-                    .buttonStyle(.borderedProminent).controlSize(.small)
-                Button("Dismiss") {}.buttonStyle(.bordered).controlSize(.small)
+            if viewModel.showProactiveBanner {
+                HStack(spacing: 8) {
+                    Text("🤖")
+                    Text("I detected PostgreSQL with 100 max_connections but only 3 active. Reduce to 20 to save ~40MB RAM?")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.textPrimary)
+                    Spacer()
+                    Button("Apply") { Task { viewModel.inputText = "optimize memory"; await viewModel.sendMessage() } }
+                        .buttonStyle(.borderedProminent).controlSize(.small)
+                    Button("Dismiss") { viewModel.dismissProactiveBanner() }.buttonStyle(.bordered).controlSize(.small)
+                }
+                .padding(10)
+                .background(Color.accent.opacity(0.1))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.accent.opacity(0.3)))
+                .padding(.horizontal, 16).padding(.top, 12)
+                .accessibilityIdentifier("ai_proactive_banner")
             }
-            .padding(10)
-            .background(Color.accent.opacity(0.1))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.accent.opacity(0.3)))
-            .padding(.horizontal, 16).padding(.top, 12)
-            .accessibilityIdentifier("ai_proactive_banner")
 
             // Header with provider selector
             HStack {

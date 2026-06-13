@@ -548,20 +548,6 @@ struct ProjectsView: View {
         .accessibilityIdentifier(id)
     }
 
-    private func secondaryButton(_ title: String, id: String) -> some View {
-        Button(action: {}) {
-            Text(title)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color.textMuted)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.bgTertiary)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(id)
-    }
-
     private func secondaryButtonAction(_ title: String, id: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)

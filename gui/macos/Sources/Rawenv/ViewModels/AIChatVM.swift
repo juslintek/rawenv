@@ -12,6 +12,9 @@ public final class AIChatViewModel: ObservableObject {
     ]
     /// Drives the chat history's loading / empty / error UI.
     @Published public var phase: LoadPhase = .idle
+    /// Controls visibility of the proactive optimization suggestion banner.
+    /// Tapping "Dismiss" hides it for the session (the banner is advisory).
+    @Published public var showProactiveBanner: Bool = true
 
     private let repository: DataRepository
     private let aiProvider: AIProvider
@@ -60,6 +63,12 @@ public final class AIChatViewModel: ObservableObject {
     public func setProvider(_ name: String) {
         selectedProvider = name
         aiProvider.selectProvider(name)
+    }
+
+    /// Hides the proactive suggestion banner. Wired to the banner's "Dismiss"
+    /// button so the control has a real effect rather than being a no-op.
+    public func dismissProactiveBanner() {
+        showProactiveBanner = false
     }
 
     public func sendMessage(override: String? = nil) async {
