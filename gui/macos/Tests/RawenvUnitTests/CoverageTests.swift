@@ -221,7 +221,7 @@ private func makeAppState() -> AppState {
     }
 
     @Test @MainActor func settingsVMPages() async {
-        let vm = SettingsViewModel(repository: TestDataRepository())
+        let vm = makeSettingsVM()
         await vm.load()
         #expect(vm.settings != nil)
         #expect(!vm.selectedProvider.isEmpty)

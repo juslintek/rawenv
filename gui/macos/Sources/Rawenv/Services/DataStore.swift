@@ -150,7 +150,13 @@ public final class DataStore: DataRepository, @unchecked Sendable {
             network: .init(localDomain: ".test", autoTls: true, proxyPort: 443, tunnelProvider: "bore", relayServer: "bore.pub"),
             cells: .init(enableByDefault: true, defaultMemoryLimit: "256MB", defaultCpuLimit: "1", networkIsolation: false),
             deploy: .init(provider: "Hetzner", sshKey: "~/.ssh/id_ed25519", terraformPath: "/usr/local/bin/terraform", ansiblePath: "/usr/local/bin/ansible", autoGenerate: false, containerRuntime: "podman", registry: "ghcr.io"),
-            ai: .init(provider: "groq", providers: ["groq", "cerebras", "ollama"], apiKey: "", ollamaEndpoint: "http://localhost:11434", proactiveSuggestions: true, autoApplySafeFixes: false, includeLogsInContext: true, maxContextSize: 4096, autonomyLevels: AIAutonomyLevel.allCases.map(\.rawValue), defaultAutonomy: "suggest-only"),
+            ai: .init(provider: "groq", providers: ["groq", "cerebras", "ollama"], apiKey: "", ollamaEndpoint: "http://localhost:11434", proactiveSuggestions: true, autoApplySafeFixes: false, includeLogsInContext: true, maxContextSize: 4096, autonomyLevels: AIAutonomyLevel.allCases.map(\.rawValue), defaultAutonomy: "suggest-only", autonomyByAction: [
+                "optimize": AIAutonomyLevel.suggestOnly.rawValue,
+                "restart": AIAutonomyLevel.confirmDangerous.rawValue,
+                "deploy": AIAutonomyLevel.confirmDangerous.rawValue,
+                "edit-config": AIAutonomyLevel.autoApplySafe.rawValue,
+                "delete": AIAutonomyLevel.confirmDangerous.rawValue,
+            ]),
             theme: .init(mode: "system", accentColor: "#6366f1", successColor: "#34d399", errorColor: "#f87171", warningColor: "#fbbf24", borderRadius: 8, fontSize: 13, sidebarWidth: 240)
         )
     }
