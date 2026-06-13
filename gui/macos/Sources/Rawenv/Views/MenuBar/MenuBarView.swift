@@ -1,10 +1,9 @@
 import SwiftUI
-#if canImport(AppKit)
-import AppKit
-#endif
 
 public struct MenuBarView: View {
     @EnvironmentObject var appState: AppState
+
+    private let actions = MenuBarActions()
 
     public init() {}
 
@@ -14,15 +13,16 @@ public struct MenuBarView: View {
             HStack {
                 Text("⚡ rawenv").font(.system(size: 15, weight: .bold))
                 Spacer()
-                Text("\(runningCount)/\(appState.serviceManager.services.count) running")
+                Text("\(runningCount)/\(serviceCount) running")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(runningCountColor)
+                    .accessibilityIdentifier("menubar_running_count")
             }
             .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 4)
 
             // Project name
             HStack(spacing: 4) {
-                Text(appState.activeProject?.name ?? "my-app")
+                Text(appState.activeProject?.name ?? "No project")
                     .font(.system(size: 13, weight: .medium))
                 Text("▾").font(.system(size: 11)).foregroundStyle(.secondary)
             }
@@ -42,7 +42,7 @@ public struct MenuBarView: View {
                             Text(service.name)
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(isOn ? .primary : .secondary)
-                            Text(":\(service.port) · \(isOn ? "\(service.mem ?? "") · \(service.uptime ?? "")" : "stopped")")
+                            Text(statusDetail(for: service))
                                 .font(.system(size: 10, design: .monospaced))
                                 .foregroundStyle(.secondary)
                         }
@@ -65,43 +65,42 @@ public struct MenuBarView: View {
                                 .animation(.easeInOut(duration: 0.15), value: isOn)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("menubar_service_toggle")
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel("\(service.name) \(isOn ? "stop" : "start")")
                     }
                     .padding(.horizontal, 14).padding(.vertical, 6)
                     .accessibilityIdentifier("menubar_service_\(service.name)")
                 }
             }
             .padding(.vertical, 4)
+            .accessibilityIdentifier("menubar_service_list")
 
             Divider()
 
             // Actions
-            HStack(spacing: 8) {
-                Button(action: { appState.serviceManager.startAll() }) {
-                    Text("▶ Start All")
-                        .font(.system(size: 11, weight: .medium))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 5)
-                        .background(Color.accentColor)
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 5))
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    actionButton("▶ Start All", filled: true,
+                                 id: "menubar_start_all") {
+                        appState.serviceManager.startAll()
+                    }
+                    actionButton("Dashboard", filled: false,
+                                 id: "menubar_open_dashboard") {
+                        appState.navigate(to: .dashboard)
+                        actions.openMainWindow()
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("menubar_start_all")
-
-                Button(action: {
-                    appState.navigate(to: .dashboard)
-                    MenuBarView.raiseMainWindow()
-                }) {
-                    Text("Dashboard")
-                        .font(.system(size: 11, weight: .medium))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 5)
-                        .background(Color.gray.opacity(0.2))
-                        .foregroundStyle(.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                HStack(spacing: 8) {
+                    actionButton("Open GUI", filled: false,
+                                 id: "menubar_open_gui") {
+                        actions.openMainWindow()
+                    }
+                    actionButton("Open TUI", filled: false,
+                                 id: "menubar_open_tui") {
+                        actions.openTUI()
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("menubar_open_dashboard")
             }
             .padding(.horizontal, 14).padding(.vertical, 8)
 
@@ -115,22 +114,53 @@ public struct MenuBarView: View {
                 .padding(.vertical, 6)
         }
         .frame(width: 300)
-        .accessibilityIdentifier("menubar_view")
+        .accessibilityIdentifier("menubar_popover")
     }
+
+    // MARK: - Subviews
+
+    private func actionButton(_ title: String, filled: Bool, id: String,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 5)
+                .background(filled ? Color.accentColor : Color.gray.opacity(0.2))
+                .foregroundStyle(filled ? Color.white : Color.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(id)
+    }
+
+    // MARK: - Derived state
+
+    private var serviceCount: Int { appState.serviceManager.services.count }
 
     private var runningCount: Int {
         appState.serviceManager.services.filter { $0.status == "running" }.count
     }
 
-    /// Brings the app to the foreground and orders the main window front so the
-    /// dashboard becomes visible even if the window was hidden or minimized
-    /// (MB-1). On non-AppKit/test builds this is a safe no-op.
-    static func raiseMainWindow() {
-        #if canImport(AppKit)
-        NSApp.activate(ignoringOtherApps: true)
-        // Prefer the primary content window (skip the menu-bar extra popover).
-        let mainWindow = NSApp.windows.first { $0.canBecomeMain } ?? NSApp.windows.first
-        mainWindow?.makeKeyAndOrderFront(nil)
-        #endif
+    /// Honest status colour: green only when every service is running, orange
+    /// when some are, and a muted secondary when none are (so "0/N" is never
+    /// shown in green).
+    private var runningCountColor: Color {
+        switch MenuBarActions.statusState(running: runningCount, total: serviceCount) {
+        case .allRunning: return .green
+        case .partial: return .orange
+        case .none: return .secondary
+        }
+    }
+
+    /// Build the per-service detail line, guarding against dangling " · "
+    /// separators when a running service reports no mem/uptime.
+    private func statusDetail(for service: Service) -> String {
+        guard service.status == "running" else { return ":\(service.port) · stopped" }
+        let parts = [service.mem, service.uptime]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+        guard !parts.isEmpty else { return ":\(service.port)" }
+        return ":\(service.port) · " + parts.joined(separator: " · ")
     }
 }

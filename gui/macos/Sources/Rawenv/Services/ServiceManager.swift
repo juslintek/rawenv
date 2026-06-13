@@ -12,7 +12,7 @@ public final class ServiceManager: ObservableObject, @unchecked Sendable {
 
     public init(repository: DataRepository, cli: RawenvCLI = RawenvCLI(),
                 backend: ServiceBackend? = nil) {
-        self.backend = backend ?? LaunchctlServiceBackend(cli: cli)
+        self.backend = backend ?? RawenvServiceBackend(cli: cli)
         Task { await loadInitial(repository: repository) }
     }
 
