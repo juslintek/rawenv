@@ -176,7 +176,7 @@ public struct ContentView: View {
         case .connections:
             ConnectionsView(viewModel: ConnectionsViewModel(repository: appState.repository))
         case .deploy:
-            DeployView(viewModel: DeployViewModel(repository: appState.repository, deployEngine: appState.deployEngine))
+            DeployView(viewModel: DeployViewModel(repository: appState.repository, projectPath: appState.activeProject?.path, deployEngine: appState.deployEngine))
         case .tunnel:
             TunnelView()
         case .projects:

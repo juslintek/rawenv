@@ -202,7 +202,7 @@ private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/ra
     @Test @MainActor func deployVMTabContent() async {
         let vm = DeployViewModel(repository: DataStore(cli: cli, projectPath: "\(testRoot)/myapp"))
         await vm.load()
-        for tab in DeployTab.allCases {
+        for tab in DeployViewTab.allCases {
             vm.selectedTab = tab
             _ = vm.currentContent
         }
