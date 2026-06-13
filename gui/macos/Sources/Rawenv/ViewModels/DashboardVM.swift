@@ -12,6 +12,8 @@ public final class DashboardViewModel: ObservableObject {
     @Published public var config: String = ""
     @Published public var selectedTab: DashboardTab = .logs
     @Published public var selectedService: Service?
+    /// Drives the service list's loading / empty / error UI.
+    @Published public var phase: LoadPhase = .idle
 
     private let repository: DataRepository
 
@@ -20,9 +22,17 @@ public final class DashboardViewModel: ObservableObject {
     }
 
     public func load() async {
-        services = await repository.fetchServices()
-        selectedService = services.first
-        await refreshDetail()
+        phase = .loading
+        do {
+            services = try await repository.fetchServices()
+            selectedService = services.first
+            await refreshDetail()
+            phase = services.isEmpty ? .empty : .loaded
+        } catch {
+            services = []
+            selectedService = nil
+            phase = .failed(error.localizedDescription)
+        }
     }
 
     /// Selects a service and refreshes the per-service tab content (logs,
@@ -34,9 +44,12 @@ public final class DashboardViewModel: ObservableObject {
     }
 
     /// Reloads the logs and config scoped to the currently selected service.
+    /// Failures here degrade to empty content — the per-tab empty states cover
+    /// the "no logs / no config" case, while the screen-level error state is
+    /// reserved for a failed service fetch.
     public func refreshDetail() async {
-        logs = await repository.fetchLogs(service: selectedService?.name)
-        config = await repository.fetchConfig(service: selectedService?.name)
+        logs = (try? await repository.fetchLogs(service: selectedService?.name)) ?? []
+        config = (try? await repository.fetchConfig(service: selectedService?.name)) ?? ""
     }
 
     public var runningCount: Int { services.filter { $0.status == "running" }.count }

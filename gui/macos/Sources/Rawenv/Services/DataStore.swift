@@ -12,38 +12,41 @@ public final class DataStore: DataRepository, @unchecked Sendable {
         self.stats = stats
     }
 
-    public func fetchServices() async -> [Service] {
+    public func fetchServices() async throws -> [Service] {
         struct CLIService: Decodable { let name: String; let version: String; let status: String; let port: Int }
-        do {
-            let services: [CLIService] = try await cli.runJSON(["services", "ls"], as: [CLIService].self, cwd: projectPath)
-            var result: [Service] = []
-            for s in services {
-                // Running services get live CPU/memory from the OS; stopped
-                // services have no process, so cpu/mem stay nil and the UI
-                // shows an em dash rather than a misleading zero.
-                var cpu: String?
-                var mem: String?
-                if s.status == "running", let usage = await stats.stats(forPort: s.port) {
-                    cpu = usage.cpu
-                    mem = usage.mem
-                }
-                result.append(Service(name: s.name, port: s.port, version: s.version,
-                                      pid: nil, cpu: cpu, mem: mem, uptime: nil,
-                                      status: s.status, icon: iconFor(s.name)))
+        // A thrown CLI error propagates so the UI can show an error state with
+        // the real message. A successful run that lists nothing returns an
+        // empty array, which the UI renders as an empty state with guidance.
+        let services: [CLIService] = try await cli.runJSON(["services", "ls"], as: [CLIService].self, cwd: projectPath)
+        var result: [Service] = []
+        for s in services {
+            // Running services get live CPU/memory from the OS; stopped
+            // services have no process, so cpu/mem stay nil and the UI
+            // shows an em dash rather than a misleading zero.
+            var cpu: String?
+            var mem: String?
+            if s.status == "running", let usage = await stats.stats(forPort: s.port) {
+                cpu = usage.cpu
+                mem = usage.mem
             }
-            return result
-        } catch { return [] }
+            result.append(Service(name: s.name, port: s.port, version: s.version,
+                                  pid: nil, cpu: cpu, mem: mem, uptime: nil,
+                                  status: s.status, icon: iconFor(s.name)))
+        }
+        return result
     }
 
-    public func fetchLogs() async -> [LogEntry] {
-        await fetchLogs(service: nil)
+    public func fetchLogs() async throws -> [LogEntry] {
+        try await fetchLogs(service: nil)
     }
 
     /// Tails the service's log file under `~/.rawenv/logs`. When `service` is
     /// given, only that service's `<name>.log` is read; otherwise the newest
     /// log file is used. Returns an empty array when no logs exist yet.
-    public func fetchLogs(service: String?) async -> [LogEntry] {
+    public func fetchLogs(service: String?) async throws -> [LogEntry] {
         let logDir = "\(NSHomeDirectory())/.rawenv/logs"
+        // A missing log directory is a legitimate empty state (no logs yet),
+        // not a failure — return an empty array rather than throwing.
         guard let files = try? FileManager.default.contentsOfDirectory(atPath: logDir) else { return [] }
 
         let targets: [String]
@@ -71,8 +74,9 @@ public final class DataStore: DataRepository, @unchecked Sendable {
         return entries
     }
 
-    public func fetchConfig(service: String?) async -> String {
+    public func fetchConfig(service: String?) async throws -> String {
         let path = "\(projectPath)/rawenv.toml"
+        // No rawenv.toml is an empty state ("run rawenv init"), not a failure.
         guard let toml = try? String(contentsOfFile: path, encoding: .utf8) else { return "" }
         guard let service else { return toml }
         return Self.configSection(for: service, in: toml)
@@ -124,27 +128,23 @@ public final class DataStore: DataRepository, @unchecked Sendable {
         return toml
     }
 
-    public func fetchConnections() async -> [Connection] {
+    public func fetchConnections() async throws -> [Connection] {
         struct CLIConn: Decodable { let from: String; let to: String }
-        do {
-            let conns: [CLIConn] = try await cli.runJSON(["connections"], as: [CLIConn].self, cwd: projectPath)
-            return conns.map { Connection(envVar: $0.from, original: $0.to, local: "localhost", mode: "local", badge: "Local", proxy: nil, alternative: nil) }
-        } catch { return [] }
+        let conns: [CLIConn] = try await cli.runJSON(["connections"], as: [CLIConn].self, cwd: projectPath)
+        return conns.map { Connection(envVar: $0.from, original: $0.to, local: "localhost", mode: "local", badge: "Local", proxy: nil, alternative: nil) }
     }
 
-    public func fetchProjects() async -> [Project] {
+    public func fetchProjects() async throws -> [Project] {
         struct CLIProject: Decodable { let path: String; let stack: String; let has_rawenv: Bool }
-        do {
-            let projects: [CLIProject] = try await cli.runJSON(["discover"], as: [CLIProject].self)
-            return projects.map { p in
-                let name = URL(fileURLWithPath: p.path).lastPathComponent
-                let stacks = p.stack.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-                return Project(name: name, path: p.path, stack: stacks, deps: "\(stacks.count) deps")
-            }
-        } catch { return [] }
+        let projects: [CLIProject] = try await cli.runJSON(["discover"], as: [CLIProject].self)
+        return projects.map { p in
+            let name = URL(fileURLWithPath: p.path).lastPathComponent
+            let stacks = p.stack.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            return Project(name: name, path: p.path, stack: stacks, deps: "\(stacks.count) deps")
+        }
     }
 
-    public func fetchSettings() async -> AppSettings {
+    public func fetchSettings() async throws -> AppSettings {
         AppSettings(
             general: .init(storeLocation: "\(NSHomeDirectory())/.rawenv/store", autoStartServices: false, autoDetectProjects: true, launchAtLogin: false, fileWatcher: false, scanPaths: ["~/Projects", "~/Developer"]),
             network: .init(localDomain: ".test", autoTls: true, proxyPort: 443, tunnelProvider: "bore", relayServer: "bore.pub"),
@@ -161,28 +161,32 @@ public final class DataStore: DataRepository, @unchecked Sendable {
         )
     }
 
-    public func fetchDeployConfig() async -> DeployConfig {
-        await fetchDeployConfig(projectPath: nil)
+    public func fetchDeployConfig() async throws -> DeployConfig {
+        try await fetchDeployConfig(projectPath: nil)
     }
 
-    public func fetchDeployConfig(projectPath: String?) async -> DeployConfig {
+    public func fetchDeployConfig(projectPath: String?) async throws -> DeployConfig {
         // Prefer the explicitly-requested (active) project path; fall back to
         // the path this store was constructed with.
         let path = projectPath ?? self.projectPath
-        do {
-            let output = try await cli.run(["deploy", "generate", "--json"], cwd: path)
-            if let data = output.data(using: .utf8), let config = try? JSONDecoder().decode(DeployConfig.self, from: data) { return config }
-        } catch {}
-        return DeployConfig(terraform: "", ansible: "", containerfile: "")
+        // A CLI error propagates (error state). A run that produces output we
+        // can't decode is a genuine failure too, so surface it rather than
+        // silently showing an empty config.
+        let output = try await cli.run(["deploy", "generate", "--json"], cwd: path)
+        guard let data = output.data(using: .utf8),
+              let config = try? JSONDecoder().decode(DeployConfig.self, from: data) else {
+            throw RepositoryError("Could not read deployment config for \(path). Run `rawenv init` to generate one.")
+        }
+        return config
     }
 
-    public func fetchInstallerConfig() async -> InstallerConfig {
+    public func fetchInstallerConfig() async throws -> InstallerConfig {
         InstallerConfig(steps: ["welcome", "install", "done"], platforms: [
             "macos": PlatformInfo(icon: "🍎", name: "macOS", detail: "Apple Silicon", serviceManager: "launchd", isolation: "Seatbelt", dns: "dnsmasq")
         ])
     }
 
-    public func fetchAIMessages() async -> [AIMessage] { [] }
+    public func fetchAIMessages() async throws -> [AIMessage] { [] }
 
     private func iconFor(_ name: String) -> String {
         switch name.lowercased() {

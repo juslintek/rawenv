@@ -10,6 +10,8 @@ public final class AIChatViewModel: ObservableObject {
     @Published public var providers: [String] = [
         "Groq (Llama 3.3 70B)", "Cerebras (Qwen3 235B)", "Cloudflare Workers AI", "Ollama (local)"
     ]
+    /// Drives the chat history's loading / empty / error UI.
+    @Published public var phase: LoadPhase = .idle
 
     private let repository: DataRepository
     private let aiProvider: AIProvider
@@ -20,11 +22,18 @@ public final class AIChatViewModel: ObservableObject {
     }
 
     public func load() async {
-        messages = await repository.fetchAIMessages()
-        let settings = await repository.fetchSettings()
-        if !settings.ai.providers.isEmpty {
-            providers = settings.ai.providers
-            selectedProvider = settings.ai.provider
+        phase = .loading
+        do {
+            messages = try await repository.fetchAIMessages()
+            let settings = try await repository.fetchSettings()
+            if !settings.ai.providers.isEmpty {
+                providers = settings.ai.providers
+                selectedProvider = settings.ai.provider
+            }
+            phase = messages.isEmpty ? .empty : .loaded
+        } catch {
+            messages = []
+            phase = .failed(error.localizedDescription)
         }
     }
 

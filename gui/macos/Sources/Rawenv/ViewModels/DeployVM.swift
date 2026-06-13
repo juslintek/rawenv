@@ -24,6 +24,8 @@ public final class DeployViewModel: ObservableObject {
     @Published public var config: DeployConfig?
     /// Transient feedback from the last Save action (success path list or error).
     @Published public var saveMessage: String?
+    /// Drives the deploy config's loading / empty / error UI.
+    @Published public var phase: LoadPhase = .idle
     public let deployEngine: DeployEngine
 
     private let repository: DataRepository
@@ -38,7 +40,16 @@ public final class DeployViewModel: ObservableObject {
     }
 
     public func load() async {
-        config = await repository.fetchDeployConfig(projectPath: projectPath)
+        phase = .loading
+        do {
+            let cfg = try await repository.fetchDeployConfig(projectPath: projectPath)
+            config = cfg
+            let hasContent = !cfg.terraform.isEmpty || !cfg.ansible.isEmpty || !cfg.containerfile.isEmpty
+            phase = hasContent ? .loaded : .empty
+        } catch {
+            config = nil
+            phase = .failed(error.localizedDescription)
+        }
     }
 
     public var currentContent: String {

@@ -75,15 +75,15 @@ private let projectDir = "/Volumes/Projects/rawenv"
 @Suite(.serialized) struct E2E_DataStore {
     let store = DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir)
 
-    @Test func fetchServices() async {
-        let services = await store.fetchServices()
+    @Test func fetchServices() async throws {
+        let services = try await store.fetchServices()
         #expect(!services.isEmpty)
         #expect(services.allSatisfy { !$0.name.isEmpty && $0.port > 0 })
     }
 
     @Test func fetchLogs() async {
-        let logs = await store.fetchLogs()
-        // May be empty if no log dir exists — that's valid real behavior
+        // A failed/empty fetch is valid real behavior; tolerate both.
+        let logs = (try? await store.fetchLogs()) ?? []
         for log in logs {
             #expect(!log.time.isEmpty)
             #expect(!log.msg.isEmpty)
@@ -91,22 +91,22 @@ private let projectDir = "/Volumes/Projects/rawenv"
     }
 
     @Test func fetchConnections() async {
-        let conns = await store.fetchConnections()
+        let conns = (try? await store.fetchConnections()) ?? []
         for c in conns {
             #expect(!c.envVar.isEmpty)
         }
     }
 
     @Test func fetchProjects() async {
-        let projects = await store.fetchProjects()
+        let projects = (try? await store.fetchProjects()) ?? []
         for p in projects {
             #expect(!p.name.isEmpty)
             #expect(!p.path.isEmpty)
         }
     }
 
-    @Test func fetchSettings() async {
-        let s = await store.fetchSettings()
+    @Test func fetchSettings() async throws {
+        let s = try await store.fetchSettings()
         #expect(!s.general.storeLocation.isEmpty)
         #expect(s.network.localDomain == ".test")
         #expect(s.cells.defaultMemoryLimit == "256MB")
@@ -114,20 +114,21 @@ private let projectDir = "/Volumes/Projects/rawenv"
     }
 
     @Test func fetchDeployConfig() async {
-        let config = await store.fetchDeployConfig()
-        // May be empty if deploy generate fails — valid
+        // May fail if `deploy generate` errors — valid; fall back to empty.
+        let config = (try? await store.fetchDeployConfig())
+            ?? DeployConfig(terraform: "", ansible: "", containerfile: "")
         _ = config.terraform
     }
 
-    @Test func fetchInstallerConfig() async {
-        let config = await store.fetchInstallerConfig()
+    @Test func fetchInstallerConfig() async throws {
+        let config = try await store.fetchInstallerConfig()
         #expect(!config.steps.isEmpty)
         #expect(config.platforms["macos"] != nil)
         #expect(config.platforms["macos"]?.serviceManager == "launchd")
     }
 
-    @Test func fetchAIMessages() async {
-        let msgs = await store.fetchAIMessages()
+    @Test func fetchAIMessages() async throws {
+        let msgs = try await store.fetchAIMessages()
         #expect(msgs.isEmpty) // Real store starts with no history
     }
 }

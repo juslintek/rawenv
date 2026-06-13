@@ -30,16 +30,41 @@ struct DeployView: View {
             Divider().background(Color.border)
 
             // Content
-            switch activeTab {
-            case .terraform: CodeTab(viewModel: viewModel, title: "Terraform", code: viewModel.config?.terraform ?? "")
-            case .ansible: CodeTab(viewModel: viewModel, title: "Ansible", code: viewModel.config?.ansible ?? "")
-            case .containerfile: CodeTab(viewModel: viewModel, title: "Containerfile", code: viewModel.config?.containerfile ?? "")
-            case .deployLog: DeployLogTab(viewModel: viewModel)
+            if activeTab == .deployLog {
+                DeployLogTab(viewModel: viewModel)
+            } else {
+                deployCodeContent
             }
         }
         .background(Color.bgPrimary)
         .task { await viewModel.load() }
         .accessibilityIdentifier("deploy_view")
+    }
+
+    /// The Terraform / Ansible / Containerfile tabs are gated by the config
+    /// fetch phase: a spinner while generating, an error state with the real
+    /// message + Retry on failure, and the generated code (or CodeTab's own
+    /// empty guidance) once loaded.
+    @ViewBuilder
+    private var deployCodeContent: some View {
+        switch viewModel.phase {
+        case .idle, .loading:
+            LoadingStateView("Generating deployment config…", idPrefix: "deploy")
+        case let .failed(message):
+            ErrorStateView(
+                title: "Couldn't generate deployment config",
+                message: message,
+                idPrefix: "deploy") {
+                    Task { await viewModel.load() }
+                }
+        case .empty, .loaded:
+            switch activeTab {
+            case .terraform: CodeTab(viewModel: viewModel, title: "Terraform", code: viewModel.config?.terraform ?? "")
+            case .ansible: CodeTab(viewModel: viewModel, title: "Ansible", code: viewModel.config?.ansible ?? "")
+            case .containerfile: CodeTab(viewModel: viewModel, title: "Containerfile", code: viewModel.config?.containerfile ?? "")
+            case .deployLog: EmptyView()
+            }
+        }
     }
 }
 

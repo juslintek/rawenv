@@ -22,7 +22,7 @@ public final class ServiceManager: ObservableObject, @unchecked Sendable {
         do {
             services = try await backend.list()
         } catch {
-            services = await repository.fetchServices()
+            services = (try? await repository.fetchServices()) ?? []
         }
     }
 

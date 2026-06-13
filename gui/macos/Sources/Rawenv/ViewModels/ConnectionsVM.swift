@@ -6,6 +6,8 @@ import AppKit
 public final class ConnectionsViewModel: ObservableObject {
     @Published public var connections: [Connection] = []
     @Published public var connectionModes: [String: String] = [:]
+    /// Drives the connections list's loading / empty / error UI.
+    @Published public var phase: LoadPhase = .idle
 
     private let repository: DataRepository
 
@@ -14,9 +16,16 @@ public final class ConnectionsViewModel: ObservableObject {
     }
 
     public func load() async {
-        connections = await repository.fetchConnections()
-        for conn in connections {
-            connectionModes[conn.envVar] = conn.mode
+        phase = .loading
+        do {
+            connections = try await repository.fetchConnections()
+            for conn in connections {
+                connectionModes[conn.envVar] = conn.mode
+            }
+            phase = connections.isEmpty ? .empty : .loaded
+        } catch {
+            connections = []
+            phase = .failed(error.localizedDescription)
         }
     }
 

@@ -4,6 +4,33 @@ struct ConnectionsView: View {
     @StateObject var viewModel: ConnectionsViewModel
 
     var body: some View {
+        Group {
+            switch viewModel.phase {
+            case .idle, .loading:
+                LoadingStateView("Loading connections…", idPrefix: "connections")
+            case .empty:
+                EmptyStateView(
+                    icon: "link.badge.plus",
+                    title: "No connections detected",
+                    guidance: "No connections found in your .env or config files. Run rawenv init to detect services, then add connection strings to your .env.",
+                    idPrefix: "connections")
+            case let .failed(message):
+                ErrorStateView(
+                    title: "Couldn't load connections",
+                    message: message,
+                    idPrefix: "connections") {
+                        Task { await viewModel.load() }
+                    }
+            case .loaded:
+                loadedContent
+            }
+        }
+        .background(Color.bgPrimary)
+        .task { await viewModel.load() }
+        .accessibilityIdentifier("connections_view")
+    }
+
+    private var loadedContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("🔌 Connection Manager").font(.system(size: 18, weight: .semibold)).foregroundStyle(Color.textPrimary)
@@ -19,8 +46,6 @@ struct ConnectionsView: View {
             .padding(20)
         }
         .background(Color.bgPrimary)
-        .task { await viewModel.load() }
-        .accessibilityIdentifier("connections_view")
     }
 }
 

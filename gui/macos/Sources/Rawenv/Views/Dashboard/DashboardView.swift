@@ -5,6 +5,33 @@ struct DashboardView: View {
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
+        Group {
+            switch viewModel.phase {
+            case .idle, .loading:
+                LoadingStateView("Loading services…", idPrefix: "dashboard")
+            case .empty:
+                EmptyStateView(
+                    icon: "square.stack.3d.up.slash",
+                    title: "No services running",
+                    guidance: "No services configured. Run rawenv init to get started.",
+                    idPrefix: "dashboard")
+            case let .failed(message):
+                ErrorStateView(
+                    title: "Couldn't load services",
+                    message: message,
+                    idPrefix: "dashboard") {
+                        Task { await viewModel.load() }
+                    }
+            case .loaded:
+                loadedContent
+            }
+        }
+        .background(Color.bgPrimary)
+        .task { await viewModel.load() }
+        .accessibilityIdentifier("dashboard_view")
+    }
+
+    private var loadedContent: some View {
         VStack(spacing: 0) {
             // Stats cards row
             HStack(spacing: 12) {
@@ -82,8 +109,6 @@ struct DashboardView: View {
                 .background(Color.bgPrimary)
         }
         .background(Color.bgPrimary)
-        .task { await viewModel.load() }
-        .accessibilityIdentifier("dashboard_view")
     }
 
     @ViewBuilder
@@ -91,10 +116,11 @@ struct DashboardView: View {
         switch viewModel.selectedTab {
         case .logs:
             if viewModel.logs.isEmpty {
-                Text("No logs yet")
-                    .foregroundStyle(Color.textMuted)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityIdentifier("logs_empty")
+                EmptyStateView(
+                    icon: "doc.text.magnifyingglass",
+                    title: "No logs yet",
+                    guidance: "Logs appear here once \(viewModel.selectedService?.name ?? "this service") starts producing output. Start the service to see activity.",
+                    idPrefix: "logs")
             } else {
                 List(viewModel.logs) { log in
                     HStack(spacing: 8) {
@@ -112,10 +138,11 @@ struct DashboardView: View {
             }
         case .config:
             if viewModel.config.isEmpty {
-                Text("No configuration")
-                    .foregroundStyle(Color.textMuted)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityIdentifier("config_empty")
+                EmptyStateView(
+                    icon: "doc.badge.gearshape",
+                    title: "No configuration",
+                    guidance: "No rawenv.toml found for this project. Run rawenv init to generate one.",
+                    idPrefix: "config")
             } else {
                 ScrollView {
                     Text(viewModel.config)

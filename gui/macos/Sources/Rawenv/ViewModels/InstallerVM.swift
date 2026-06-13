@@ -5,6 +5,8 @@ import Combine
 public final class InstallerViewModel: ObservableObject {
     @Published public var currentStep: Int = 0
     @Published public var config: InstallerConfig?
+    /// Drives the installer's loading / error UI.
+    @Published public var phase: LoadPhase = .idle
 
     private let repository: DataRepository
 
@@ -13,7 +15,15 @@ public final class InstallerViewModel: ObservableObject {
     }
 
     public func load() async {
-        config = await repository.fetchInstallerConfig()
+        phase = .loading
+        do {
+            let cfg = try await repository.fetchInstallerConfig()
+            config = cfg
+            phase = cfg.steps.isEmpty ? .empty : .loaded
+        } catch {
+            config = nil
+            phase = .failed(error.localizedDescription)
+        }
     }
 
     public func nextStep() {

@@ -181,16 +181,16 @@ private struct StubStatsProvider: ProcessStatsProvider {
         try toml.write(to: dir.appendingPathComponent("rawenv.toml"), atomically: true, encoding: .utf8)
 
         let store = DataStore(projectPath: dir.path, stats: StubStatsProvider())
-        let config = await store.fetchConfig(service: "postgresql")
+        let config = try await store.fetchConfig(service: "postgresql")
         #expect(config == "[services]\npostgresql = \"16\"")
 
-        let full = await store.fetchConfig(service: nil)
+        let full = try await store.fetchConfig(service: nil)
         #expect(full == toml)
     }
 
-    @Test func fetchConfigReturnsEmptyWhenNoToml() async {
+    @Test func fetchConfigReturnsEmptyWhenNoToml() async throws {
         let store = DataStore(projectPath: "/nonexistent-rawenv-path-xyz", stats: StubStatsProvider())
-        let config = await store.fetchConfig(service: "postgresql")
+        let config = try await store.fetchConfig(service: "postgresql")
         #expect(config.isEmpty)
     }
 }
