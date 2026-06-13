@@ -61,6 +61,23 @@ public final class RawenvCLI: Sendable {
         return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
+    /// Run the CLI and return both the exit status and the combined stdout/stderr
+    /// output, so callers can surface real success/failure (e.g. `rawenv add`).
+    public func runStatus(_ args: [String], cwd: String? = nil) async throws -> (status: Int32, output: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: binaryPath)
+        process.arguments = args
+        if let cwd { process.currentDirectoryURL = URL(fileURLWithPath: cwd) }
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        try process.run()
+        process.waitUntilExit()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return (process.terminationStatus, output)
+    }
+
     public func runJSON<T: Decodable>(_ args: [String], as type: T.Type, cwd: String? = nil) async throws -> T {
         let output = try await run(args + ["--json"], cwd: cwd)
         guard let data = output.data(using: .utf8) else { throw CLIError.invalidOutput }
