@@ -250,12 +250,26 @@ private func makeAppStateInstalledNoSetup() -> AppState {
 
 // MARK: - InstallerView
 
+@MainActor
+private func makeOfflineInstallerEngine() -> InstallerEngine {
+    let tmp = FileManager.default.temporaryDirectory
+        .appendingPathComponent("rawenv-install-\(UUID().uuidString)")
+    try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+    let binDir = tmp.appendingPathComponent("bin").path
+    let rcFile = tmp.appendingPathComponent(".zshrc").path
+    let source = tmp.appendingPathComponent("rawenv-src").path
+    let script = "#!/bin/sh\necho \"rawenv 0.2.0-test\"\n"
+    try? script.write(toFile: source, atomically: true, encoding: .utf8)
+    try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: source)
+    return InstallerEngine(binDirectory: binDir, rcFile: rcFile, sourceBinary: source)
+}
+
 @Suite struct InstallerViewTests {
     @Test @MainActor func installerWelcome() {
         let state = makeAppStateNotInstalled()
         let tm = ThemeManager()
         let vm = InstallerViewModel(repository: TestDataRepository())
-        let engine = InstallerEngine()
+        let engine = makeOfflineInstallerEngine()
         render(InstallerView(viewModel: vm, engine: engine).environmentObject(state).environmentObject(tm))
     }
 
@@ -263,7 +277,7 @@ private func makeAppStateInstalledNoSetup() -> AppState {
         let state = makeAppStateNotInstalled()
         let tm = ThemeManager()
         let vm = InstallerViewModel(repository: TestDataRepository())
-        let engine = InstallerEngine()
+        let engine = makeOfflineInstallerEngine()
         engine.startInstall()
         render(InstallerView(viewModel: vm, engine: engine).environmentObject(state).environmentObject(tm))
     }
@@ -272,9 +286,26 @@ private func makeAppStateInstalledNoSetup() -> AppState {
         let state = makeAppStateNotInstalled()
         let tm = ThemeManager()
         let vm = InstallerViewModel(repository: TestDataRepository())
-        let engine = InstallerEngine()
+        let engine = makeOfflineInstallerEngine()
         engine.startInstall()
-        try? await Task.sleep(nanoseconds: 4_000_000_000)
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        render(InstallerView(viewModel: vm, engine: engine).environmentObject(state).environmentObject(tm))
+    }
+
+    @Test @MainActor func installerError() async {
+        let state = makeAppStateNotInstalled()
+        let tm = ThemeManager()
+        let vm = InstallerViewModel(repository: TestDataRepository())
+        // Point at a missing source so the engine lands in the error state.
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("rawenv-install-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let engine = InstallerEngine(
+            binDirectory: tmp.appendingPathComponent("bin").path,
+            rcFile: tmp.appendingPathComponent(".zshrc").path,
+            sourceBinary: tmp.appendingPathComponent("missing").path)
+        engine.startInstall()
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
         render(InstallerView(viewModel: vm, engine: engine).environmentObject(state).environmentObject(tm))
     }
 }

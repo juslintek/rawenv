@@ -153,7 +153,7 @@ private func binaryPath() -> String {
     @Test @MainActor func initialState() {
         let engine = RealInstallerEngine()
         #expect(engine.state == .welcome)
-        #expect(engine.steps.count == 6)
+        #expect(engine.steps.count == 4)
     }
 }
 

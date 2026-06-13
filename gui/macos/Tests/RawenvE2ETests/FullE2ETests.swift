@@ -5,6 +5,18 @@ import AppKit
 
 // Full E2E tests — no mocks, all real implementations.
 
+/// Poll a condition on the main actor until it holds or a generous timeout
+/// elapses. Used to make InstallFlowVM walkthrough tests tolerant of slow
+/// scheduling under heavy parallel test load.
+@MainActor
+private func pollUntilInstallFlow(timeoutMs: Int = 20_000, _ condition: @MainActor () -> Bool) async {
+    var elapsed = 0
+    while elapsed < timeoutMs && !condition() {
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        elapsed += 50
+    }
+}
+
 private func binaryPath() -> String {
     let candidates = [
         "/Volumes/Projects/rawenv/zig-out/bin/rawenv",
@@ -274,7 +286,7 @@ private let projectDir = "/Volumes/Projects/rawenv"
         #expect(engine.state == .welcome)
         #expect(engine.currentStep == 0)
         #expect(engine.progress == 0)
-        #expect(engine.steps.count == 6)
+        #expect(engine.steps.count == 4)
     }
 
     // Note: startInstall() actually downloads a binary — skip in CI
@@ -344,7 +356,7 @@ private let projectDir = "/Volumes/Projects/rawenv"
     @Test @MainActor func installCompletes() async {
         let vm = InstallFlowVM()
         vm.startInstall(name: "Redis", action: "migrate")
-        try? await Task.sleep(nanoseconds: 4_000_000_000)
+        await pollUntilInstallFlow { vm.isComplete }
         #expect(vm.isComplete == true)
         #expect(vm.isInstalling == false)
         #expect(vm.installedRuntimes.contains("Redis"))
@@ -353,7 +365,7 @@ private let projectDir = "/Volumes/Projects/rawenv"
     @Test @MainActor func installFailsForSQLServer() async {
         let vm = InstallFlowVM()
         vm.startInstall(name: "SQL Server", action: "install")
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        await pollUntilInstallFlow { vm.error != nil }
         #expect(vm.error != nil)
         #expect(vm.isInstalling == false)
     }
@@ -361,7 +373,7 @@ private let projectDir = "/Volumes/Projects/rawenv"
     @Test @MainActor func retry() async {
         let vm = InstallFlowVM()
         vm.startInstall(name: "SQL Server", action: "install")
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        await pollUntilInstallFlow { vm.error != nil }
         vm.retry()
         #expect(vm.isInstalling == true)
         #expect(vm.error == nil)

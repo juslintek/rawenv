@@ -14,6 +14,7 @@ struct InstallerView: View {
                     case .welcome: welcomeContent
                     case .installing: installingContent
                     case .done: doneContent
+                    case .error: errorContent
                     }
                 }
                 .padding(32)
@@ -50,6 +51,7 @@ struct InstallerView: View {
         switch engine.state {
         case .welcome: return 0
         case .installing: return 1
+        case .error: return 1
         case .done: return 2
         }
     }
@@ -68,7 +70,7 @@ struct InstallerView: View {
                 .multilineTextAlignment(.center)
             stepDots
             VStack(alignment: .leading, spacing: 12) {
-                detectItem(icon: "🍎", name: "macOS detected", detail: "Apple Silicon · macOS 26")
+                detectItem(icon: "🍎", name: "macOS detected", detail: engine.systemDescription)
                 detectItem(icon: "📦", name: "Binary", detail: "~10MB → ~/.rawenv/bin/rawenv")
                 detectItem(icon: "⚙️", name: "Service manager", detail: "launchd integration")
                 detectItem(icon: "🔒", name: "Isolation", detail: "Seatbelt sandbox")
@@ -150,16 +152,41 @@ struct InstallerView: View {
             }
             HStack {
                 Spacer()
-                if engine.state == .done {
-                    accentButton("Launch rawenv →", id: "installer_launch_btn") {}
-                } else {
-                    Text("Installing...")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.textMuted)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Color.bgTertiary)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                Text("Installing...")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.textMuted)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.bgTertiary)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+        }
+    }
+
+    // MARK: - Error
+
+    private var errorContent: some View {
+        VStack(spacing: 20) {
+            Text("✕")
+                .font(.system(size: 48, weight: .bold))
+                .foregroundStyle(Color.error)
+            Text("Installation failed")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundStyle(Color.textPrimary)
+            stepDots
+            Text(engine.errorMessage ?? "An unknown error occurred during installation.")
+                .font(.system(size: 13))
+                .foregroundStyle(Color.error)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(Color.error.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .accessibilityIdentifier("installer_error_message")
+            HStack {
+                Spacer()
+                accentButton("Retry →", id: "installer_retry_btn") {
+                    engine.retry()
                 }
             }
         }
@@ -184,7 +211,8 @@ struct InstallerView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("$ rawenv --version")
                     .foregroundStyle(Color.textMuted)
-                Text("rawenv 0.1.0 (macOS arm64)")
+                Text(engine.verifiedVersion.map { $0.hasPrefix("rawenv") ? $0 : "rawenv \($0)" }
+                        ?? "rawenv (installed)")
                     .foregroundStyle(Color.textPrimary)
                 Text("$ rawenv")
                     .foregroundStyle(Color.textMuted)

@@ -2,6 +2,17 @@ import Testing
 import SwiftUI
 @testable import RawenvLib
 
+/// Poll a condition on the main actor until it holds or a generous timeout
+/// elapses — keeps InstallFlowVM walkthrough tests robust under parallel load.
+@MainActor
+private func pollUntilInstallFlow(timeoutMs: Int = 20_000, _ condition: @MainActor () -> Bool) async {
+    var elapsed = 0
+    while elapsed < timeoutMs && !condition() {
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        elapsed += 50
+    }
+}
+
 @Suite struct InstallFlowVMTests {
     @Test @MainActor func initialState() {
         let vm = InstallFlowVM()
@@ -48,7 +59,7 @@ import SwiftUI
     @Test @MainActor func installCompletes() async {
         let vm = InstallFlowVM()
         vm.startInstall(name: "Redis", action: "migrate")
-        try? await Task.sleep(nanoseconds: 5_000_000_000)
+        await pollUntilInstallFlow { vm.isComplete }
         #expect(vm.isComplete == true)
         #expect(vm.isInstalling == false)
         #expect(vm.installedRuntimes.contains("Redis"))
@@ -58,16 +69,16 @@ import SwiftUI
     @Test @MainActor func installFailsForSQLServer() async {
         let vm = InstallFlowVM()
         vm.startInstall(name: "SQL Server", action: "install")
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        await pollUntilInstallFlow { vm.error != nil }
         #expect(vm.error != nil)
-        #expect(vm.error!.contains("Port"))
+        #expect(vm.error?.contains("Port") == true)
         #expect(vm.isInstalling == false)
     }
 
     @Test @MainActor func retry() async {
         let vm = InstallFlowVM()
         vm.startInstall(name: "SQL Server", action: "install")
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        await pollUntilInstallFlow { vm.error != nil }
         #expect(vm.error != nil)
         vm.retry()
         #expect(vm.isInstalling == true)
