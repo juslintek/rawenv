@@ -62,8 +62,15 @@ public final class DataStore: DataRepository, @unchecked Sendable {
     }
 
     public func fetchDeployConfig() async -> DeployConfig {
+        await fetchDeployConfig(projectPath: nil)
+    }
+
+    public func fetchDeployConfig(projectPath: String?) async -> DeployConfig {
+        // Prefer the explicitly-requested (active) project path; fall back to
+        // the path this store was constructed with.
+        let path = projectPath ?? self.projectPath
         do {
-            let output = try await cli.run(["deploy", "generate", "--json"], cwd: projectPath)
+            let output = try await cli.run(["deploy", "generate", "--json"], cwd: path)
             if let data = output.data(using: .utf8), let config = try? JSONDecoder().decode(DeployConfig.self, from: data) { return config }
         } catch {}
         return DeployConfig(terraform: "", ansible: "", containerfile: "")

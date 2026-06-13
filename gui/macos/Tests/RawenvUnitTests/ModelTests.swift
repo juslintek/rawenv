@@ -133,9 +133,9 @@ import Testing
     }
 
     @Test func deployTabCases() {
-        let all = DeployTab.allCases
-        #expect(all.count == 3)
-        #expect(DeployTab.terraform.rawValue == "terraform")
+        let all = DeployViewTab.allCases
+        #expect(all.count == 4)
+        #expect(DeployViewTab.terraform.rawValue == "terraform")
     }
 
     @Test func arraySubscriptSafe() {
