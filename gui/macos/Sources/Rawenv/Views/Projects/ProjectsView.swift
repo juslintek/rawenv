@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct ProjectsView: View {
     @EnvironmentObject var appState: AppState
@@ -7,8 +8,6 @@ struct ProjectsView: View {
     @StateObject var installVM: InstallFlowVM
     @StateObject var setupVM: ProjectSetupVM
     @State private var page: ProjectPage
-    @State private var showAddPath = false
-    @State private var customPathText = ""
     @State private var filterText = ""
 
     enum ProjectPage { case discovery, list, setup }
@@ -130,6 +129,20 @@ struct ProjectsView: View {
         installVM.startInstall(name: name, action: action)
     }
 
+    /// Open a native folder picker (NSOpenPanel) and queue the chosen directory
+    /// for scanning. Directories only — projects live in folders, not files.
+    private func chooseCustomPath() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Add"
+        panel.message = "Choose a folder to scan for projects"
+        if panel.runModal() == .OK, let url = panel.url {
+            engine.addCustomPath(path: url.path)
+        }
+    }
+
     // MARK: - Discovery
 
     private var discoveryView: some View {
@@ -170,45 +183,9 @@ struct ProjectsView: View {
             .padding(16)
             .cardStyle()
 
-            // Add custom path inline
-            if showAddPath {
-                HStack(spacing: 8) {
-                    TextField("Enter path (e.g. ~/Work/)", text: $customPathText)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13))
-                        .padding(6)
-                        .background(Color.bgTertiary)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.border, lineWidth: 1))
-                        .accessibilityIdentifier("add_path_field")
-                    Button(action: {
-                        guard !customPathText.isEmpty else { return }
-                        engine.addCustomPath(path: customPathText)
-                        customPathText = ""
-                        showAddPath = false
-                    }) {
-                        Text("Add")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.accent)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("add_path_confirm")
-                    Button(action: { showAddPath = false; customPathText = "" }) {
-                        Text("Cancel")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Color.textMuted)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.vertical, 4)
-            }
-
+            // Add custom path via native folder picker
             HStack(spacing: 8) {
-                Button(action: { showAddPath = true }) {
+                Button(action: { chooseCustomPath() }) {
                     Text("+ Add custom path")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color.textMuted)
@@ -338,7 +315,7 @@ struct ProjectsView: View {
                 Spacer()
                 secondaryButtonAction("+ Add project manually", id: "projects_add_manual") {
                     page = .discovery
-                    showAddPath = true
+                    chooseCustomPath()
                 }
             }
         }
@@ -416,6 +393,39 @@ struct ProjectsView: View {
             if setupVM.isDetecting {
                 HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Detecting services…").setupDetailMuted() }
                     .accessibilityIdentifier("setup_detecting")
+            }
+
+            if !setupVM.runtimes.isEmpty {
+                sectionLabel("RUNTIMES")
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(setupVM.runtimes) { rt in
+                        HStack(spacing: 10) {
+                            Text(rt.name)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Color.textPrimary)
+                            Spacer()
+                            if rt.name.lowercased().contains("node") {
+                                Picker("", selection: Binding(
+                                    get: { setupVM.nodeVersion },
+                                    set: { setupVM.setNodeVersion($0) }
+                                )) {
+                                    ForEach(setupVM.nodeVersionChoices, id: \.self) { v in
+                                        Text(v).tag(v)
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(width: 90)
+                                .accessibilityIdentifier("setup_node_version")
+                            } else {
+                                Text(rt.version)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Color.textMuted)
+                            }
+                        }
+                        .padding(12)
+                        .cardStyle()
+                    }
+                }
             }
 
             sectionLabel("DETECTED SERVICES")
