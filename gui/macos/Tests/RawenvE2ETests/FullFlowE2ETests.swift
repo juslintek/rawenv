@@ -61,7 +61,19 @@ private func readFile(_ path: String) -> String {
     // MARK: Step 2 — Installer flow
 
     @Test @MainActor func step02_installerFlow() async {
-        let engine = InstallerEngine()
+        // Hermetic install: isolated temp dir + offline source binary, so the
+        // flow is deterministic and never depends on the network.
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("rawenv-install-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let binDir = tmp.appendingPathComponent("bin").path
+        let rcFile = tmp.appendingPathComponent(".zshrc").path
+        let source = tmp.appendingPathComponent("rawenv-src").path
+        let script = "#!/bin/sh\necho \"rawenv 0.2.0-test\"\n"
+        try? script.write(toFile: source, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: source)
+
+        let engine = InstallerEngine(binDirectory: binDir, rcFile: rcFile, sourceBinary: source)
         #expect(engine.state == .welcome)
         #expect(engine.currentStep == 0)
         #expect(engine.progress == 0)
@@ -69,19 +81,18 @@ private func readFile(_ path: String) -> String {
         engine.startInstall()
         #expect(engine.state == .installing)
 
-        // Wait for install to complete (has network call that may timeout, plus sleeps)
+        // Wait for install to complete (real file copy + verify + PATH edit).
         for _ in 0..<30 {
             try? await Task.sleep(nanoseconds: 500_000_000)
-            if engine.state == .done { break }
+            if engine.state == .done || engine.state == .error { break }
         }
 
         #expect(engine.state == .done)
         #expect(engine.progress == 1.0)
 
-        // Verify binary exists at expected location
-        let homeBin = "\(NSHomeDirectory())/.rawenv/bin/rawenv"
-        let devBin = "/Volumes/Projects/rawenv/zig-out/bin/rawenv"
-        #expect(fileExists(homeBin) || fileExists(devBin))
+        // The binary was really installed and is executable.
+        #expect(fileExists("\(binDir)/rawenv"))
+        #expect(FileManager.default.isExecutableFile(atPath: "\(binDir)/rawenv"))
     }
 
     // MARK: Step 3 — Scanner detects all projects

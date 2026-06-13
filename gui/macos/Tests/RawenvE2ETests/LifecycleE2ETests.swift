@@ -9,6 +9,17 @@ import Foundation
 private let testRoot = "/tmp/rawenv-lifecycle-test"
 private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/rawenv")
 
+/// Poll a condition on the main actor until it holds or a generous timeout
+/// elapses — keeps InstallFlowVM walkthrough tests robust under parallel load.
+@MainActor
+private func pollUntilInstallFlow(timeoutMs: Int = 20_000, _ condition: @MainActor () -> Bool) async {
+    var elapsed = 0
+    while elapsed < timeoutMs && !condition() {
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        elapsed += 50
+    }
+}
+
 @Suite(.serialized) struct LifecycleE2ETests {
 
     // MARK: - Phase 1: Project Creation
@@ -277,7 +288,7 @@ private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/ra
         #expect(vm.steps.count == 5)
 
         // Wait for completion
-        try? await Task.sleep(nanoseconds: 4_000_000_000)
+        await pollUntilInstallFlow { vm.isComplete }
         #expect(vm.isComplete)
         #expect(vm.installedRuntimes.contains("Redis"))
 
@@ -291,7 +302,7 @@ private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/ra
 
         // SQL Server fails
         vm.startInstall(name: "SQL Server", action: "install")
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        await pollUntilInstallFlow { vm.error != nil }
         #expect(vm.error != nil)
         #expect(!vm.isInstalling)
 

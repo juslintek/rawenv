@@ -9,6 +9,24 @@ import AppKit
 private let testRoot = "/tmp/rawenv-deep-test"
 private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/rawenv")
 
+/// Build an installer engine pointed at an isolated temp dir with an offline,
+/// deterministic source binary so install runs are hermetic (no network, no
+/// real home directory writes).
+@MainActor
+private func makeOfflineInstallerEngine() -> (engine: InstallerEngine, binPath: String) {
+    let tmp = FileManager.default.temporaryDirectory
+        .appendingPathComponent("rawenv-install-\(UUID().uuidString)")
+    try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+    let binDir = tmp.appendingPathComponent("bin").path
+    let rcFile = tmp.appendingPathComponent(".zshrc").path
+    let source = tmp.appendingPathComponent("rawenv-src").path
+    let script = "#!/bin/sh\necho \"rawenv 0.2.0-test\"\n"
+    try? script.write(toFile: source, atomically: true, encoding: .utf8)
+    try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: source)
+    let engine = InstallerEngine(binDirectory: binDir, rcFile: rcFile, sourceBinary: source)
+    return (engine, "\(binDir)/rawenv")
+}
+
 @Suite(.serialized) struct DeepFunctionalityTests {
 
     @Test func setup() async throws {
@@ -333,9 +351,9 @@ private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/ra
     // MARK: - Installer
 
     @Test @MainActor func installerFullFlow() async {
-        let engine = InstallerEngine()
+        let (engine, _) = makeOfflineInstallerEngine()
         #expect(engine.state == .welcome)
-        #expect(engine.steps.count == 6)
+        #expect(engine.steps.count == 4)
 
         engine.startInstall()
         #expect(engine.state == .installing)
@@ -348,7 +366,7 @@ private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/ra
     }
 
     @Test @MainActor func installerStepProgression() async {
-        let engine = InstallerEngine()
+        let (engine, _) = makeOfflineInstallerEngine()
         engine.startInstall()
 
         // Check progress increases

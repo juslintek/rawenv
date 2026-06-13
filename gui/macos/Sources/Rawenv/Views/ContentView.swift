@@ -192,7 +192,7 @@ public struct ContentView: View {
                 engine: appState.installerEngine
             )
         case .uninstall:
-            UninstallView()
+            UninstallView(onClose: { appState.navigate(to: .dashboard) })
         case .settings:
             SettingsView(viewModel: SettingsViewModel(repository: appState.repository))
         case .menuBar:

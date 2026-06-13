@@ -1,7 +1,45 @@
 import Testing
+import Foundation
 @testable import RawenvLib
 
-@Suite struct InstallerEngineTests {
+@Suite(.serialized) struct InstallerEngineTests {
+
+    /// Poll until the engine reaches a terminal state, tolerant of slow
+    /// scheduling under parallel test load.
+    @MainActor
+    private func waitForTerminal(_ engine: InstallerEngine, timeoutMs: Int = 15_000) async {
+        var elapsed = 0
+        while elapsed < timeoutMs {
+            if engine.state == .done || engine.state == .error { return }
+            try? await Task.sleep(nanoseconds: 25_000_000)
+            elapsed += 25
+        }
+    }
+
+    /// Build an engine wired to an isolated temp directory and an offline,
+    /// deterministic source binary (a tiny executable script), so install runs
+    /// never touch the real home directory or the network.
+    @MainActor
+    private func makeOfflineEngine(sourceExists: Bool = true)
+        -> (engine: InstallerEngine, binPath: String, rcFile: String, source: String) {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("rawenv-install-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let binDir = tmp.appendingPathComponent("bin").path
+        let rcFile = tmp.appendingPathComponent(".zshrc").path
+        let source = tmp.appendingPathComponent("rawenv-src").path
+
+        if sourceExists {
+            let script = "#!/bin/sh\necho \"rawenv 0.2.0-test\"\n"
+            try? script.write(toFile: source, atomically: true, encoding: .utf8)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: source)
+        }
+
+        let engine = InstallerEngine(
+            binDirectory: binDir, rcFile: rcFile, sourceBinary: source, stepDelayNanos: 0)
+        return (engine, "\(binDir)/rawenv", rcFile, source)
+    }
+
     @Test @MainActor func initialStateIsWelcome() {
         let engine = InstallerEngine()
         #expect(engine.state == .welcome)
@@ -10,22 +48,70 @@ import Testing
     }
 
     @Test @MainActor func startInstallTransitionsToInstalling() {
-        let engine = InstallerEngine()
+        let (engine, _, _, _) = makeOfflineEngine()
         engine.startInstall()
         #expect(engine.state == .installing)
     }
 
-    @Test @MainActor func completesAllSteps() async {
-        let engine = InstallerEngine()
-        engine.startInstall()
-        // Wait for all steps to complete (6 steps × 350ms = ~2.1s, give buffer)
-        try? await Task.sleep(nanoseconds: 4_000_000_000)
-        #expect(engine.state == .done)
-        #expect(engine.progress == 1.0)
-    }
-
     @Test @MainActor func hasCorrectStepCount() {
         let engine = InstallerEngine()
-        #expect(engine.steps.count == 6)
+        #expect(engine.steps.count == 4)
+    }
+
+    @Test @MainActor func completesAllStepsAndInstallsBinary() async {
+        let (engine, binPath, rcFile, _) = makeOfflineEngine()
+        engine.startInstall()
+        await waitForTerminal(engine)
+        #expect(engine.state == .done)
+        #expect(engine.progress == 1.0)
+        // The binary was really written, made executable, and verified.
+        #expect(FileManager.default.isExecutableFile(atPath: binPath))
+        #expect(engine.verifiedVersion?.contains("rawenv") == true)
+        // PATH was configured in the isolated rc file.
+        let rc = (try? String(contentsOfFile: rcFile, encoding: .utf8)) ?? ""
+        #expect(rc.contains("rawenv"))
+    }
+
+    @Test @MainActor func missingSourceEntersErrorState() async {
+        let (engine, binPath, _, _) = makeOfflineEngine(sourceExists: false)
+        engine.startInstall()
+        await waitForTerminal(engine)
+        #expect(engine.state == .error)
+        #expect(engine.errorMessage != nil)
+        #expect(engine.errorMessage?.isEmpty == false)
+        #expect(!FileManager.default.fileExists(atPath: binPath))
+    }
+
+    @Test @MainActor func retryAfterErrorSucceeds() async {
+        let (engine, binPath, _, source) = makeOfflineEngine(sourceExists: false)
+        engine.startInstall()
+        await waitForTerminal(engine)
+        #expect(engine.state == .error)
+
+        // Provide the missing source, then retry — the wizard recovers.
+        let script = "#!/bin/sh\necho \"rawenv 0.2.0-test\"\n"
+        try? script.write(toFile: source, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: source)
+
+        engine.retry()
+        await waitForTerminal(engine)
+        #expect(engine.state == .done)
+        #expect(engine.errorMessage == nil)
+        #expect(FileManager.default.isExecutableFile(atPath: binPath))
+    }
+
+    @Test @MainActor func verifyDetectsMissingBinary() {
+        let (engine, _, _, _) = makeOfflineEngine()
+        // No install has run, so nothing is on disk yet.
+        let result = engine.verifyBinary()
+        #expect(result.ok == false)
+    }
+
+    @Test @MainActor func systemDescriptionIsRealNotHardcoded() {
+        let engine = InstallerEngine()
+        let desc = engine.systemDescription
+        #expect(desc.contains("macOS"))
+        // Derived from the real machine: includes an architecture descriptor.
+        #expect(desc.contains("·"))
     }
 }

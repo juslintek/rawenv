@@ -1,27 +1,22 @@
 import SwiftUI
 
 struct UninstallView: View {
-    @State private var items: [UninstallItem] = [
-        .init(label: "Remove rawenv binary", desc: "~/.rawenv/bin/rawenv", size: "10 MB", selected: true),
-        .init(label: "Remove installed packages", desc: "~/.rawenv/store/", size: "1.2 GB", selected: true),
-        .init(label: "Stop and remove services", desc: "launchd plists", size: "—", selected: true),
-        .init(label: "Remove service data", desc: ".rawenv/data/ in each project", size: "180 MB", selected: true),
-        .init(label: "Remove configuration", desc: "rawenv.toml, .rawenv/theme.toml", size: "4 KB", selected: false),
-        .init(label: "Remove DNS and proxy", desc: "dnsmasq config, .test domains", size: "—", selected: true),
-    ]
-    @State private var phase: UninstallPhase
+    @StateObject private var engine: UninstallEngine
+    private let onClose: (() -> Void)?
 
-    init(initialPhase: UninstallPhase = .selection) {
-        _phase = State(initialValue: initialPhase)
+    init(initialPhase: UninstallEngine.Phase = .selection, onClose: (() -> Void)? = nil) {
+        _engine = StateObject(wrappedValue: UninstallEngine(initialPhase: initialPhase))
+        self.onClose = onClose
     }
 
     var body: some View {
         VStack(spacing: 20) {
-            switch phase {
+            switch engine.phase {
             case .selection: selectionView
             case .confirming: confirmView
             case .progress: progressView
             case .done: doneView
+            case .error: errorView
             }
         }
         .frame(maxWidth: 500)
@@ -38,9 +33,10 @@ struct UninstallView: View {
                 .font(.system(size: 12)).foregroundStyle(Color.textMuted).multilineTextAlignment(.center)
 
             VStack(spacing: 4) {
-                ForEach($items) { $item in
+                ForEach($engine.items) { $item in
                     HStack {
                         Toggle("", isOn: $item.selected).toggleStyle(.checkbox)
+                            .accessibilityIdentifier("uninstall_\(item.key)")
                         VStack(alignment: .leading, spacing: 1) {
                             Text(item.label).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.textPrimary)
                             Text(item.desc).font(.system(size: 11)).foregroundStyle(Color.textMuted)
@@ -55,11 +51,11 @@ struct UninstallView: View {
             }
 
             HStack(spacing: 12) {
-                Button("Cancel") {}.buttonStyle(.bordered)
+                Button("Cancel") { onClose?() }.buttonStyle(.bordered)
                     .accessibilityIdentifier("uninstall_cancel")
-                Button("Uninstall Selected") { phase = .confirming }
+                Button("Uninstall Selected") { engine.proceedToConfirm() }
                     .buttonStyle(.borderedProminent).tint(.red)
-                    .disabled(items.filter(\.selected).isEmpty)
+                    .disabled(!engine.hasSelection)
                     .accessibilityIdentifier("uninstall_button")
             }
         }
@@ -70,19 +66,26 @@ struct UninstallView: View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle").font(.system(size: 36)).foregroundStyle(Color.error)
             Text("Are you sure?").font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.textPrimary)
-            Text("This will remove \(items.filter(\.selected).count) items and cannot be undone.")
+            Text("This will remove \(engine.selectedCount) items and cannot be undone.")
                 .font(.system(size: 12)).foregroundStyle(Color.textMuted)
             HStack(spacing: 12) {
-                Button("Go Back") { phase = .selection }.buttonStyle(.bordered)
-                Button("Confirm Uninstall") { startUninstall() }.buttonStyle(.borderedProminent).tint(.red)
+                Button("Go Back") { engine.goBackToSelection() }.buttonStyle(.bordered)
+                    .accessibilityIdentifier("uninstall_goback_button")
+                Button("Confirm Uninstall") { engine.startUninstall() }.buttonStyle(.borderedProminent).tint(.red)
+                    .accessibilityIdentifier("uninstall_confirm_button")
             }
         }.padding(24)
     }
 
     private var progressView: some View {
         VStack(spacing: 16) {
-            ProgressView().controlSize(.large)
-            Text("Removing...").font(.system(size: 14)).foregroundStyle(Color.textPrimary)
+            ProgressView(value: engine.progress).controlSize(.large)
+                .frame(maxWidth: 280)
+                .accessibilityIdentifier("uninstall_progress")
+            Text(engine.currentLabel.isEmpty ? "Removing…" : "Removing \(engine.currentLabel)…")
+                .font(.system(size: 14)).foregroundStyle(Color.textPrimary)
+            Button("Cancel") { engine.cancel() }.buttonStyle(.bordered)
+                .accessibilityIdentifier("uninstall_progress_cancel")
         }.padding(24)
     }
 
@@ -90,22 +93,25 @@ struct UninstallView: View {
         VStack(spacing: 16) {
             Image(systemName: "checkmark.circle").font(.system(size: 36)).foregroundStyle(Color.success)
             Text("Uninstall complete").font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.textPrimary)
-            Text("rawenv has been removed from your system.").font(.system(size: 12)).foregroundStyle(Color.textMuted)
+            Text("Removed \(engine.removedCount) item\(engine.removedCount == 1 ? "" : "s") from your system.")
+                .font(.system(size: 12)).foregroundStyle(Color.textMuted)
+            Button("Done") { onClose?() }.buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("uninstall_done_button")
         }.padding(24)
     }
 
-    private func startUninstall() {
-        phase = .progress
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { phase = .done }
+    private var errorView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "xmark.octagon").font(.system(size: 36)).foregroundStyle(Color.error)
+            Text("Uninstall incomplete").font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.textPrimary)
+            Text(engine.errorMessage ?? "Some items could not be removed.")
+                .font(.system(size: 12)).foregroundStyle(Color.error).multilineTextAlignment(.center)
+                .accessibilityIdentifier("uninstall_error_message")
+            HStack(spacing: 12) {
+                Button("Back") { engine.goBackToSelection() }.buttonStyle(.bordered)
+                Button("Retry") { engine.startUninstall() }.buttonStyle(.borderedProminent).tint(.red)
+                    .accessibilityIdentifier("uninstall_retry_button")
+            }
+        }.padding(24)
     }
 }
-
-private struct UninstallItem: Identifiable {
-    let id = UUID()
-    let label: String
-    let desc: String
-    let size: String
-    var selected: Bool
-}
-
-enum UninstallPhase { case selection, confirming, progress, done }
