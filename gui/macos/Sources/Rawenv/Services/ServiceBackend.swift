@@ -16,6 +16,10 @@ public protocol ServiceBackend: Sendable {
     func start(_ name: String) async
     /// Stops services via the rawenv CLI (`rawenv down`).
     func stop(_ name: String) async
+    /// Starts all services via `rawenv up`.
+    func up() async
+    /// Stops all services via `rawenv down`.
+    func down() async
 }
 
 /// Production backend: lists services via the rawenv CLI and starts/stops them
@@ -49,6 +53,14 @@ public struct RawenvServiceBackend: ServiceBackend {
     public func stop(_ name: String) async {
         // `rawenv down` stops the project's services in reverse dependency
         // order. As with start(), the true state is re-read via list() after.
+        _ = try? await cli.run(["down"])
+    }
+
+    public func up() async {
+        _ = try? await cli.run(["up"])
+    }
+
+    public func down() async {
         _ = try? await cli.run(["down"])
     }
 
