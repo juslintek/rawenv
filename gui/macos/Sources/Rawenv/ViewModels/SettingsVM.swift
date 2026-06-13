@@ -32,6 +32,8 @@ public final class SettingsViewModel: ObservableObject {
     @Published public var revealedDeployFields: Set<String> = []
     /// Validation messages keyed by field id; empty means valid.
     @Published public var validationErrors: [String: String] = [:]
+    /// Drives the Services page's loading / empty / error UI.
+    @Published public var servicesPhase: LoadPhase = .idle
 
     private let repository: DataRepository
     private let settingsStore: SettingsPersisting
@@ -57,8 +59,14 @@ public final class SettingsViewModel: ObservableObject {
         let resolved: AppSettings
         if let persisted = settingsStore.load() {
             resolved = persisted
+        } else if let fetched = try? await repository.fetchSettings() {
+            resolved = fetched
         } else {
-            resolved = await repository.fetchSettings()
+            // Settings could not be loaded or generated. Surface it on the
+            // Services page rather than leaving the screen silently blank.
+            servicesPhase = .failed("Could not load settings.")
+            loaded = true
+            return
         }
         settings = resolved
         selectedProvider = resolved.ai.provider
@@ -76,7 +84,14 @@ public final class SettingsViewModel: ObservableObject {
         byomApiKey = secretStore.secret(for: SecretAccount.aiAPIKey) ?? ""
         loadDeployCredentials(for: resolved.deploy.provider)
 
-        services = await repository.fetchServices()
+        servicesPhase = .loading
+        do {
+            services = try await repository.fetchServices()
+            servicesPhase = services.isEmpty ? .empty : .loaded
+        } catch {
+            services = []
+            servicesPhase = .failed(error.localizedDescription)
+        }
         runtimes = await runtimeManager.list()
         loaded = true
     }

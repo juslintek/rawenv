@@ -1,4 +1,4 @@
-import Foundation
+[38;5;141m> [0m[38;5;10mimport Foundation
 import Combine
 import AppKit
 
@@ -6,6 +6,8 @@ import AppKit
 public final class ConnectionsViewModel: ObservableObject {
     @Published public var connections: [Connection] = []
     @Published public var connectionModes: [String: String] = [:]
+    /// Drives the connections list's loading / empty / error UI.
+    @Published public var phase: LoadPhase = .idle
 
     private let repository: DataRepository
     private let modeStore: ConnectionModePersisting
@@ -17,12 +19,19 @@ public final class ConnectionsViewModel: ObservableObject {
     }
 
     public func load() async {
-        connections = await repository.fetchConnections()
-        for conn in connections {
-            // Prefer the user's persisted choice so the selected mode survives
-            // navigating away and back (and app restarts); fall back to the
-            // mode reported by the data layer on first use.
-            connectionModes[conn.envVar] = modeStore.mode(for: conn.envVar) ?? conn.mode
+        phase = .loading
+        do {
+            connections = try await repository.fetchConnections()
+            for conn in connections {
+                // Prefer the user's persisted choice so the selected mode survives
+                // navigating away and back (and app restarts); fall back to the
+                // mode reported by the data layer on first use.
+                connectionModes[conn.envVar] = modeStore.mode(for: conn.envVar) ?? conn.mode
+            }
+            phase = connections.isEmpty ? .empty : .loaded
+        } catch {
+            connections = []
+            phase = .failed(error.localizedDescription)
         }
     }
 
@@ -46,3 +55,4 @@ public final class ConnectionsViewModel: ObservableObject {
         NSPasteboard.general.setString(str, forType: .string)
     }
 }
+[0m

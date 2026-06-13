@@ -61,7 +61,7 @@ public final class AppState: ObservableObject, NavigationService {
 
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let projects = await repository.fetchProjects()
+            let projects = (try? await repository.fetchProjects()) ?? []
             if let first = projects.first {
                 self.managedProjects = [first]
                 self.activeProject = first

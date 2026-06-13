@@ -105,7 +105,7 @@ public struct ContentView: View {
                         Button("▶ Start All") {
                             Task {
                                 await appState.serviceManager.up()
-                                sidebarServices = await appState.repository.fetchServices()
+                                sidebarServices = (try? await appState.repository.fetchServices()) ?? []
                             }
                         }
                         .buttonStyle(.bordered)
@@ -113,7 +113,7 @@ public struct ContentView: View {
                         Button("⏹ Stop") {
                             Task {
                                 await appState.serviceManager.down()
-                                sidebarServices = await appState.repository.fetchServices()
+                                sidebarServices = (try? await appState.repository.fetchServices()) ?? []
                             }
                         }
                         .buttonStyle(.bordered)
@@ -147,7 +147,7 @@ public struct ContentView: View {
             .scrollContentBackground(.hidden)
             .accessibilityIdentifier("sidebar")
             .frame(minWidth: themeManager.sidebarWidth)
-            .task { sidebarServices = await appState.repository.fetchServices() }
+            .task { sidebarServices = (try? await appState.repository.fetchServices()) ?? [] }
         } detail: {
             detailView
         }

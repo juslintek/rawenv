@@ -302,9 +302,20 @@ struct ProjectsView: View {
                 }
             }
 
-            VStack(spacing: 1) {
-                ForEach(filteredProjects) { project in
-                    projectRow(project)
+            if filteredProjects.isEmpty {
+                EmptyStateView(
+                    icon: "folder.badge.questionmark",
+                    title: filterText.isEmpty ? "No projects discovered" : "No projects match your filter",
+                    guidance: filterText.isEmpty
+                        ? "No projects found yet. Run a scan, add a custom path, or run rawenv init inside a project to get started."
+                        : "No discovered projects match “\(filterText)”. Clear the filter or scan more locations.",
+                    idPrefix: "projects")
+                    .frame(minHeight: 200)
+            } else {
+                VStack(spacing: 1) {
+                    ForEach(filteredProjects) { project in
+                        projectRow(project)
+                    }
                 }
             }
 

@@ -57,50 +57,50 @@ private func binaryPath() -> String {
 @Suite(.serialized) struct RealDataRepositoryTests {
     let repo = RealDataRepository(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: "/Volumes/Projects/rawenv")
 
-    @Test func fetchServices() async {
-        let services = await repo.fetchServices()
+    @Test func fetchServices() async throws {
+        let services = try await repo.fetchServices()
         #expect(!services.isEmpty)
         #expect(services.allSatisfy { $0.port > 0 })
     }
 
     @Test func fetchProjects() async {
-        let projects = await repo.fetchProjects()
+        let projects = (try? await repo.fetchProjects()) ?? []
         // discover may return empty, that's fine
         _ = projects
     }
 
-    @Test func fetchSettings() async {
-        let settings = await repo.fetchSettings()
+    @Test func fetchSettings() async throws {
+        let settings = try await repo.fetchSettings()
         #expect(!settings.general.storeLocation.isEmpty)
         #expect(settings.network.localDomain == ".test")
     }
 
-    @Test func fetchInstallerConfig() async {
-        let config = await repo.fetchInstallerConfig()
+    @Test func fetchInstallerConfig() async throws {
+        let config = try await repo.fetchInstallerConfig()
         #expect(!config.steps.isEmpty)
         #expect(config.platforms["macos"] != nil)
     }
 
     @Test func fetchLogs() async {
-        let logs = await repo.fetchLogs()
+        let logs = (try? await repo.fetchLogs()) ?? []
         // May be empty if no log files exist
         _ = logs
     }
 
     @Test func fetchConnections() async {
-        let conns = await repo.fetchConnections()
+        let conns = (try? await repo.fetchConnections()) ?? []
         _ = conns
     }
 
     @Test func fetchDeployConfig() async {
-        let config = await repo.fetchDeployConfig()
+        let config = try? await repo.fetchDeployConfig()
         // May have content if rawenv.toml exists
         _ = config
     }
 
     @Test func fetchAIMessages() async {
-        let msgs = await repo.fetchAIMessages()
-        // Falls back to mock-data.json which contains sample messages
+        let msgs = (try? await repo.fetchAIMessages()) ?? []
+        // Real store starts with no history
         _ = msgs
     }
 }

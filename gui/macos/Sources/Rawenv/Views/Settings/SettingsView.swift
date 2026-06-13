@@ -128,11 +128,26 @@ private struct ServicesSettingsPage: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Services").font(.title2).foregroundStyle(Color.textPrimary)
             Text("All configured services in this project").foregroundStyle(Color.textMuted)
-            if vm.services.isEmpty {
-                Text("No services configured. Add one from the Dashboard.")
-                    .foregroundStyle(Color.textMuted).font(.callout)
-                    .accessibilityIdentifier("services_settings_empty")
-            } else {
+            switch vm.servicesPhase {
+            case .idle, .loading:
+                LoadingStateView("Loading services…", idPrefix: "services_settings")
+                    .frame(minHeight: 160)
+            case .empty:
+                EmptyStateView(
+                    icon: "server.rack",
+                    title: "No services configured",
+                    guidance: "No services configured. Run rawenv init to get started.",
+                    idPrefix: "services_settings")
+                    .frame(minHeight: 160)
+            case let .failed(message):
+                ErrorStateView(
+                    title: "Couldn't load services",
+                    message: message,
+                    idPrefix: "services_settings") {
+                        Task { await vm.load() }
+                    }
+                    .frame(minHeight: 160)
+            case .loaded:
                 ForEach(vm.services) { svc in
                     HStack(spacing: 8) {
                         StatusDot(isRunning: svc.status == "running")

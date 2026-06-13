@@ -39,21 +39,24 @@ struct AIChatView: View {
             // Messages
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 10) {
-                        ForEach(Array(viewModel.messages.enumerated()), id: \.offset) { idx, msg in
-                            MessageBubble(message: msg)
-                                .id(idx)
-                                .accessibilityIdentifier("message_\(msg.role)_\(idx)")
-                        }
-                        if viewModel.isLoading {
-                            HStack {
-                                TypingIndicator()
-                                Spacer()
-                            }.padding(.horizontal, 16)
-                            .accessibilityIdentifier("ai_typing")
-                        }
+                    if !viewModel.messages.isEmpty {
+                        messagesList
+                    } else if viewModel.phase.isLoading {
+                        LoadingStateView("Loading conversation…", idPrefix: "ai")
+                    } else if let errorMessage = viewModel.phase.errorMessage {
+                        ErrorStateView(
+                            title: "Couldn't load conversation",
+                            message: errorMessage,
+                            idPrefix: "ai") {
+                                Task { await viewModel.load() }
+                            }
+                    } else {
+                        EmptyStateView(
+                            icon: "bubble.left.and.bubble.right",
+                            title: "Ask the AI assistant",
+                            guidance: "No messages yet. Ask about your services, configuration, or deployment to get started.",
+                            idPrefix: "ai")
                     }
-                    .padding(.vertical, 12)
                 }
                 .onChange(of: viewModel.messages.count) {
                     withAnimation { proxy.scrollTo(viewModel.messages.count - 1, anchor: .bottom) }
@@ -82,6 +85,24 @@ struct AIChatView: View {
         .background(Color.bgPrimary)
         .task { await viewModel.load() }
         .accessibilityIdentifier("ai_chat_view")
+    }
+
+    private var messagesList: some View {
+        LazyVStack(spacing: 10) {
+            ForEach(Array(viewModel.messages.enumerated()), id: \.offset) { idx, msg in
+                MessageBubble(message: msg)
+                    .id(idx)
+                    .accessibilityIdentifier("message_\(msg.role)_\(idx)")
+            }
+            if viewModel.isLoading {
+                HStack {
+                    TypingIndicator()
+                    Spacer()
+                }.padding(.horizontal, 16)
+                .accessibilityIdentifier("ai_typing")
+            }
+        }
+        .padding(.vertical, 12)
     }
 }
 

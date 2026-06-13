@@ -24,7 +24,7 @@ public final class AIEngine: ObservableObject, @unchecked Sendable {
     }
 
     public func loadHistory(from repository: DataRepository) async {
-        messages = await repository.fetchAIMessages()
+        messages = (try? await repository.fetchAIMessages()) ?? []
     }
 
     public func send(prompt: String) async {
