@@ -34,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build test container
-        run: cd gui/linux && docker build -f Dockerfile.test -t rawenv-linux-test .
+        run: docker build -f gui/linux/Dockerfile.test -t rawenv-linux-test .
       - name: Run e2e tests
         run: docker run --name linux-tests rawenv-linux-test
       - name: Extract test results
@@ -55,7 +55,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - name: Build
-        run: cd gui/windows && dotnet build Rawenv.sln
+        run: cd gui/windows && dotnet build Rawenv.Tests/Rawenv.Tests.csproj
       - name: Run unit tests
         run: cd gui/windows && dotnet test Rawenv.Tests/Rawenv.Tests.csproj --logger trx
       - name: Upload test results

@@ -1,35 +1,42 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const resolver = @import("resolver");
 const store = @import("store");
 
 // Extension tests (discover module tested via `zig test src/core/discover.zig -lc`)
 // These tests verify store-level behavior for extension-capable services.
+// Skip on Windows where HOME is unavailable.
 
 test "store path for extension-capable service postgresql" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const path = try store.getStorePath(std.testing.allocator, "postgresql", "16.2");
     defer std.testing.allocator.free(path);
     try std.testing.expect(std.mem.endsWith(u8, path, ".rawenv/store/postgresql-16.2"));
 }
 
 test "store path for extension-capable service redis" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const path = try store.getStorePath(std.testing.allocator, "redis", "7.4");
     defer std.testing.allocator.free(path);
     try std.testing.expect(std.mem.endsWith(u8, path, ".rawenv/store/redis-7.4"));
 }
 
 test "store path for extension-capable service php" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const path = try store.getStorePath(std.testing.allocator, "php", "8.3.0");
     defer std.testing.allocator.free(path);
     try std.testing.expect(std.mem.endsWith(u8, path, ".rawenv/store/php-8.3.0"));
 }
 
 test "isInstalled returns false for extension-capable services not yet installed" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     try std.testing.expect(try store.isInstalled(std.testing.allocator, "postgresql", "16.2") == false);
     try std.testing.expect(try store.isInstalled(std.testing.allocator, "redis", "7.4") == false);
     try std.testing.expect(try store.isInstalled(std.testing.allocator, "php", "8.3.0") == false);
 }
 
 test "isInstalled returns false for missing package" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const result = try store.isInstalled(std.testing.allocator, "nonexistent-pkg", "99.99.99");
     try std.testing.expect(result == false);
 }

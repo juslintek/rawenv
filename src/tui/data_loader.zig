@@ -192,6 +192,7 @@ fn defaultPort(name: []const u8) []const u8 {
 fn readFile(allocator: std.mem.Allocator, path: []const u8) ?[]u8 {
     const pathZ = allocator.dupeZ(u8, path) catch return null;
     defer allocator.free(pathZ);
+    if (comptime @import("builtin").os.tag == .windows) return null;
     const fd = std.posix.openat(std.posix.AT.FDCWD, pathZ, .{}, 0) catch return null;
     defer _ = std.c.close(fd);
     var buf_list: std.ArrayList(u8) = .empty;

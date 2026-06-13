@@ -24,8 +24,8 @@ RUN pip3 install --break-system-packages dogtail pytest
 
 WORKDIR /app
 
-COPY . /app/gui/linux/
-COPY ../../shared/mock-data.json /app/shared/mock-data.json
+COPY gui/linux/ /app/gui/linux/
+COPY shared/mock-data.json /app/shared/mock-data.json
 
 WORKDIR /app/gui/linux
 

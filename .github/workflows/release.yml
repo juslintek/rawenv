@@ -13,27 +13,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS is built natively per-arch: Zig only auto-resolves the macOS
-          # SDK (libobjc/libSystem) for a native target, not an explicit -Dtarget.
-          - os: macos-14            # Apple silicon runner
-            artifact: rawenv-darwin-arm64
+          - os: macos-14
+            artifact: rawenv-aarch64-macos
             build: zig build -Doptimize=ReleaseSafe
             bin: zig-out/bin/rawenv
-          - os: macos-13            # Intel runner
-            artifact: rawenv-darwin-x64
+          - os: macos-13
+            artifact: rawenv-x86_64-macos
             build: zig build -Doptimize=ReleaseSafe
             bin: zig-out/bin/rawenv
-          # Linux uses musl so the binaries are fully static (no glibc dependency).
           - os: ubuntu-latest
-            artifact: rawenv-linux-x64
+            artifact: rawenv-x86_64-linux
             build: zig build -Dtarget=x86_64-linux-musl -Doptimize=ReleaseSafe
             bin: zig-out/bin/rawenv
           - os: ubuntu-latest
-            artifact: rawenv-linux-arm64
+            artifact: rawenv-aarch64-linux
             build: zig build -Dtarget=aarch64-linux-musl -Doptimize=ReleaseSafe
             bin: zig-out/bin/rawenv
           - os: windows-latest
-            artifact: rawenv-windows-x64.exe
+            artifact: rawenv-x86_64-windows
             build: zig build -Dtarget=x86_64-windows -Doptimize=ReleaseSafe
             bin: zig-out/bin/rawenv.exe
     runs-on: ${{ matrix.os }}
@@ -54,11 +51,17 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          cp "${{ matrix.bin }}" "dist/${{ matrix.artifact }}"
+          if [[ "${{ matrix.artifact }}" == *windows* ]]; then
+            cp "${{ matrix.bin }}" "dist/rawenv.exe"
+            cd dist && zip "${{ matrix.artifact }}.zip" rawenv.exe && rm rawenv.exe
+          else
+            cp "${{ matrix.bin }}" "dist/rawenv"
+            cd dist && tar czf "${{ matrix.artifact }}.tar.gz" rawenv && rm rawenv
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: dist/${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}.*
           if-no-files-found: error
 
   release:
