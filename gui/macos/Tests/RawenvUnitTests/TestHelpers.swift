@@ -85,3 +85,45 @@ final class TestAIProvider: AIProvider, @unchecked Sendable {
         }
     }
 }
+
+/// In-memory ``SecretStoring`` for tests — never touches the real Keychain.
+final class InMemorySecretStore: SecretStoring, @unchecked Sendable {
+    private var storage: [String: String] = [:]
+    func setSecret(_ value: String, for account: String) throws {
+        if value.isEmpty { storage[account] = nil } else { storage[account] = value }
+    }
+    func secret(for account: String) -> String? { storage[account] }
+    func deleteSecret(for account: String) throws { storage[account] = nil }
+}
+
+/// Deterministic ``RuntimeManaging`` for tests. Tracks which runtimes are
+/// "installed" so install/remove can be asserted without hitting the CLI.
+final class TestRuntimeManager: RuntimeManaging, @unchecked Sendable {
+    private var installed: Set<String>
+    private let catalog: [(String, String)] = [("node", "22"), ("php", "8.4"), ("python", "3.13")]
+    init(installed: Set<String> = ["node"]) { self.installed = installed }
+
+    func list() async -> [RuntimeInfo] {
+        catalog.map { (name, version) in
+            RuntimeInfo(name: name, version: version,
+                        path: installed.contains(name) ? "/tmp/store/\(name)-\(version)" : "",
+                        installed: installed.contains(name))
+        }
+    }
+    func install(_ name: String, version: String) async throws { installed.insert(name) }
+    func remove(_ name: String, version: String) async throws { installed.remove(name) }
+}
+
+/// Builds a ``SettingsViewModel`` backed by isolated temp/in-memory storage so
+/// unit tests never read or write the user's real settings file or Keychain.
+@MainActor
+func makeSettingsVM(repository: DataRepository = TestDataRepository(),
+                    settingsStore: SettingsPersisting? = nil,
+                    secretStore: SecretStoring = InMemorySecretStore(),
+                    runtimeManager: RuntimeManaging = TestRuntimeManager()) -> SettingsViewModel {
+    let store = settingsStore ?? SettingsStore(
+        fileURL: FileManager.default.temporaryDirectory
+            .appendingPathComponent("rawenv-settings-\(UUID().uuidString).json"))
+    return SettingsViewModel(repository: repository, settingsStore: store,
+                             secretStore: secretStore, runtimeManager: runtimeManager)
+}

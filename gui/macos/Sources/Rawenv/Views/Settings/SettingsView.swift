@@ -71,6 +71,23 @@ private extension SettingsPage {
     }
 }
 
+// MARK: - Binding helpers (read setting, write + persist)
+
+private extension SettingsViewModel {
+    func boolBinding(_ keyPath: WritableKeyPath<AppSettings, Bool>) -> Binding<Bool> {
+        Binding(
+            get: { self.settings?[keyPath: keyPath] ?? false },
+            set: { newValue in self.update { $0[keyPath: keyPath] = newValue } }
+        )
+    }
+    func stringBinding(_ keyPath: WritableKeyPath<AppSettings, String>) -> Binding<String> {
+        Binding(
+            get: { self.settings?[keyPath: keyPath] ?? "" },
+            set: { newValue in self.update { $0[keyPath: keyPath] = newValue } }
+        )
+    }
+}
+
 // MARK: - General
 
 private struct GeneralSettingsPage: View {
@@ -79,16 +96,24 @@ private struct GeneralSettingsPage: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("General").font(.title2).foregroundStyle(Color.textPrimary)
             Text("Core rawenv settings").foregroundStyle(Color.textMuted)
-            if let s = vm.settings?.general {
+            if vm.settings != nil {
                 SettingRow(label: "Store location", desc: "Where rawenv installs packages") {
-                    TextField("", text: .constant(s.storeLocation)).textFieldStyle(.roundedBorder).frame(width: 200)
+                    TextField("", text: vm.stringBinding(\.general.storeLocation)).textFieldStyle(.roundedBorder).frame(width: 200)
+                        .accessibilityIdentifier("settings_store_location")
                 }
-                SettingToggle(label: "Auto-start services", desc: "Start services when entering project directory", isOn: Binding(get: { vm.settings?.general.autoStartServices ?? false }, set: { vm.settings?.general.autoStartServices = $0 }))
-                SettingToggle(label: "Auto-detect projects", desc: "Scan for package.json, composer.json, etc.", isOn: Binding(get: { vm.settings?.general.autoDetectProjects ?? false }, set: { vm.settings?.general.autoDetectProjects = $0 }))
-                SettingToggle(label: "Launch at login", desc: "Start rawenv background service at login", isOn: Binding(get: { vm.settings?.general.launchAtLogin ?? false }, set: { vm.settings?.general.launchAtLogin = $0 }))
-                SettingToggle(label: "File watcher", desc: "Monitor project dirs for changes", isOn: Binding(get: { vm.settings?.general.fileWatcher ?? false }, set: { vm.settings?.general.fileWatcher = $0 }))
+                SettingToggle(label: "Auto-start services", desc: "Start services when entering project directory", isOn: vm.boolBinding(\.general.autoStartServices))
+                SettingToggle(label: "Auto-detect projects", desc: "Scan for package.json, composer.json, etc.", isOn: vm.boolBinding(\.general.autoDetectProjects))
+                SettingToggle(label: "Launch at login", desc: "Start rawenv background service at login", isOn: vm.boolBinding(\.general.launchAtLogin))
+                SettingToggle(label: "File watcher", desc: "Monitor project dirs for changes", isOn: vm.boolBinding(\.general.fileWatcher))
                 SettingRow(label: "Scan paths", desc: "Directories to scan for projects") {
-                    TextField("", text: .constant(s.scanPaths.joined(separator: ", "))).textFieldStyle(.roundedBorder).frame(width: 250)
+                    TextField("", text: Binding(
+                        get: { vm.settings?.general.scanPaths.joined(separator: ", ") ?? "" },
+                        set: { newValue in
+                            let parts = newValue.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                            vm.update { $0.general.scanPaths = parts }
+                        }
+                    )).textFieldStyle(.roundedBorder).frame(width: 250)
+                        .accessibilityIdentifier("settings_scan_paths")
                 }
             }
         }.accessibilityIdentifier("general_settings")
@@ -102,8 +127,27 @@ private struct ServicesSettingsPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Services").font(.title2).foregroundStyle(Color.textPrimary)
-            Text("Manage service configuration").foregroundStyle(Color.textMuted)
-            Text("Configure services from the Dashboard detail view.").foregroundStyle(Color.textMuted).font(.callout)
+            Text("All configured services in this project").foregroundStyle(Color.textMuted)
+            if vm.services.isEmpty {
+                Text("No services configured. Add one from the Dashboard.")
+                    .foregroundStyle(Color.textMuted).font(.callout)
+                    .accessibilityIdentifier("services_settings_empty")
+            } else {
+                ForEach(vm.services) { svc in
+                    HStack(spacing: 8) {
+                        StatusDot(isRunning: svc.status == "running")
+                        Text(svc.icon).font(.system(size: 14))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(svc.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.textPrimary)
+                            Text("v\(svc.version) · \(svc.status)").font(.system(size: 11)).foregroundStyle(Color.textMuted)
+                        }
+                        Spacer()
+                        Text(":\(svc.port)").font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.textMuted)
+                    }
+                    .padding(8).cardStyle()
+                    .accessibilityIdentifier("settings_service_\(svc.name)")
+                }
+            }
         }.accessibilityIdentifier("services_settings")
     }
 }
@@ -116,27 +160,36 @@ private struct RuntimesSettingsPage: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Runtimes").font(.title2).foregroundStyle(Color.textPrimary)
             Text("Installed language runtimes").foregroundStyle(Color.textMuted)
-            RuntimeRow(name: "Node.js", version: "22.15.0", path: "~/.rawenv/store/node-22.15.0/", installed: true)
-            RuntimeRow(name: "PHP", version: "8.4.6", path: "/opt/homebrew/bin/php (external)", installed: true)
-            RuntimeRow(name: "Python", version: "Not installed", path: "", installed: false)
-            RuntimeRow(name: "Ruby", version: "Not installed", path: "", installed: false)
+            ForEach(vm.runtimes) { rt in
+                RuntimeRow(runtime: rt, vm: vm)
+            }
         }.accessibilityIdentifier("runtimes_settings")
     }
 }
 
 private struct RuntimeRow: View {
-    let name: String; let version: String; let path: String; let installed: Bool
+    let runtime: RuntimeInfo
+    @ObservedObject var vm: SettingsViewModel
     var body: some View {
         HStack {
-            StatusDot(isRunning: installed)
+            StatusDot(isRunning: runtime.installed)
             VStack(alignment: .leading) {
-                Text(name).font(.system(size: 13, weight: .semibold)).foregroundStyle(installed ? Color.textPrimary : Color.textMuted)
-                Text(installed ? "\(version) · \(path)" : version).font(.system(size: 11)).foregroundStyle(Color.textMuted)
+                Text(runtime.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(runtime.installed ? Color.textPrimary : Color.textMuted)
+                Text(runtime.installed ? "\(runtime.version) · \(runtime.path)" : "Not installed").font(.system(size: 11)).foregroundStyle(Color.textMuted)
             }
             Spacer()
-            if !installed { Button("+ Install") {}.buttonStyle(.bordered).controlSize(.small) }
+            if runtime.installed {
+                Button("Remove") { Task { await vm.removeRuntime(runtime) } }
+                    .buttonStyle(.bordered).controlSize(.small)
+                    .accessibilityIdentifier("runtime_remove_\(runtime.name)")
+            } else {
+                Button("+ Install") { Task { await vm.installRuntime(runtime) } }
+                    .buttonStyle(.bordered).controlSize(.small)
+                    .accessibilityIdentifier("runtime_install_\(runtime.name)")
+            }
         }
         .padding(8).cardStyle()
+        .accessibilityIdentifier("runtime_row_\(runtime.name)")
     }
 }
 
@@ -152,28 +205,35 @@ private struct NetworkSettingsPage: View {
                 GroupBox("DNS Masking") {
                     VStack(alignment: .leading, spacing: 8) {
                         SettingRow(label: "Local domain", desc: "TLD for local services") {
-                            TextField("", text: Binding(get: { vm.settings?.network.localDomain ?? "" }, set: { vm.settings?.network.localDomain = $0 })).textFieldStyle(.roundedBorder).frame(width: 80)
+                            TextField("", text: vm.stringBinding(\.network.localDomain)).textFieldStyle(.roundedBorder).frame(width: 80)
+                                .accessibilityIdentifier("settings_local_domain")
                         }
                         SettingRow(label: "DNS provider", desc: "dnsmasq") { Text("● active").font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.success) }
                     }.padding(4)
                 }
                 GroupBox("Reverse Proxy") {
                     VStack(alignment: .leading, spacing: 8) {
-                        SettingToggle(label: "Auto-TLS", desc: "Self-signed certs for .test domains", isOn: Binding(get: { vm.settings?.network.autoTls ?? false }, set: { vm.settings?.network.autoTls = $0 }))
-                        SettingRow(label: "Proxy port", desc: "Main proxy listening port") {
-                            TextField("", text: .constant("\(s.proxyPort)")).textFieldStyle(.roundedBorder).frame(width: 60)
-                        }
+                        SettingToggle(label: "Auto-TLS", desc: "Self-signed certs for .test domains", isOn: vm.boolBinding(\.network.autoTls))
+                        ValidatedField(
+                            label: "Proxy port", desc: "Main proxy listening port",
+                            initial: String(s.proxyPort), width: 70,
+                            identifier: "settings_proxy_port",
+                            validate: SettingsValidator.isValidPort,
+                            errorMessage: vm.validationErrors["proxyPort"] ?? "Enter a port between 1 and 65535",
+                            onValid: { vm.setProxyPort(fromText: $0) },
+                            onInvalid: { vm.setProxyPort(fromText: $0) })
                     }.padding(4)
                 }
                 GroupBox("Tunneling") {
                     VStack(alignment: .leading, spacing: 8) {
                         SettingRow(label: "Tunnel provider", desc: "For exposing local services") {
-                            Picker("", selection: Binding(get: { vm.settings?.network.tunnelProvider ?? "" }, set: { vm.settings?.network.tunnelProvider = $0 })) {
+                            Picker("", selection: vm.stringBinding(\.network.tunnelProvider)) {
                                 ForEach(["bore", "cloudflared", "ngrok", "rathole"], id: \.self) { Text($0).tag($0) }
                             }.frame(width: 140).accessibilityIdentifier("settings_tunnel_provider_picker")
                         }
                         SettingRow(label: "Relay server", desc: "bore relay endpoint") {
-                            TextField("", text: Binding(get: { vm.settings?.network.relayServer ?? "" }, set: { vm.settings?.network.relayServer = $0 })).textFieldStyle(.roundedBorder).frame(width: 160)
+                            TextField("", text: vm.stringBinding(\.network.relayServer)).textFieldStyle(.roundedBorder).frame(width: 160)
+                                .accessibilityIdentifier("settings_relay_server")
                         }
                     }.padding(4)
                 }
@@ -190,15 +250,25 @@ private struct CellsSettingsPage: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Isolation Cells").font(.title2).foregroundStyle(Color.textPrimary)
             Text("OS-native process isolation. Using Seatbelt (sandbox-exec)").foregroundStyle(Color.textMuted)
-            if vm.settings != nil {
-                SettingToggle(label: "Enable cells by default", desc: "Isolate all new services automatically", isOn: Binding(get: { vm.settings?.cells.enableByDefault ?? false }, set: { vm.settings?.cells.enableByDefault = $0 }))
-                SettingRow(label: "Default memory limit", desc: "Per-cell memory cap") {
-                    TextField("", text: Binding(get: { vm.settings?.cells.defaultMemoryLimit ?? "" }, set: { vm.settings?.cells.defaultMemoryLimit = $0 })).textFieldStyle(.roundedBorder).frame(width: 80)
-                }
-                SettingRow(label: "Default CPU limit", desc: "Per-cell CPU cores") {
-                    TextField("", text: Binding(get: { vm.settings?.cells.defaultCpuLimit ?? "" }, set: { vm.settings?.cells.defaultCpuLimit = $0 })).textFieldStyle(.roundedBorder).frame(width: 60)
-                }
-                SettingToggle(label: "Network isolation", desc: "Restrict each cell to its port only", isOn: Binding(get: { vm.settings?.cells.networkIsolation ?? false }, set: { vm.settings?.cells.networkIsolation = $0 }))
+            if let s = vm.settings?.cells {
+                SettingToggle(label: "Enable cells by default", desc: "Isolate all new services automatically", isOn: vm.boolBinding(\.cells.enableByDefault))
+                ValidatedField(
+                    label: "Default memory limit", desc: "Per-cell memory cap (e.g. 256MB, 1GB)",
+                    initial: s.defaultMemoryLimit, width: 90,
+                    identifier: "settings_memory_limit",
+                    validate: SettingsValidator.isValidMemoryLimit,
+                    errorMessage: vm.validationErrors["memoryLimit"] ?? "Enter a number, optionally with KB/MB/GB",
+                    onValid: { vm.setMemoryLimit(fromText: $0) },
+                    onInvalid: { vm.setMemoryLimit(fromText: $0) })
+                ValidatedField(
+                    label: "Default CPU limit", desc: "Per-cell CPU cores",
+                    initial: s.defaultCpuLimit, width: 70,
+                    identifier: "settings_cpu_limit",
+                    validate: SettingsValidator.isValidCPULimit,
+                    errorMessage: vm.validationErrors["cpuLimit"] ?? "Enter a positive number of cores",
+                    onValid: { vm.setCPULimit(fromText: $0) },
+                    onInvalid: { vm.setCPULimit(fromText: $0) })
+                SettingToggle(label: "Network isolation", desc: "Restrict each cell to its port only", isOn: vm.boolBinding(\.cells.networkIsolation))
             }
         }.accessibilityIdentifier("cells_settings")
     }
@@ -212,23 +282,68 @@ private struct DeploySettingsPage: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Deploy").font(.title2).foregroundStyle(Color.textPrimary)
             Text("Deployment and infrastructure settings").foregroundStyle(Color.textMuted)
-            if let s = vm.settings?.deploy {
+            if vm.settings != nil {
                 SettingRow(label: "Provider", desc: "Cloud provider") {
-                    Picker("", selection: Binding(get: { vm.settings?.deploy.provider ?? "" }, set: { vm.settings?.deploy.provider = $0 })) {
-                        ForEach(["Hetzner", "DigitalOcean", "AWS", "GCP"], id: \.self) { Text($0).tag($0) }
+                    Picker("", selection: Binding(
+                        get: { vm.settings?.deploy.provider ?? "" },
+                        set: { vm.selectDeployProvider($0) }
+                    )) {
+                        ForEach(DeployProviders.all, id: \.self) { Text($0).tag($0) }
                     }.frame(width: 140).accessibilityIdentifier("settings_deploy_provider_picker")
                 }
+
+                GroupBox("\(vm.settings?.deploy.provider ?? "") Credentials") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(vm.deployFields()) { field in
+                            DeployCredentialRow(field: field, vm: vm)
+                        }
+                    }.padding(4)
+                }
+
                 SettingRow(label: "SSH Key", desc: "Key for server access") {
-                    TextField("", text: .constant(s.sshKey)).textFieldStyle(.roundedBorder).frame(width: 200)
+                    TextField("", text: vm.stringBinding(\.deploy.sshKey)).textFieldStyle(.roundedBorder).frame(width: 200)
+                        .accessibilityIdentifier("settings_ssh_key")
                 }
                 SettingRow(label: "Container runtime", desc: "For image builds") {
-                    Picker("", selection: Binding(get: { vm.settings?.deploy.containerRuntime ?? "" }, set: { vm.settings?.deploy.containerRuntime = $0 })) {
+                    Picker("", selection: vm.stringBinding(\.deploy.containerRuntime)) {
                         ForEach(["podman", "docker", "buildah"], id: \.self) { Text($0).tag($0) }
                     }.frame(width: 120).accessibilityIdentifier("settings_container_runtime_picker")
                 }
-                SettingToggle(label: "Auto-generate on save", desc: "Regenerate deploy configs when rawenv.toml changes", isOn: Binding(get: { vm.settings?.deploy.autoGenerate ?? false }, set: { vm.settings?.deploy.autoGenerate = $0 }))
+                SettingToggle(label: "Auto-generate on save", desc: "Regenerate deploy configs when rawenv.toml changes", isOn: vm.boolBinding(\.deploy.autoGenerate))
             }
         }.accessibilityIdentifier("deploy_settings")
+    }
+}
+
+private struct DeployCredentialRow: View {
+    let field: CredentialField
+    @ObservedObject var vm: SettingsViewModel
+    var body: some View {
+        let binding = Binding(
+            get: { vm.deployCredentials[field.key] ?? "" },
+            set: { vm.setDeployCredential($0, field: field) }
+        )
+        let revealed = vm.revealedDeployFields.contains(field.key)
+        return SettingRow(label: field.label, desc: field.isSecret ? "Stored in macOS Keychain" : "") {
+            HStack(spacing: 4) {
+                Group {
+                    if field.isSecret && !revealed {
+                        SecureField("", text: binding)
+                    } else {
+                        TextField("", text: binding)
+                    }
+                }
+                .textFieldStyle(.roundedBorder).frame(width: 180)
+                .accessibilityIdentifier("deploy_cred_\(field.key)")
+                if field.isSecret {
+                    Button { vm.toggleRevealDeployField(field) } label: {
+                        Image(systemName: revealed ? "eye.slash" : "eye")
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityIdentifier("deploy_cred_reveal_\(field.key)")
+                }
+            }
+        }
     }
 }
 
@@ -242,15 +357,34 @@ private struct AISettingsPage: View {
             Text("AI assistant configuration").foregroundStyle(Color.textMuted)
             if let ai = vm.settings?.ai {
                 SettingRow(label: "Provider", desc: "Active AI provider") {
-                    Picker("", selection: $vm.selectedProvider) {
+                    Picker("", selection: Binding(
+                        get: { vm.selectedProvider },
+                        set: { newValue in vm.selectedProvider = newValue; vm.update { $0.ai.provider = newValue } }
+                    )) {
                         ForEach(ai.providers, id: \.self) { Text($0).tag($0) }
                     }.frame(width: 200).accessibilityIdentifier("ai_provider_picker")
                 }
-                SettingRow(label: "API Key", desc: "For paid providers") {
-                    SecureField("", text: $vm.byomApiKey).textFieldStyle(.roundedBorder).frame(width: 200).accessibilityIdentifier("byom_api_key")
+                SettingRow(label: "API Key", desc: "Stored in macOS Keychain") {
+                    HStack(spacing: 4) {
+                        Group {
+                            if vm.revealAPIKey {
+                                TextField("", text: Binding(get: { vm.byomApiKey }, set: { vm.setAPIKey($0) }))
+                            } else {
+                                SecureField("", text: Binding(get: { vm.byomApiKey }, set: { vm.setAPIKey($0) }))
+                            }
+                        }
+                        .textFieldStyle(.roundedBorder).frame(width: 180)
+                        .accessibilityIdentifier("byom_api_key")
+                        Button { vm.revealAPIKey.toggle() } label: {
+                            Image(systemName: vm.revealAPIKey ? "eye.slash" : "eye")
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier("byom_api_key_reveal")
+                    }
                 }
                 SettingRow(label: "Ollama endpoint", desc: "Local model server") {
-                    TextField("", text: .constant(ai.ollamaEndpoint)).textFieldStyle(.roundedBorder).frame(width: 200)
+                    TextField("", text: vm.stringBinding(\.ai.ollamaEndpoint)).textFieldStyle(.roundedBorder).frame(width: 200)
+                        .accessibilityIdentifier("settings_ollama_endpoint")
                 }
                 SettingRow(label: "BYOM custom URL", desc: "Bring Your Own Model endpoint") {
                     TextField("", text: $vm.byomEndpoint).textFieldStyle(.roundedBorder).frame(width: 250).accessibilityIdentifier("byom_endpoint")
@@ -264,16 +398,17 @@ private struct AISettingsPage: View {
                                 Spacer()
                                 Picker("", selection: Binding(
                                     get: { vm.autonomyPerAction[action] ?? .suggestOnly },
-                                    set: { vm.autonomyPerAction[action] = $0 }
+                                    set: { vm.setAutonomy($0, for: action) }
                                 )) {
                                     ForEach(AIAutonomyLevel.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                                }.frame(width: 160).accessibilityIdentifier("autonomy_\(action)")
+                                }.frame(width: 170).accessibilityIdentifier("autonomy_\(action)")
                             }
                         }
                     }.padding(4)
                 }
 
-                SettingToggle(label: "Proactive suggestions", desc: "AI suggests optimizations automatically", isOn: Binding(get: { vm.settings?.ai.proactiveSuggestions ?? false }, set: { vm.settings?.ai.proactiveSuggestions = $0 }))
+                SettingToggle(label: "Proactive suggestions", desc: "AI suggests optimizations automatically", isOn: vm.boolBinding(\.ai.proactiveSuggestions))
+                SettingToggle(label: "Include logs in context", desc: "Send recent logs to the AI for better answers", isOn: vm.boolBinding(\.ai.includeLogsInContext))
             }
         }.accessibilityIdentifier("ai_settings")
     }
@@ -292,7 +427,7 @@ private struct ThemeSettingsPage: View {
             Text("Theme").font(.title2).foregroundStyle(Color.textPrimary)
             Text("Customize appearance").foregroundStyle(Color.textMuted)
 
-            // Mode picker
+            // Mode picker — "System" follows the macOS appearance setting.
             SettingRow(label: "Mode", desc: "App color scheme") {
                 Picker("", selection: Binding(
                     get: { tm.mode },
@@ -303,6 +438,11 @@ private struct ThemeSettingsPage: View {
                 .pickerStyle(.segmented)
                 .frame(width: 200)
                 .accessibilityIdentifier("theme_mode_picker")
+            }
+            if tm.mode == .system {
+                Text("Following macOS appearance.")
+                    .font(.system(size: 11)).foregroundStyle(Color.textMuted)
+                    .accessibilityIdentifier("theme_system_hint")
             }
 
             // Colors
@@ -336,7 +476,6 @@ private struct ThemeSettingsPage: View {
             // Live preview
             GroupBox("Live Preview") {
                 VStack(alignment: .leading, spacing: 10) {
-                    // Sample service row
                     HStack(spacing: 8) {
                         Circle().fill(tm.successColor).frame(width: 8, height: 8)
                         Text("PostgreSQL").font(.system(size: CGFloat(tm.fontSize), weight: .medium)).foregroundStyle(Color.textPrimary)
@@ -347,7 +486,6 @@ private struct ThemeSettingsPage: View {
                     .background(Color.bgSecondary)
                     .clipShape(RoundedRectangle(cornerRadius: tm.borderRadius))
 
-                    // Sample buttons
                     HStack(spacing: 8) {
                         Text("Primary").font(.system(size: CGFloat(tm.fontSize - 1)))
                             .padding(.horizontal, 10).padding(.vertical, 4)
@@ -363,7 +501,6 @@ private struct ThemeSettingsPage: View {
                             .clipShape(RoundedRectangle(cornerRadius: tm.borderRadius))
                     }
 
-                    // Progress bar
                     GeometryReader { geo in
                         RoundedRectangle(cornerRadius: tm.borderRadius / 2)
                             .fill(Color.bgTertiary)
@@ -374,7 +511,6 @@ private struct ThemeSettingsPage: View {
                             }
                     }.frame(height: 6)
 
-                    // Toggle
                     Toggle("Auto-start services", isOn: .constant(true))
                         .font(.system(size: CGFloat(tm.fontSize)))
                         .tint(tm.accentColor)
@@ -382,11 +518,9 @@ private struct ThemeSettingsPage: View {
                 .padding(8)
             }
 
-            // Reset
             Button("Reset to Defaults") { tm.reset() }
                 .accessibilityIdentifier("theme_reset_btn")
 
-            // TOML preview
             GroupBox("theme.toml") {
                 Text(tomlPreview)
                     .font(.system(size: 11, design: .monospaced))
@@ -450,7 +584,9 @@ private struct SettingRow<Content: View>: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.textPrimary)
-                Text(desc).font(.system(size: 11)).foregroundStyle(Color.textMuted)
+                if !desc.isEmpty {
+                    Text(desc).font(.system(size: 11)).foregroundStyle(Color.textMuted)
+                }
             }
             Spacer()
             content
@@ -466,6 +602,72 @@ private struct SettingToggle: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.textPrimary)
                 Text(desc).font(.system(size: 11)).foregroundStyle(Color.textMuted)
+            }
+        }
+        .accessibilityIdentifier("toggle_\(label)")
+    }
+}
+
+/// A text field that validates its contents on every edit. Valid input is
+/// committed via `onValid`; invalid input shows an inline error and is not
+/// persisted.
+private struct ValidatedField: View {
+    let label: String
+    let desc: String
+    let initial: String
+    var width: CGFloat = 80
+    let identifier: String
+    let validate: (String) -> Bool
+    let errorMessage: String
+    let onValid: (String) -> Void
+    let onInvalid: (String) -> Void
+
+    @State private var text: String
+    @State private var isValid: Bool = true
+
+    init(label: String, desc: String, initial: String, width: CGFloat = 80,
+         identifier: String, validate: @escaping (String) -> Bool,
+         errorMessage: String, onValid: @escaping (String) -> Void,
+         onInvalid: @escaping (String) -> Void) {
+        self.label = label
+        self.desc = desc
+        self.initial = initial
+        self.width = width
+        self.identifier = identifier
+        self.validate = validate
+        self.errorMessage = errorMessage
+        self.onValid = onValid
+        self.onInvalid = onInvalid
+        _text = State(initialValue: initial)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.textPrimary)
+                    Text(desc).font(.system(size: 11)).foregroundStyle(Color.textMuted)
+                }
+                Spacer()
+                TextField("", text: $text)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: width)
+                    .accessibilityIdentifier(identifier)
+                    .onChange(of: text) { _, newValue in
+                        if validate(newValue) {
+                            isValid = true
+                            onValid(newValue)
+                        } else {
+                            isValid = false
+                            onInvalid(newValue)
+                        }
+                    }
+            }
+            if !isValid {
+                Text(errorMessage)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.error)
+                    .accessibilityIdentifier("\(identifier)_error")
             }
         }
     }

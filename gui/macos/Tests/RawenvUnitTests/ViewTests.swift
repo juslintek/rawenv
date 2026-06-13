@@ -308,14 +308,14 @@ private func makeAppStateInstalledNoSetup() -> AppState {
     @Test @MainActor func settingsRenders() {
         let state = makeAppState()
         let tm = ThemeManager()
-        let vm = SettingsViewModel(repository: TestDataRepository())
+        let vm = makeSettingsVM()
         render(SettingsView(viewModel: vm).environmentObject(state).environmentObject(tm))
     }
 
     @Test @MainActor func settingsWithData() async {
         let state = makeAppState()
         let tm = ThemeManager()
-        let vm = SettingsViewModel(repository: TestDataRepository())
+        let vm = makeSettingsVM()
         await vm.load()
         render(SettingsView(viewModel: vm).environmentObject(state).environmentObject(tm))
     }
@@ -323,7 +323,7 @@ private func makeAppStateInstalledNoSetup() -> AppState {
     @Test @MainActor func settingsAllPages() async {
         let state = makeAppState()
         let tm = ThemeManager()
-        let vm = SettingsViewModel(repository: TestDataRepository())
+        let vm = makeSettingsVM()
         await vm.load()
         for page in SettingsPage.allCases {
             vm.currentPage = page

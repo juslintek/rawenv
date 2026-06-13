@@ -54,6 +54,9 @@ public struct AISettings: Codable, Equatable {
     public var maxContextSize: Int
     public var autonomyLevels: [String]
     public var defaultAutonomy: String
+    /// Per-action autonomy levels (action name -> ``AIAutonomyLevel`` rawValue).
+    /// Defaulted so existing call sites and older persisted files remain valid.
+    public var autonomyByAction: [String: String] = [:]
 }
 
 public struct ThemeSettings: Codable, Equatable {
