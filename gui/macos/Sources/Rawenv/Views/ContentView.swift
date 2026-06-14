@@ -170,20 +170,18 @@ public struct ContentView: View {
     private var detailView: some View {
         switch appState.currentDestination {
         case .dashboard:
-            DashboardView(viewModel: DashboardViewModel(repository: appState.repository))
+            DashboardView(viewModel: appState.dashboardVM)
         case .aiChat:
-            AIChatView(viewModel: AIChatViewModel(repository: appState.repository, aiProvider: appState.aiProvider))
+            AIChatView(viewModel: appState.aiChatVM)
         case .connections:
-            ConnectionsView(viewModel: ConnectionsViewModel(repository: appState.repository))
+            ConnectionsView(viewModel: appState.connectionsVM)
         case .deploy:
-            DeployView(viewModel: DeployViewModel(repository: appState.repository, projectPath: appState.activeProject?.path, deployEngine: appState.deployEngine))
+            DeployView(viewModel: appState.deployVM)
         case .tunnel:
-            TunnelView(viewModel: TunnelVM(
-                commandRunner: { TunnelVM.runRawenvTunnel(port: $0) },
-                repository: appState.repository))
+            TunnelView(viewModel: appState.tunnelVM)
         case .projects:
             ProjectsView(
-                viewModel: ProjectsViewModel(repository: appState.repository),
+                viewModel: appState.projectsVM,
                 engine: appState.scannerEngine
             )
         case .installer:

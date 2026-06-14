@@ -18,6 +18,15 @@ public final class AppState: ObservableObject, NavigationService {
     public let deployEngine: DeployEngine
     public let themeManager = ThemeManager()
 
+    // Cached ViewModels — created once, never recreated on navigation.
+    // This prevents the process-storm bug where each body evaluation spawned new CLI processes.
+    public lazy var dashboardVM: DashboardViewModel = DashboardViewModel(repository: repository)
+    public lazy var aiChatVM: AIChatViewModel = AIChatViewModel(repository: repository, aiProvider: aiProvider)
+    public lazy var connectionsVM: ConnectionsViewModel = ConnectionsViewModel(repository: repository)
+    public lazy var deployVM: DeployViewModel = DeployViewModel(repository: repository, projectPath: activeProject?.path, deployEngine: deployEngine)
+    public lazy var tunnelVM: TunnelVM = TunnelVM(commandRunner: { TunnelVM.runRawenvTunnel(port: $0) }, repository: repository)
+    public lazy var projectsVM: ProjectsViewModel = ProjectsViewModel(repository: repository)
+
     // Real implementations (used when useTestDoubles = false)
     public let realServiceManager: RealServiceManager?
     public let realScannerEngine: RealScannerEngine?
