@@ -89,7 +89,8 @@ fi
 . "$ROOT/.githooks/quality-guards.sh"
 collect_staged all_staged '*'
 if [ "${#all_staged[@]}" -gt 0 ]; then
-  quality_guards "${all_staged[@]}" || { warn "quality guardrails failed"; fail=1; }
+  QG_DIFF="git diff --cached -U0 --" \
+    quality_guards "${all_staged[@]}" || { warn "quality guardrails failed"; fail=1; }
 fi
 
 if [ "$fail" -ne 0 ]; then
