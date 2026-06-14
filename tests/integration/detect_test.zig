@@ -4,7 +4,7 @@ const io = testing.io;
 const Io = std.Io;
 
 fn rawenvBin() []const u8 {
-    return if (std.c.getenv("RAWENV_BINARY")) |s| std.mem.sliceTo(s, 0) else "zig-out/bin/rawenv";
+    return if (std.c.getenv("RAWENV_BIN")) |s| std.mem.sliceTo(s, 0) else "zig-out/bin/rawenv";
 }
 
 fn fileExists(dir: std.Io.Dir, name: []const u8) bool {

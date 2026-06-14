@@ -519,7 +519,8 @@ pub fn build(b: *std.Build) void {
     });
     integration_init.root_module.link_libc = true;
     const run_init_test = b.addRunArtifact(integration_init);
-    run_init_test.step.dependOn(&exe.step);
+    run_init_test.step.dependOn(b.getInstallStep());
+    run_init_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
 
     const integration_help = b.addTest(.{
         .root_module = b.createModule(.{
@@ -530,7 +531,8 @@ pub fn build(b: *std.Build) void {
     });
     integration_help.root_module.link_libc = true;
     const run_help_test = b.addRunArtifact(integration_help);
-    run_help_test.step.dependOn(&exe.step);
+    run_help_test.step.dependOn(b.getInstallStep());
+    run_help_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
 
     const integration_services = b.addTest(.{
         .root_module = b.createModule(.{
@@ -541,7 +543,8 @@ pub fn build(b: *std.Build) void {
     });
     integration_services.root_module.link_libc = true;
     const run_services_test = b.addRunArtifact(integration_services);
-    run_services_test.step.dependOn(&exe.step);
+    run_services_test.step.dependOn(b.getInstallStep());
+    run_services_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
 
     const integration_step = b.step("test-integration", "Run CLI integration tests");
     integration_step.dependOn(&run_init_test.step);
@@ -557,7 +560,8 @@ pub fn build(b: *std.Build) void {
     });
     integration_detect.root_module.link_libc = true;
     const run_detect_test = b.addRunArtifact(integration_detect);
-    run_detect_test.step.dependOn(&exe.step);
+    run_detect_test.step.dependOn(b.getInstallStep());
+    run_detect_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
     integration_step.dependOn(&run_detect_test.step);
 
     // Detector coverage E2E (E2E-103): one fixture + test per supported manifest
@@ -586,7 +590,8 @@ pub fn build(b: *std.Build) void {
     });
     integration_add.root_module.link_libc = true;
     const run_add_test = b.addRunArtifact(integration_add);
-    run_add_test.step.dependOn(&exe.step);
+    run_add_test.step.dependOn(b.getInstallStep());
+    run_add_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
     integration_step.dependOn(&run_add_test.step);
 
     const integration_status = b.addTest(.{

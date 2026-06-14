@@ -259,10 +259,14 @@ import Testing
 @Suite struct ScannerEngineTests {
     @Test @MainActor func initialState() {
         let engine = ScannerEngine()
-        // Default scan roots are all under the user's home — no machine-specific mounts.
+        // Assert the exact default scan roots — all under the user's home, no
+        // machine-specific mounts. (Update intentionally if a default root changes.)
         let home = NSHomeDirectory()
-        #expect(engine.paths.count == 5)
-        #expect(engine.paths.allSatisfy { $0.path.hasPrefix(home) })
+        #expect(
+            engine.paths.map(\.path) == [
+                "\(home)/Projects", "\(home)/Developer", "\(home)/Code",
+                "\(home)/Desktop", "\(home)/Documents",
+            ])
         #expect(engine.totalProjects == 0)
         #expect(engine.isScanning == false)
         #expect(engine.scanComplete == false)
