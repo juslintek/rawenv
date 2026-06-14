@@ -83,8 +83,17 @@ if [ "${#yaml_now[@]}" -gt 0 ] && have yamllint; then
   yamllint -c "$ROOT/.yamllint" "${yaml_now[@]}" || { warn "yamllint issues above"; fail=1; }
 fi
 
+# --- Quality guardrails: review-lesson anti-patterns (hardcoded paths, masked
+# failures, unpinned actions, hook-skip directives). See
+# ~/.kiro/steering/code-review-lessons.md ---
+. "$ROOT/.githooks/quality-guards.sh"
+collect_staged all_staged '*'
+if [ "${#all_staged[@]}" -gt 0 ]; then
+  quality_guards "${all_staged[@]}" || { warn "quality guardrails failed"; fail=1; }
+fi
+
 if [ "$fail" -ne 0 ]; then
-  warn "commit blocked by lint errors. Fix + re-stage, or 'git commit --no-verify' to bypass."
+  warn "commit blocked. Fix the cause — do not bypass hooks."
   exit 1
 fi
 exit 0

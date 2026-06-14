@@ -5,7 +5,6 @@
 # Platforms whose tools are absent (Vala/Linux, .NET on macOS) are skipped with a
 # notice rather than failing. Written for bash 3.2 (no mapfile/assoc arrays).
 #
-# Bypass in emergencies with: git push --no-verify
 set -uo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
@@ -92,8 +91,15 @@ else
   warn "meson/valac not found — skipping Linux GUI tests (run in CI on ubuntu)"
 fi
 
+# 7. Quality guardrails: review-lesson anti-patterns on changed files.
+. "$ROOT/.githooks/quality-guards.sh"
+collect_changed qg_changed '*'
+if [ "${#qg_changed[@]}" -gt 0 ]; then
+  step "quality guardrails" quality_guards "${qg_changed[@]}"
+fi
+
 if [ "$fail" -ne 0 ]; then
-  err "push blocked by failing checks. Fix them, or bypass with 'git push --no-verify'."
+  err "push blocked by failing checks. Fix the cause — do not bypass hooks."
   exit 1
 fi
 ok "all checks passed — pushing."
