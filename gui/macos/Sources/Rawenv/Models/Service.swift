@@ -1,6 +1,6 @@
 import Foundation
 
-public struct Service: Codable, Identifiable, Equatable, Hashable {
+public struct Service: Codable, Identifiable, Equatable, Hashable, Sendable {
     public var id: String { name }
     public let name: String
     public let port: Int
