@@ -21,6 +21,7 @@ reviews:
   path_filters:
     - "!**/.zig-cache/**"
     - "!**/zig-out/**"
+    - "!**/.build/**"
     - "!gui/macos/.build/**"
     - "!gui/macos/build/**"
     - "!**/*.lock"
