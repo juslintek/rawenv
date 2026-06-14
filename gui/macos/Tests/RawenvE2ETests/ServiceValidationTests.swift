@@ -408,5 +408,7 @@ private let recipeProjectTests: [RecipeProjectTest] = [
         try? FileManager.default.removeItem(atPath: datadir)
     }
 
-    private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/rawenv")
+    private let cli = RawenvCLI(
+        binaryPath: (ProcessInfo.processInfo.environment["RAWENV_BINARY"]
+            ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"))
 }

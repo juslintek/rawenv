@@ -1,12 +1,14 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import RawenvLib
 
 /// Tests the full project creation lifecycle using framework templates:
 /// create from template → detect services → configure → verify → teardown
 
 private let testRoot = "/tmp/rawenv-template-lifecycle"
-private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/rawenv")
+private let cli = RawenvCLI(
+    binaryPath: (ProcessInfo.processInfo.environment["RAWENV_BINARY"] ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"))
 
 @Suite(.serialized) struct ProjectCreationLifecycleTests {
 
@@ -157,13 +159,15 @@ private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/ra
         let redis = lib.service(named: "redis")!
 
         let home = NSHomeDirectory()
-        let nodeStart = lib.startCommand(for: node, dataDir: "\(home)/.rawenv/data/node", logDir: "\(home)/.rawenv/logs")
+        let nodeStart = lib.startCommand(
+            for: node, dataDir: "\(home)/.rawenv/data/node", logDir: "\(home)/.rawenv/logs")
         #expect(!nodeStart.isEmpty)
 
         let pgStart = lib.startCommand(for: pg, dataDir: "\(home)/.rawenv/data/pg", logDir: "\(home)/.rawenv/logs")
         #expect(pgStart.contains("pg_ctl"))
 
-        let redisStart = lib.startCommand(for: redis, dataDir: "\(home)/.rawenv/data/redis", logDir: "\(home)/.rawenv/logs", port: 6379)
+        let redisStart = lib.startCommand(
+            for: redis, dataDir: "\(home)/.rawenv/data/redis", logDir: "\(home)/.rawenv/logs", port: 6379)
         #expect(redisStart.contains("redis-server"))
         #expect(redisStart.contains("6379"))
 
@@ -252,7 +256,8 @@ private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/ra
         #expect(install.contains("meilisearch"))
 
         // Generate start command
-        let start = lib.startCommand(for: meilisearch, dataDir: "/tmp/meili-data", logDir: "/tmp/meili-logs", port: 7700)
+        let start = lib.startCommand(
+            for: meilisearch, dataDir: "/tmp/meili-data", logDir: "/tmp/meili-logs", port: 7700)
         #expect(start.contains("7700"))
 
         // Generate stop command

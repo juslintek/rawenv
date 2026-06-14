@@ -1,5 +1,6 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import RawenvLib
 
 /// End-to-end: rawenv allocates non-conflicting ports for two instances of the
@@ -7,15 +8,22 @@ import Foundation
 /// with isolated data, and clean up.
 @Suite(.serialized) struct MultiInstanceE2ETests {
 
-    private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/rawenv")
+    private let cli = RawenvCLI(
+        binaryPath: (ProcessInfo.processInfo.environment["RAWENV_BINARY"]
+            ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"))
     private let root = "/tmp/rawenv-multi-instance"
     private let redisBin = "/opt/homebrew/bin/redis-server"
 
-    struct ServiceJSON: Decodable { let name: String; let port: Int; let status: String }
+    struct ServiceJSON: Decodable {
+        let name: String
+        let port: Int
+        let status: String
+    }
 
     @Test func twoRedisInstancesOnDistinctAllocatedPorts() async throws {
         guard FileManager.default.isExecutableFile(atPath: redisBin) else {
-            print("SKIP: redis-server not installed"); return
+            print("SKIP: redis-server not installed")
+            return
         }
 
         // Setup: project with two redis instances, no explicit ports → rawenv auto-allocates.
@@ -48,7 +56,9 @@ import Foundation
         for svc in [cache, queue] {
             let dir = "\(root)/data/\(svc.name)"
             try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-            _ = shell("redis-server --port \(svc.port) --daemonize yes --dir '\(dir)' --save '' --appendonly no --loglevel warning")
+            _ = shell(
+                "redis-server --port \(svc.port) --daemonize yes --dir '\(dir)' --save '' --appendonly no --loglevel warning"
+            )
         }
         defer {
             for svc in [cache, queue] { _ = shell("redis-cli -p \(svc.port) shutdown nosave") }
@@ -76,7 +86,8 @@ import Foundation
 
     @Test func explicitPortOverrideIsHonoredEndToEnd() async throws {
         guard FileManager.default.isExecutableFile(atPath: redisBin) else {
-            print("SKIP: redis-server not installed"); return
+            print("SKIP: redis-server not installed")
+            return
         }
         let dir = "\(root)-override"
         try? FileManager.default.removeItem(atPath: dir)
@@ -95,7 +106,8 @@ import Foundation
         let services = try await cli.runJSON(["services", "ls", "--json"], as: [ServiceJSON].self, cwd: dir)
         #expect(services.first?.port == 16399)
 
-        _ = shell("redis-server --port 16399 --daemonize yes --dir '\(dir)' --save '' --appendonly no --loglevel warning")
+        _ = shell(
+            "redis-server --port 16399 --daemonize yes --dir '\(dir)' --save '' --appendonly no --loglevel warning")
         defer { _ = shell("redis-cli -p 16399 shutdown nosave") }
         try await Task.sleep(nanoseconds: 1_000_000_000)
         #expect(shell("redis-cli -p 16399 ping").contains("PONG"))

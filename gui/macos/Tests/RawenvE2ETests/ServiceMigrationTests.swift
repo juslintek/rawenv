@@ -1,11 +1,13 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import RawenvLib
 
 /// Tests migrating existing services to rawenv and adding new services to existing projects.
 
 private let testRoot = "/tmp/rawenv-migration-test"
-private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/rawenv")
+private let cli = RawenvCLI(
+    binaryPath: (ProcessInfo.processInfo.environment["RAWENV_BINARY"] ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"))
 
 @Suite(.serialized) struct ServiceMigrationTests {
 
@@ -60,7 +62,11 @@ private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/ra
     }
 
     @Test func step02_servicesDetected() async throws {
-        struct S: Decodable { let name: String; let port: Int; let status: String }
+        struct S: Decodable {
+            let name: String
+            let port: Int
+            let status: String
+        }
         let services: [S] = try await cli.runJSON(["services", "ls"], as: [S].self, cwd: "\(testRoot)/existing-app")
         #expect(!services.isEmpty)
         // Should detect postgres and redis from .env
@@ -97,14 +103,16 @@ private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/ra
         let redis = lib.service(named: "redis")!
         let redisInstall = lib.installCommand(for: redis, version: "7.4", platform: "macos")
         #expect(redisInstall.contains("redis"))
-        let redisStart = lib.startCommand(for: redis, dataDir: "\(dataDir)/redis", logDir: "\(home)/.rawenv/logs", port: 6379)
+        let redisStart = lib.startCommand(
+            for: redis, dataDir: "\(dataDir)/redis", logDir: "\(home)/.rawenv/logs", port: 6379)
         #expect(redisStart.contains("6379"))
 
         // Elasticsearch migration
         let es = lib.service(named: "Elasticsearch")!
         let esInstall = lib.installCommand(for: es, version: "8.13", platform: "macos")
         #expect(esInstall.contains("8.13"))
-        let esStart = lib.startCommand(for: es, dataDir: "\(dataDir)/elasticsearch", logDir: "\(home)/.rawenv/logs", port: 9200)
+        let esStart = lib.startCommand(
+            for: es, dataDir: "\(dataDir)/elasticsearch", logDir: "\(home)/.rawenv/logs", port: 9200)
         #expect(esStart.contains("elasticsearch"))
     }
 
@@ -161,7 +169,7 @@ private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/ra
         #expect(mail.default_port == 8025)
         let start = lib.startCommand(for: mail, dataDir: "/tmp/mail", logDir: "/tmp/logs", port: 8025)
         #expect(start.contains("8025"))
-        #expect(start.contains("1025")) // SMTP port
+        #expect(start.contains("1025"))  // SMTP port
     }
 
     @Test @MainActor func step04_addGrafanaWithPrometheus() {
@@ -211,7 +219,10 @@ private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/ra
     }
 
     @Test func step06_verifyNewServiceInList() async throws {
-        struct S: Decodable { let name: String; let port: Int }
+        struct S: Decodable {
+            let name: String
+            let port: Int
+        }
         let services: [S] = try await cli.runJSON(["services", "ls"], as: [S].self, cwd: "\(testRoot)/existing-app")
         let names = services.map(\.name)
         #expect(names.contains("meilisearch"))

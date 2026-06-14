@@ -1,12 +1,15 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import RawenvLib
 
 /// FULL project setup E2E: create a project → find it → detect services →
 /// generate the isolated config + deploy/dns artifacts → actually RUN a detected
 /// service and verify it serves data → tear everything down.
 @Suite(.serialized) struct FullProjectSetupE2ETests {
-    private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/rawenv")
+    private let cli = RawenvCLI(
+        binaryPath: (ProcessInfo.processInfo.environment["RAWENV_BINARY"]
+            ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"))
     private let redisBin = "/opt/homebrew/bin/redis-server"
     private let root = "/tmp/rawenv-full-setup"
 
@@ -46,14 +49,18 @@ import Foundation
 
         // ---- 4. RUN a detected service for real & verify it serves data ----
         guard FileManager.default.isExecutableFile(atPath: redisBin),
-              let redis = setup.services.first(where: { $0.name == "redis" }) else {
-            print("SKIP service-run: redis-server not installed"); return
+            let redis = setup.services.first(where: { $0.name == "redis" })
+        else {
+            print("SKIP service-run: redis-server not installed")
+            return
         }
         // Use a dedicated port + data dir so we never collide with a real redis.
         let port = 16511
         let dataDir = "\(root)/cells/redis"
         try FileManager.default.createDirectory(atPath: dataDir, withIntermediateDirectories: true)
-        _ = sh("redis-server --port \(port) --daemonize yes --dir '\(dataDir)' --save '' --appendonly no --loglevel warning")
+        _ = sh(
+            "redis-server --port \(port) --daemonize yes --dir '\(dataDir)' --save '' --appendonly no --loglevel warning"
+        )
         defer { _ = sh("redis-cli -p \(port) shutdown nosave") }
         try await Task.sleep(nanoseconds: 1_200_000_000)
 
@@ -69,15 +76,23 @@ import Foundation
     }
 
     private func sh(_ cmd: String) -> String {
-        let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/bash"); p.arguments = ["-lc", cmd]
-        let pipe = Pipe(); p.standardOutput = pipe; p.standardError = pipe
-        try? p.run(); p.waitUntilExit()
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/bash")
+        p.arguments = ["-lc", cmd]
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = pipe
+        try? p.run()
+        p.waitUntilExit()
         return String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
     private func portOpen(_ port: Int) -> Bool {
-        let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/bash")
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/bash")
         p.arguments = ["-lc", "lsof -i :\(port) -sTCP:LISTEN 2>/dev/null | grep -q LISTEN"]
-        try? p.run(); p.waitUntilExit(); return p.terminationStatus == 0
+        try? p.run()
+        p.waitUntilExit()
+        return p.terminationStatus == 0
     }
 }
