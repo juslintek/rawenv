@@ -13,10 +13,10 @@ jobs:
   schema-validation:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
       - run: npx ajv-cli@5 validate --spec=draft2020 -s shared/schema.json -d shared/mock-data.json
@@ -24,7 +24,7 @@ jobs:
   macos:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
@@ -43,7 +43,7 @@ jobs:
         run: cd gui/macos && swift build && swift test
       - name: Upload test results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: macos-test-results
           path: gui/macos/.build/
@@ -51,7 +51,7 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
       - name: Build test container
@@ -67,16 +67,16 @@ jobs:
           docker run --rm rawenv-linux-test sh -c '
             Xvfb :99 -screen 0 1280x1024x24 &
             sleep 1
-            dbus-run-session -- sh -c "cd tests/e2e && python3 -m pytest -v"
+            dbus-run-session -- sh -c "cd /app/gui/linux && python3 -m pytest -v tests/e2e"
           '
 
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: '8.0.x'
       - name: Build
@@ -85,7 +85,7 @@ jobs:
         run: cd gui/windows && dotnet test Rawenv.Tests/Rawenv.Tests.csproj --logger trx
       - name: Upload test results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: windows-test-results
           path: gui/windows/**/TestResults/

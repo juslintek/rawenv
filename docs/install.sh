@@ -44,7 +44,11 @@ if [ -f "$TMP/rawenv" ]; then
   mv "$TMP/rawenv" "$BIN_DIR/rawenv"
 else
   src="$(find "$TMP" -name rawenv -type f -print -quit)"
-  [ -n "$src" ] && mv "$src" "$BIN_DIR/rawenv"
+  if [ -z "$src" ]; then
+    echo "rawenv binary not found in archive: $ARTIFACT" >&2
+    exit 1
+  fi
+  mv "$src" "$BIN_DIR/rawenv"
 fi
 chmod +x "$BIN_DIR/rawenv"
 
