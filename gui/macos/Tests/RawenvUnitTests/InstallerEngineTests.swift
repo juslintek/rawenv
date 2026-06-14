@@ -1,5 +1,6 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import RawenvLib
 
 @Suite(.serialized) struct InstallerEngineTests {
@@ -20,8 +21,11 @@ import Foundation
     /// deterministic source binary (a tiny executable script), so install runs
     /// never touch the real home directory or the network.
     @MainActor
-    private func makeOfflineEngine(sourceExists: Bool = true)
-        -> (engine: InstallerEngine, binPath: String, rcFile: String, source: String) {
+    private func makeOfflineEngine(
+        sourceExists: Bool = true
+    )
+        -> (engine: InstallerEngine, binPath: String, rcFile: String, source: String)
+    {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("rawenv-install-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
@@ -105,6 +109,17 @@ import Foundation
         // No install has run, so nothing is on disk yet.
         let result = engine.verifyBinary()
         #expect(result.ok == false)
+    }
+
+    @Test func embeddedCLIPathNeverReturnsHostExecutable() {
+        // In the test bundle there is no embedded rawenv, so this must be nil —
+        // and it must NEVER return the running host executable (the self-exec
+        // guard that prevents the GUI from installing itself as the CLI).
+        let embedded = InstallerEngine.embeddedCLIPath(fm: .default)
+        if let embedded {
+            let own = Bundle.main.executableURL?.resolvingSymlinksInPath().path
+            #expect(embedded.compare(own ?? "", options: .caseInsensitive) != .orderedSame)
+        }
     }
 
     @Test @MainActor func systemDescriptionIsRealNotHardcoded() {

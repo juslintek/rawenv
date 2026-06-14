@@ -41,7 +41,7 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
     /// Honest, user-visible install steps. Every entry below maps to real work
     /// performed in ``performInstall()`` — there are no placeholder steps.
     public let steps = [
-        "Downloading rawenv binary…",
+        "Installing rawenv binary…",
         "Installing to ~/.rawenv/bin/…",
         "Verifying binary…",
         "Adding to PATH…",
@@ -70,9 +70,19 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
         self.binPath = "\(self.binDir)/rawenv"
         self.rcFile = rcFile ?? "\(home)/.zshrc"
         self.sourceBinary = sourceBinary
-        self.installURL =
-            downloadURL ?? "https://github.com/juslintek/rawenv/releases/latest/download/rawenv-darwin-arm64"
+        self.installURL = downloadURL ?? Self.defaultDownloadURL()
         self.stepDelayNanos = stepDelayNanos
+    }
+
+    /// Release asset URL for the current architecture. Matches the names the
+    /// release workflow publishes (`rawenv-<arch>-macos.tar.gz`) — used only as
+    /// a last-resort fallback when no embedded or dev-build CLI is available.
+    private static func defaultDownloadURL() -> String {
+        let asset =
+            machineArchRaw() == "arm64"
+            ? "rawenv-aarch64-macos.tar.gz"
+            : "rawenv-x86_64-macos.tar.gz"
+        return "https://github.com/juslintek/rawenv/releases/latest/download/\(asset)"
     }
 
     /// Absolute path the binary is installed to.
@@ -150,9 +160,12 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
         addToPath(binDir)
     }
 
-    /// Resolve the binary either from an explicit local source, a network
-    /// download, or a local dev build — surfacing real errors instead of
-    /// swallowing them.
+    /// Resolve the binary, preferring sources that need no network:
+    ///   1. an explicit local source (tests / offline),
+    ///   2. the CLI embedded in the app bundle (the exact signed binary we ship),
+    ///   3. a local dev build (`zig-out/bin/rawenv`),
+    ///   4. download a release archive and extract it.
+    /// Real errors are surfaced rather than swallowed.
     private func obtainBinary(fm: FileManager) async throws {
         if let source = sourceBinary {
             guard fm.fileExists(atPath: source) else {
@@ -162,33 +175,105 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
             return
         }
 
+        // Prefer the CLI shipped inside the app bundle. No network, and it
+        // installs the exact binary the app was built and signed with — this is
+        // what makes first-run install work offline (and fixes the 404 from
+        // requesting a non-existent release asset).
+        if let embedded = Self.embeddedCLIPath(fm: fm) {
+            try replaceBinary(from: embedded, fm: fm)
+            return
+        }
+
+        // Local dev build from a source checkout.
+        let devBuild = "\(fm.currentDirectoryPath)/zig-out/bin/rawenv"
+        if fm.fileExists(atPath: devBuild) {
+            try replaceBinary(from: devBuild, fm: fm)
+            return
+        }
+
+        // Last resort: download a release archive (or raw binary) and install it.
         guard let url = URL(string: installURL) else { throw InstallError.noSource }
+        let data: Data
+        let response: URLResponse
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            if let http = response as? HTTPURLResponse,
-                !(200...299).contains(http.statusCode)
-            {
-                throw InstallError.downloadFailed(http.statusCode)
-            }
-            do {
-                if fm.fileExists(atPath: binPath) { try fm.removeItem(atPath: binPath) }
-                try data.write(to: URL(fileURLWithPath: binPath))
-            } catch {
-                throw InstallError.writeFailed(error.localizedDescription)
-            }
-        } catch let error as InstallError {
-            // A real install/write error: do not paper over it with a fallback.
-            throw error
+            (data, response) = try await URLSession.shared.data(from: url)
         } catch {
-            // Network unreachable: fall back to a local dev build if present,
-            // otherwise propagate the failure to the wizard's error state.
-            let devBuild = "\(fm.currentDirectoryPath)/zig-out/bin/rawenv"
-            if fm.fileExists(atPath: devBuild) {
-                try replaceBinary(from: devBuild, fm: fm)
-                return
-            }
+            // Network unreachable and nothing local to fall back to.
             throw error
         }
+        if let http = response as? HTTPURLResponse,
+            !(200...299).contains(http.statusCode)
+        {
+            throw InstallError.downloadFailed(http.statusCode)
+        }
+        do {
+            if installURL.hasSuffix(".tar.gz") || installURL.hasSuffix(".tgz") {
+                try extractArchive(data: data, fm: fm)
+            } else {
+                if fm.fileExists(atPath: binPath) { try fm.removeItem(atPath: binPath) }
+                try data.write(to: URL(fileURLWithPath: binPath))
+            }
+        } catch let error as InstallError {
+            throw error
+        } catch {
+            throw InstallError.writeFailed(error.localizedDescription)
+        }
+    }
+
+    /// Path to the `rawenv` CLI embedded in the running app bundle, or `nil` if
+    /// not present. Never returns the app's own GUI executable (which would
+    /// collide on a case-insensitive filesystem).
+    nonisolated static func embeddedCLIPath(fm: FileManager) -> String? {
+        var candidates: [String] = []
+        if let res = Bundle.main.resourceURL?.appendingPathComponent("rawenv").path {
+            candidates.append(res)
+        }
+        candidates.append(Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/rawenv").path)
+        let ownExec = Bundle.main.executableURL?.resolvingSymlinksInPath().path
+        for candidate in candidates where fm.isExecutableFile(atPath: candidate) {
+            let resolved = URL(fileURLWithPath: candidate).resolvingSymlinksInPath().path
+            if let own = ownExec, resolved.compare(own, options: .caseInsensitive) == .orderedSame {
+                continue
+            }
+            return candidate
+        }
+        return nil
+    }
+
+    /// Extract a downloaded `.tar.gz` release archive and install the `rawenv`
+    /// binary it contains.
+    private func extractArchive(data: Data, fm: FileManager) throws {
+        let tmpDir = fm.temporaryDirectory.appendingPathComponent("rawenv-dl-\(UUID().uuidString)")
+        try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: tmpDir) }
+
+        let archive = tmpDir.appendingPathComponent("rawenv.tar.gz")
+        try data.write(to: archive)
+
+        let tar = Process()
+        tar.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
+        tar.arguments = ["xzf", archive.path, "-C", tmpDir.path]
+        try tar.run()
+        tar.waitUntilExit()
+        guard tar.terminationStatus == 0 else {
+            throw InstallError.writeFailed("could not extract the downloaded archive")
+        }
+
+        let direct = tmpDir.appendingPathComponent("rawenv").path
+        var sourcePath: String?
+        if fm.isExecutableFile(atPath: direct) {
+            sourcePath = direct
+        } else if let enumerator = fm.enumerator(atPath: tmpDir.path) {
+            for case let entry as String in enumerator where (entry as NSString).lastPathComponent == "rawenv" {
+                sourcePath = tmpDir.appendingPathComponent(entry).path
+                break
+            }
+        }
+        guard let found = sourcePath else {
+            throw InstallError.writeFailed("rawenv binary not found in the downloaded archive")
+        }
+        if fm.fileExists(atPath: binPath) { try fm.removeItem(atPath: binPath) }
+        try fm.copyItem(atPath: found, toPath: binPath)
     }
 
     private func replaceBinary(from source: String, fm: FileManager) throws {
@@ -252,6 +337,16 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
         } else {
             // Create the rc file if it does not yet exist so PATH is configured.
             try? line.write(toFile: rcFile, atomically: true, encoding: .utf8)
+        }
+    }
+
+    /// Raw machine architecture (e.g. "arm64", "x86_64").
+    private static func machineArchRaw() -> String {
+        var sysinfo = utsname()
+        uname(&sysinfo)
+        return withUnsafeBytes(of: &sysinfo.machine) { raw -> String in
+            let ptr = raw.baseAddress!.assumingMemoryBound(to: CChar.self)
+            return String(cString: ptr)
         }
     }
 
