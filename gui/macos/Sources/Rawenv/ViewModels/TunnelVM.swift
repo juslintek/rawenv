@@ -137,9 +137,12 @@ public final class TunnelVM: ObservableObject {
     private func runTunnelCommand() {
         guard let commandRunner else { return }
         let requestedPort = port
-        Task.detached { [weak self] in
-            let output = commandRunner(requestedPort)
-            await MainActor.run { self?.lastOutput = output }
+        // Outer Task inherits the @MainActor context, so state updates are safe;
+        // the blocking CLI call runs in an inner detached task (capturing only
+        // the @Sendable runner + the port), so `self` is never sent off-actor.
+        Task {
+            let output = await Task.detached { commandRunner(requestedPort) }.value
+            lastOutput = output
         }
     }
 
@@ -148,17 +151,14 @@ public final class TunnelVM: ObservableObject {
         guard let p = installPrompt else { return }
         installing = true
         installError = nil
-        Task.detached { [weak self] in
-            let ok = Self.brewInstall(p)
-            await MainActor.run {
-                guard let self else { return }
-                self.installing = false
-                if ok {
-                    self.installPrompt = nil
-                    self.appendTunnel()
-                } else {
-                    self.installError = "Could not install \(p). Install it manually: brew install \(p)"
-                }
+        Task {
+            let ok = await Task.detached { Self.brewInstall(p) }.value
+            installing = false
+            if ok {
+                installPrompt = nil
+                appendTunnel()
+            } else {
+                installError = "Could not install \(p). Install it manually: brew install \(p)"
             }
         }
     }
