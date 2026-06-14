@@ -101,5 +101,9 @@ identifier_name:
 nesting:
   type_level: 3
 
+large_tuple:
+  warning: 4          # labeled tuples are idiomatic in test helpers
+  error: 6
+
 force_cast: error
 force_try: error
