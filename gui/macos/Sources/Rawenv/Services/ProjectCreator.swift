@@ -67,7 +67,7 @@ public final class ProjectCreator: ObservableObject {
 
     private func loadTemplates() {
         let searchPaths = [
-            ProcessInfo.processInfo.environment["RAWENV_REPO"].map { "\($0)/shared/recipes" },
+            ProcessInfo.processInfo.environment["RAWENV_REPO"].flatMap { $0.isEmpty ? nil : "\($0)/shared/recipes" },
             "\(FileManager.default.currentDirectoryPath)/shared/recipes",
             "\(FileManager.default.currentDirectoryPath)/../../shared/recipes",
             "/Volumes/Projects/rawenv/shared/recipes",

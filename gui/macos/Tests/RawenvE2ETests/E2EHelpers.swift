@@ -14,7 +14,6 @@ func resolvedRawenvBinary() -> String {
     let candidates = [
         ProcessInfo.processInfo.environment["RAWENV_BINARY"],
         "\(FileManager.default.currentDirectoryPath)/../../zig-out/bin/rawenv",
-        "/Volumes/Projects/rawenv/zig-out/bin/rawenv",
     ].compactMap { $0 }
     for candidate in candidates where FileManager.default.isExecutableFile(atPath: candidate) {
         return candidate
@@ -28,8 +27,5 @@ func resolvedRawenvRepo() -> String {
         return repo
     }
     let relative = "\(FileManager.default.currentDirectoryPath)/../.."
-    if FileManager.default.fileExists(atPath: "\(relative)/rawenv.toml") {
-        return relative
-    }
-    return "/Volumes/Projects/rawenv"
+    return relative
 }

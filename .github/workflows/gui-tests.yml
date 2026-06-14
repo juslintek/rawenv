@@ -6,11 +6,16 @@ on:
   pull_request:
     paths: ['gui/**', 'shared/**']
 
+permissions:
+  contents: read
+
 jobs:
   schema-validation:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -20,9 +25,12 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
         with:
           version: 0.16.0
+          use-cache: false
       # The GUI integration/E2E tests shell out to the rawenv CLI and use the
       # repo as a fixture. Build the CLI and point the tests at it + the repo
       # via env (tests fall back to a local dev path when these are unset).
@@ -44,6 +52,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Build test container
         run: docker build -f gui/linux/Dockerfile.test -t rawenv-linux-test .
       - name: Unit tests (meson) — gate
@@ -64,6 +74,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'

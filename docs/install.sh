@@ -43,7 +43,8 @@ tar -xzf "$TMP/$ARTIFACT" -C "$TMP"
 if [ -f "$TMP/rawenv" ]; then
   mv "$TMP/rawenv" "$BIN_DIR/rawenv"
 else
-  find "$TMP" -name rawenv -type f -exec mv {} "$BIN_DIR/rawenv" \;
+  src="$(find "$TMP" -name rawenv -type f -print -quit)"
+  [ -n "$src" ] && mv "$src" "$BIN_DIR/rawenv"
 fi
 chmod +x "$BIN_DIR/rawenv"
 
