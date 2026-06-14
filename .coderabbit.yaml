@@ -1,0 +1,84 @@
+# CodeRabbit configuration — AI PR reviews for rawenv.
+# Schema: https://docs.coderabbit.ai/reference/configuration
+# Applies when the CodeRabbit GitHub App is installed on the repo and a PR opens.
+language: en-US
+early_access: false
+
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  review_status: true
+  poem: false
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+
+  # Skip generated/vendored/build artifacts and committed test fixtures.
+  path_filters:
+    - "!**/.zig-cache/**"
+    - "!**/zig-out/**"
+    - "!gui/macos/.build/**"
+    - "!gui/macos/build/**"
+    - "!**/*.lock"
+    - "!**/node_modules/**"
+    - "!tests/integration/fixtures/**"
+    - "!docs/**/*.svg"
+
+  # Stack-specific review guidance. Mirrors AGENTS.md, the GUI skills, and the
+  # local lint configs so CodeRabbit reviews to the same standard as the hooks.
+  path_instructions:
+    - path: "src/**/*.zig"
+      instructions: >-
+        Zig 0.16.0 core. Enforce TigerStyle (Safety > Performance > DX): explicit
+        control flow, assertions at boundaries, no unbounded recursion. Flag
+        cross-platform breaks (e.g. POSIX-only APIs like AT.FDCWD used without a
+        Windows comptime guard). Code must pass `zig fmt --check` and `zig build test`.
+    - path: "gui/macos/Sources/**/*.swift"
+      instructions: >-
+        macOS SwiftUI (MVVM). ViewModels must be owned (not recreated in a parent
+        view body) — flag inline ViewModel construction inside `body`/@ViewBuilder.
+        RawenvCLI must never resolve to the app's own GUI binary (self-exec guard).
+        No force-unwrap/force-try in non-test code. snake_case is allowed on Codable
+        structs that mirror the JSON/CLI wire format.
+    - path: "gui/linux/**/*.vala"
+      instructions: >-
+        GTK4 + Libadwaita (Vala, MVVM). Every inspectable widget needs a stable
+        set_name() for dogtail e2e. New files must be registered in meson.build.
+    - path: "gui/windows/**/*.cs"
+      instructions: >-
+        WinUI 3 + CommunityToolkit.Mvvm. Use [ObservableProperty]/[RelayCommand],
+        resolve ViewModels from DI, and set AutomationProperties.AutomationId for
+        WinAppDriver e2e. Keep the Appium API version consistent with the package.
+    - path: ".githooks/**"
+      instructions: >-
+        Git hooks must stay bash 3.2 compatible (macOS default): no `mapfile`, no
+        associative arrays. They must degrade gracefully when a tool is absent.
+    - path: "**/*.sh"
+      instructions: >-
+        Shell scripts must pass `shellcheck -x --severity=warning` and `shfmt`.
+        Never run destructive commands without confirmation.
+
+  tools:
+    shellcheck:
+      enabled: true
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    actionlint:
+      enabled: true
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
