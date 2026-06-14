@@ -32,7 +32,7 @@ fn rawenvBin() []const u8 {
         const s = std.mem.sliceTo(p, 0);
         if (s.len > 0) return s;
     }
-    return if (std.c.getenv("RAWENV_BINARY")) |s| std.mem.sliceTo(s, 0) else "zig-out/bin/rawenv";
+    return if (std.c.getenv("RAWENV_BIN")) |s| std.mem.sliceTo(s, 0) else "zig-out/bin/rawenv";
 }
 
 const RunResult = struct {
