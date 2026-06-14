@@ -9,8 +9,7 @@ import Testing
 @Suite(.serialized) struct MultiInstanceE2ETests {
 
     private let cli = RawenvCLI(
-        binaryPath: (ProcessInfo.processInfo.environment["RAWENV_BINARY"]
-            ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"))
+        binaryPath: resolvedRawenvBinary())
     private let root = "/tmp/rawenv-multi-instance"
     private let redisBin = "/opt/homebrew/bin/redis-server"
 

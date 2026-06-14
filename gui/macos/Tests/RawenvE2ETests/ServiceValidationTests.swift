@@ -409,6 +409,5 @@ private let recipeProjectTests: [RecipeProjectTest] = [
     }
 
     private let cli = RawenvCLI(
-        binaryPath: (ProcessInfo.processInfo.environment["RAWENV_BINARY"]
-            ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"))
+        binaryPath: resolvedRawenvBinary())
 }
