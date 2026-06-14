@@ -8,8 +8,7 @@ import Testing
 /// service and verify it serves data → tear everything down.
 @Suite(.serialized) struct FullProjectSetupE2ETests {
     private let cli = RawenvCLI(
-        binaryPath: (ProcessInfo.processInfo.environment["RAWENV_BINARY"]
-            ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"))
+        binaryPath: resolvedRawenvBinary())
     private let redisBin = "/opt/homebrew/bin/redis-server"
     private let root = "/tmp/rawenv-full-setup"
 

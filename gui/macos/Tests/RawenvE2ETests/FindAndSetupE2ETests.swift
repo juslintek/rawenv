@@ -7,8 +7,7 @@ import Testing
 /// (ProjectSetupVM runs `rawenv init` + `services ls --json`). No simulation.
 @Suite(.serialized) struct FindAndSetupE2ETests {
     private let cli = RawenvCLI(
-        binaryPath: (ProcessInfo.processInfo.environment["RAWENV_BINARY"]
-            ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"))
+        binaryPath: resolvedRawenvBinary())
     private let root = "/tmp/rawenv-find-setup"
 
     @Test @MainActor func scanFindsProjectThenDetectsRealServices() async throws {
