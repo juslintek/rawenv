@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 
 @MainActor
 public final class ServiceManager: ObservableObject, @unchecked Sendable {
@@ -10,8 +10,10 @@ public final class ServiceManager: ObservableObject, @unchecked Sendable {
         self.init(repository: DataStore(), cli: RawenvCLI())
     }
 
-    public init(repository: DataRepository, cli: RawenvCLI = RawenvCLI(),
-                backend: ServiceBackend? = nil) {
+    public init(
+        repository: DataRepository, cli: RawenvCLI = RawenvCLI(),
+        backend: ServiceBackend? = nil
+    ) {
         self.backend = backend ?? RawenvServiceBackend(cli: cli)
         Task { await loadInitial(repository: repository) }
     }

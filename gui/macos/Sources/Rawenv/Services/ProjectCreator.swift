@@ -70,7 +70,6 @@ public final class ProjectCreator: ObservableObject {
             ProcessInfo.processInfo.environment["RAWENV_REPO"].flatMap { $0.isEmpty ? nil : "\($0)/shared/recipes" },
             "\(FileManager.default.currentDirectoryPath)/shared/recipes",
             "\(FileManager.default.currentDirectoryPath)/../../shared/recipes",
-            "/Volumes/Projects/rawenv/shared/recipes",
             "\(NSHomeDirectory())/.rawenv/recipes",
         ].compactMap { $0 }
         for base in searchPaths {

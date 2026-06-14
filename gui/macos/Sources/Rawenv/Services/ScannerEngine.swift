@@ -29,7 +29,7 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
         let home = NSHomeDirectory()
         let scanDirs = [
             "\(home)/Projects", "\(home)/Developer", "\(home)/Code",
-            "/Volumes/Projects", "\(home)/Desktop", "\(home)/Documents",
+            "\(home)/Desktop", "\(home)/Documents",
         ]
         paths = scanDirs.map {
             ScanPath(path: $0, status: .queued, projectCount: 0, cached: false)
@@ -122,10 +122,8 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
                 isDir.boolValue, !item.hasPrefix(".")
             else { continue }
             var stack: [String] = []
-            for marker in markers {
-                if fm.fileExists(atPath: "\(full)/\(marker)") {
-                    stack.append(stackNames[marker] ?? marker)
-                }
+            for marker in markers where fm.fileExists(atPath: "\(full)/\(marker)") {
+                stack.append(stackNames[marker] ?? marker)
             }
             if !stack.isEmpty {
                 projects.append(Project(name: item, path: full, stack: stack, deps: Self.depsSummary(full)))

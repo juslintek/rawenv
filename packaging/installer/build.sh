@@ -14,13 +14,13 @@ mkdir -p "$APP_DIR/Contents/Resources"
 
 # Compile Swift
 swiftc \
-    -O \
-    -parse-as-library \
-    -o "$APP_DIR/Contents/MacOS/rawenv-installer" \
-    "$SCRIPT_DIR/InstallerApp.swift"
+  -O \
+  -parse-as-library \
+  -o "$APP_DIR/Contents/MacOS/rawenv-installer" \
+  "$SCRIPT_DIR/InstallerApp.swift"
 
 # Info.plist
-cat > "$APP_DIR/Contents/Info.plist" << 'PLIST'
+cat >"$APP_DIR/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -41,7 +41,7 @@ PLIST
 
 # Copy rawenv binary into Resources (if available)
 if [ -f "$OUT_DIR/rawenv" ]; then
-    cp "$OUT_DIR/rawenv" "$APP_DIR/Contents/Resources/rawenv"
+  cp "$OUT_DIR/rawenv" "$APP_DIR/Contents/Resources/rawenv"
 fi
 
 echo "✓ Built: $APP_DIR"

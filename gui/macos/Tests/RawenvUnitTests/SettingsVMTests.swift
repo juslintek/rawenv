@@ -1,4 +1,5 @@
 import Testing
+
 @testable import RawenvLib
 
 @Suite struct SettingsVMTests {
@@ -26,7 +27,7 @@ import Testing
 
     @Test @MainActor func byomFieldsInitiallyEmpty() {
         let vm = makeSettingsVM()
-        #expect(vm.byomEndpoint == "")
-        #expect(vm.byomApiKey == "")
+        #expect(vm.byomEndpoint.isEmpty)
+        #expect(vm.byomApiKey.isEmpty)
     }
 }

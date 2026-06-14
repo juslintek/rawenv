@@ -12,15 +12,17 @@ struct ConnectionsView: View {
                 EmptyStateView(
                     icon: "link.badge.plus",
                     title: "No connections detected",
-                    guidance: "No connections found in your .env or config files. Run rawenv init to detect services, then add connection strings to your .env.",
+                    guidance:
+                        "No connections found in your .env or config files. Run rawenv init to detect services, then add connection strings to your .env.",
                     idPrefix: "connections")
-            case let .failed(message):
+            case .failed(let message):
                 ErrorStateView(
                     title: "Couldn't load connections",
                     message: message,
-                    idPrefix: "connections") {
-                        Task { await viewModel.load() }
-                    }
+                    idPrefix: "connections"
+                ) {
+                    Task { await viewModel.load() }
+                }
             case .loaded:
                 loadedContent
             }
@@ -33,14 +35,21 @@ struct ConnectionsView: View {
     private var loadedContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("🔌 Connection Manager").font(.system(size: 18, weight: .semibold)).foregroundStyle(Color.textPrimary)
-                Text("Detected connections from .env and config files").font(.system(size: 12)).foregroundStyle(Color.textMuted)
+                Text("🔌 Connection Manager").font(.system(size: 18, weight: .semibold)).foregroundStyle(
+                    Color.textPrimary)
+                Text("Detected connections from .env and config files").font(.system(size: 12)).foregroundStyle(
+                    Color.textMuted)
 
                 ForEach(Array(viewModel.connections.indices), id: \.self) { idx in
-                    ConnectionCard(connection: viewModel.connections[idx], mode: Binding(
-                        get: { viewModel.connectionModes[viewModel.connections[idx].envVar] ?? viewModel.connections[idx].mode },
-                        set: { viewModel.setMode($0, for: viewModel.connections[idx].envVar) }
-                    ))
+                    ConnectionCard(
+                        connection: viewModel.connections[idx],
+                        mode: Binding(
+                            get: {
+                                viewModel.connectionModes[viewModel.connections[idx].envVar]
+                                    ?? viewModel.connections[idx].mode
+                            },
+                            set: { viewModel.setMode($0, for: viewModel.connections[idx].envVar) }
+                        ))
                 }
             }
             .padding(20)
@@ -86,7 +95,9 @@ private struct ConnectionCard: View {
 
             // Connection string + copy
             HStack {
-                Text(activeConnectionString).font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.textMuted).lineLimit(1)
+                Text(activeConnectionString).font(.system(size: 11, design: .monospaced)).foregroundStyle(
+                    Color.textMuted
+                ).lineLimit(1)
                 Spacer()
                 Button(copied ? "Copied!" : "Copy") {
                     NSPasteboard.general.clearContents()
@@ -137,7 +148,9 @@ private struct ConnectionCard: View {
 }
 
 private struct ModeButton: View {
-    let title: String; let isActive: Bool; let action: () -> Void
+    let title: String
+    let isActive: Bool
+    let action: () -> Void
     var body: some View {
         if isActive {
             Button(title, action: action).buttonStyle(.borderedProminent).controlSize(.small)

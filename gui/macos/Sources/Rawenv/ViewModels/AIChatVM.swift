@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 
 @MainActor
 public final class AIChatViewModel: ObservableObject {
@@ -8,7 +8,7 @@ public final class AIChatViewModel: ObservableObject {
     @Published public var isLoading: Bool = false
     @Published public var selectedProvider: String = "Groq (Llama 3.3 70B)"
     @Published public var providers: [String] = [
-        "Groq (Llama 3.3 70B)", "Cerebras (Qwen3 235B)", "Cloudflare Workers AI", "Ollama (local)"
+        "Groq (Llama 3.3 70B)", "Cerebras (Qwen3 235B)", "Cloudflare Workers AI", "Ollama (local)",
     ]
     /// Drives the chat history's loading / empty / error UI.
     @Published public var phase: LoadPhase = .idle
@@ -21,10 +21,12 @@ public final class AIChatViewModel: ObservableObject {
     private let settingsStore: SettingsPersisting
     private let secretStore: SecretStoring
 
-    public init(repository: DataRepository,
-                aiProvider: AIProvider,
-                settingsStore: SettingsPersisting = SettingsStore(),
-                secretStore: SecretStoring = KeychainSecretStore()) {
+    public init(
+        repository: DataRepository,
+        aiProvider: AIProvider,
+        settingsStore: SettingsPersisting = SettingsStore(),
+        secretStore: SecretStoring = KeychainSecretStore()
+    ) {
         self.repository = repository
         self.aiProvider = aiProvider
         self.settingsStore = settingsStore

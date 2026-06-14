@@ -1,4 +1,5 @@
 import Testing
+
 @testable import RawenvLib
 
 /// Covers AI-1: GFM tables (and other block constructs) parse into structured
@@ -7,14 +8,14 @@ import Testing
 
     @Test func parsesTableHeaderRowsAndAlignments() {
         let md = """
-        | Name  | Port  | Memory |
-        |:------|:-----:|-------:|
-        | pg    | 5432  | 84MB   |
-        | redis | 6379  | 12MB   |
-        """
+            | Name  | Port  | Memory |
+            |:------|:-----:|-------:|
+            | pg    | 5432  | 84MB   |
+            | redis | 6379  | 12MB   |
+            """
         let blocks = MarkdownRenderer.parse(md)
         #expect(blocks.count == 1)
-        guard case let .table(header, alignments, rows) = blocks[0] else {
+        guard case .table(let header, let alignments, let rows) = blocks[0] else {
             Issue.record("expected a table block, got \(blocks)")
             return
         }
@@ -28,7 +29,7 @@ import Testing
         let blocks = MarkdownRenderer.parse(md)
         // No block should be a paragraph containing literal pipe characters.
         for block in blocks {
-            if case let .paragraph(text) = block {
+            if case .paragraph(let text) = block {
                 #expect(!text.contains("|"))
             }
         }
@@ -37,14 +38,14 @@ import Testing
 
     @Test func tableSurroundedByText() {
         let md = """
-        Here is the plan:
+            Here is the plan:
 
-        | Step | Action |
-        |------|--------|
-        | 1    | resize |
+            | Step | Action |
+            |------|--------|
+            | 1    | resize |
 
-        Done.
-        """
+            Done.
+            """
         let blocks = MarkdownRenderer.parse(md)
         #expect(blocks.count == 3)
         #expect(blocks.first == .paragraph("Here is the plan:"))
@@ -54,8 +55,11 @@ import Testing
 
     @Test func parsesHeadings() {
         let blocks = MarkdownRenderer.parse("# Title\n## Subtitle")
-        #expect(blocks == [.heading(level: 1, text: "Title"),
-                           .heading(level: 2, text: "Subtitle")])
+        #expect(
+            blocks == [
+                .heading(level: 1, text: "Title"),
+                .heading(level: 2, text: "Subtitle"),
+            ])
     }
 
     @Test func hashWithoutSpaceIsNotHeading() {
@@ -94,7 +98,7 @@ import Testing
     @Test func handlesEscapedPipesInCells() {
         let md = "| Cmd | Note |\n|---|---|\n| a \\| b | ok |"
         let blocks = MarkdownRenderer.parse(md)
-        guard case let .table(_, _, rows) = blocks[0] else {
+        guard case .table(_, _, let rows) = blocks[0] else {
             Issue.record("expected table")
             return
         }

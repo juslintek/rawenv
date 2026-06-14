@@ -18,7 +18,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     settingsDetail
                 }.padding(20)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(Color.bgPrimary)
         }
@@ -98,21 +98,36 @@ private struct GeneralSettingsPage: View {
             Text("Core rawenv settings").foregroundStyle(Color.textMuted)
             if vm.settings != nil {
                 SettingRow(label: "Store location", desc: "Where rawenv installs packages") {
-                    TextField("", text: vm.stringBinding(\.general.storeLocation)).textFieldStyle(.roundedBorder).frame(width: 200)
-                        .accessibilityIdentifier("settings_store_location")
+                    TextField("", text: vm.stringBinding(\.general.storeLocation)).textFieldStyle(.roundedBorder).frame(
+                        width: 200
+                    )
+                    .accessibilityIdentifier("settings_store_location")
                 }
-                SettingToggle(label: "Auto-start services", desc: "Start services when entering project directory", isOn: vm.boolBinding(\.general.autoStartServices))
-                SettingToggle(label: "Auto-detect projects", desc: "Scan for package.json, composer.json, etc.", isOn: vm.boolBinding(\.general.autoDetectProjects))
-                SettingToggle(label: "Launch at login", desc: "Start rawenv background service at login", isOn: vm.boolBinding(\.general.launchAtLogin))
-                SettingToggle(label: "File watcher", desc: "Monitor project dirs for changes", isOn: vm.boolBinding(\.general.fileWatcher))
+                SettingToggle(
+                    label: "Auto-start services", desc: "Start services when entering project directory",
+                    isOn: vm.boolBinding(\.general.autoStartServices))
+                SettingToggle(
+                    label: "Auto-detect projects", desc: "Scan for package.json, composer.json, etc.",
+                    isOn: vm.boolBinding(\.general.autoDetectProjects))
+                SettingToggle(
+                    label: "Launch at login", desc: "Start rawenv background service at login",
+                    isOn: vm.boolBinding(\.general.launchAtLogin))
+                SettingToggle(
+                    label: "File watcher", desc: "Monitor project dirs for changes",
+                    isOn: vm.boolBinding(\.general.fileWatcher))
                 SettingRow(label: "Scan paths", desc: "Directories to scan for projects") {
-                    TextField("", text: Binding(
-                        get: { vm.settings?.general.scanPaths.joined(separator: ", ") ?? "" },
-                        set: { newValue in
-                            let parts = newValue.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-                            vm.update { $0.general.scanPaths = parts }
-                        }
-                    )).textFieldStyle(.roundedBorder).frame(width: 250)
+                    TextField(
+                        "",
+                        text: Binding(
+                            get: { vm.settings?.general.scanPaths.joined(separator: ", ") ?? "" },
+                            set: { newValue in
+                                let parts = newValue.split(separator: ",").map {
+                                    $0.trimmingCharacters(in: .whitespaces)
+                                }.filter { !$0.isEmpty }
+                                vm.update { $0.general.scanPaths = parts }
+                            }
+                        )
+                    ).textFieldStyle(.roundedBorder).frame(width: 250)
                         .accessibilityIdentifier("settings_scan_paths")
                 }
             }
@@ -137,16 +152,18 @@ private struct ServicesSettingsPage: View {
                     icon: "server.rack",
                     title: "No services configured",
                     guidance: "No services configured. Run rawenv init to get started.",
-                    idPrefix: "services_settings")
-                    .frame(minHeight: 160)
-            case let .failed(message):
+                    idPrefix: "services_settings"
+                )
+                .frame(minHeight: 160)
+            case .failed(let message):
                 ErrorStateView(
                     title: "Couldn't load services",
                     message: message,
-                    idPrefix: "services_settings") {
-                        Task { await vm.load() }
-                    }
-                    .frame(minHeight: 160)
+                    idPrefix: "services_settings"
+                ) {
+                    Task { await vm.load() }
+                }
+                .frame(minHeight: 160)
             case .loaded:
                 ForEach(vm.services) { svc in
                     HStack(spacing: 8) {
@@ -154,10 +171,12 @@ private struct ServicesSettingsPage: View {
                         Text(svc.icon).font(.system(size: 14))
                         VStack(alignment: .leading, spacing: 2) {
                             Text(svc.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.textPrimary)
-                            Text("v\(svc.version) · \(svc.status)").font(.system(size: 11)).foregroundStyle(Color.textMuted)
+                            Text("v\(svc.version) · \(svc.status)").font(.system(size: 11)).foregroundStyle(
+                                Color.textMuted)
                         }
                         Spacer()
-                        Text(":\(svc.port)").font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.textMuted)
+                        Text(":\(svc.port)").font(.system(size: 12, design: .monospaced)).foregroundStyle(
+                            Color.textMuted)
                     }
                     .padding(8).cardStyle()
                     .accessibilityIdentifier("settings_service_\(svc.name)")
@@ -189,8 +208,11 @@ private struct RuntimeRow: View {
         HStack {
             StatusDot(isRunning: runtime.installed)
             VStack(alignment: .leading) {
-                Text(runtime.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(runtime.installed ? Color.textPrimary : Color.textMuted)
-                Text(runtime.installed ? "\(runtime.version) · \(runtime.path)" : "Not installed").font(.system(size: 11)).foregroundStyle(Color.textMuted)
+                Text(runtime.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(
+                    runtime.installed ? Color.textPrimary : Color.textMuted)
+                Text(runtime.installed ? "\(runtime.version) · \(runtime.path)" : "Not installed").font(
+                    .system(size: 11)
+                ).foregroundStyle(Color.textMuted)
             }
             Spacer()
             if runtime.installed {
@@ -220,15 +242,20 @@ private struct NetworkSettingsPage: View {
                 GroupBox("DNS Masking") {
                     VStack(alignment: .leading, spacing: 8) {
                         SettingRow(label: "Local domain", desc: "TLD for local services") {
-                            TextField("", text: vm.stringBinding(\.network.localDomain)).textFieldStyle(.roundedBorder).frame(width: 80)
+                            TextField("", text: vm.stringBinding(\.network.localDomain)).textFieldStyle(.roundedBorder)
+                                .frame(width: 80)
                                 .accessibilityIdentifier("settings_local_domain")
                         }
-                        SettingRow(label: "DNS provider", desc: "dnsmasq") { Text("● active").font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.success) }
+                        SettingRow(label: "DNS provider", desc: "dnsmasq") {
+                            Text("● active").font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.success)
+                        }
                     }.padding(4)
                 }
                 GroupBox("Reverse Proxy") {
                     VStack(alignment: .leading, spacing: 8) {
-                        SettingToggle(label: "Auto-TLS", desc: "Self-signed certs for .test domains", isOn: vm.boolBinding(\.network.autoTls))
+                        SettingToggle(
+                            label: "Auto-TLS", desc: "Self-signed certs for .test domains",
+                            isOn: vm.boolBinding(\.network.autoTls))
                         ValidatedField(
                             label: "Proxy port", desc: "Main proxy listening port",
                             initial: String(s.proxyPort), width: 70,
@@ -247,7 +274,8 @@ private struct NetworkSettingsPage: View {
                             }.frame(width: 140).accessibilityIdentifier("settings_tunnel_provider_picker")
                         }
                         SettingRow(label: "Relay server", desc: "bore relay endpoint") {
-                            TextField("", text: vm.stringBinding(\.network.relayServer)).textFieldStyle(.roundedBorder).frame(width: 160)
+                            TextField("", text: vm.stringBinding(\.network.relayServer)).textFieldStyle(.roundedBorder)
+                                .frame(width: 160)
                                 .accessibilityIdentifier("settings_relay_server")
                         }
                     }.padding(4)
@@ -266,7 +294,9 @@ private struct CellsSettingsPage: View {
             Text("Isolation Cells").font(.title2).foregroundStyle(Color.textPrimary)
             Text("OS-native process isolation. Using Seatbelt (sandbox-exec)").foregroundStyle(Color.textMuted)
             if let s = vm.settings?.cells {
-                SettingToggle(label: "Enable cells by default", desc: "Isolate all new services automatically", isOn: vm.boolBinding(\.cells.enableByDefault))
+                SettingToggle(
+                    label: "Enable cells by default", desc: "Isolate all new services automatically",
+                    isOn: vm.boolBinding(\.cells.enableByDefault))
                 ValidatedField(
                     label: "Default memory limit", desc: "Per-cell memory cap (e.g. 256MB, 1GB)",
                     initial: s.defaultMemoryLimit, width: 90,
@@ -283,7 +313,9 @@ private struct CellsSettingsPage: View {
                     errorMessage: vm.validationErrors["cpuLimit"] ?? "Enter a positive number of cores",
                     onValid: { vm.setCPULimit(fromText: $0) },
                     onInvalid: { vm.setCPULimit(fromText: $0) })
-                SettingToggle(label: "Network isolation", desc: "Restrict each cell to its port only", isOn: vm.boolBinding(\.cells.networkIsolation))
+                SettingToggle(
+                    label: "Network isolation", desc: "Restrict each cell to its port only",
+                    isOn: vm.boolBinding(\.cells.networkIsolation))
             }
         }.accessibilityIdentifier("cells_settings")
     }
@@ -299,10 +331,13 @@ private struct DeploySettingsPage: View {
             Text("Deployment and infrastructure settings").foregroundStyle(Color.textMuted)
             if vm.settings != nil {
                 SettingRow(label: "Provider", desc: "Cloud provider") {
-                    Picker("", selection: Binding(
-                        get: { vm.settings?.deploy.provider ?? "" },
-                        set: { vm.selectDeployProvider($0) }
-                    )) {
+                    Picker(
+                        "",
+                        selection: Binding(
+                            get: { vm.settings?.deploy.provider ?? "" },
+                            set: { vm.selectDeployProvider($0) }
+                        )
+                    ) {
                         ForEach(DeployProviders.all, id: \.self) { Text($0).tag($0) }
                     }.frame(width: 140).accessibilityIdentifier("settings_deploy_provider_picker")
                 }
@@ -316,15 +351,19 @@ private struct DeploySettingsPage: View {
                 }
 
                 SettingRow(label: "SSH Key", desc: "Key for server access") {
-                    TextField("", text: vm.stringBinding(\.deploy.sshKey)).textFieldStyle(.roundedBorder).frame(width: 200)
-                        .accessibilityIdentifier("settings_ssh_key")
+                    TextField("", text: vm.stringBinding(\.deploy.sshKey)).textFieldStyle(.roundedBorder).frame(
+                        width: 200
+                    )
+                    .accessibilityIdentifier("settings_ssh_key")
                 }
                 SettingRow(label: "Container runtime", desc: "For image builds") {
                     Picker("", selection: vm.stringBinding(\.deploy.containerRuntime)) {
                         ForEach(["podman", "docker", "buildah"], id: \.self) { Text($0).tag($0) }
                     }.frame(width: 120).accessibilityIdentifier("settings_container_runtime_picker")
                 }
-                SettingToggle(label: "Auto-generate on save", desc: "Regenerate deploy configs when rawenv.toml changes", isOn: vm.boolBinding(\.deploy.autoGenerate))
+                SettingToggle(
+                    label: "Auto-generate on save", desc: "Regenerate deploy configs when rawenv.toml changes",
+                    isOn: vm.boolBinding(\.deploy.autoGenerate))
             }
         }.accessibilityIdentifier("deploy_settings")
     }
@@ -351,7 +390,9 @@ private struct DeployCredentialRow: View {
                 .textFieldStyle(.roundedBorder).frame(width: 180)
                 .accessibilityIdentifier("deploy_cred_\(field.key)")
                 if field.isSecret {
-                    Button { vm.toggleRevealDeployField(field) } label: {
+                    Button {
+                        vm.toggleRevealDeployField(field)
+                    } label: {
                         Image(systemName: revealed ? "eye.slash" : "eye")
                     }
                     .buttonStyle(.borderless)
@@ -372,10 +413,16 @@ private struct AISettingsPage: View {
             Text("AI assistant configuration").foregroundStyle(Color.textMuted)
             if let ai = vm.settings?.ai {
                 SettingRow(label: "Provider", desc: "Active AI provider") {
-                    Picker("", selection: Binding(
-                        get: { vm.selectedProvider },
-                        set: { newValue in vm.selectedProvider = newValue; vm.update { $0.ai.provider = newValue } }
-                    )) {
+                    Picker(
+                        "",
+                        selection: Binding(
+                            get: { vm.selectedProvider },
+                            set: { newValue in
+                                vm.selectedProvider = newValue
+                                vm.update { $0.ai.provider = newValue }
+                            }
+                        )
+                    ) {
                         ForEach(ai.providers, id: \.self) { Text($0).tag($0) }
                     }.frame(width: 200).accessibilityIdentifier("ai_provider_picker")
                 }
@@ -390,7 +437,9 @@ private struct AISettingsPage: View {
                         }
                         .textFieldStyle(.roundedBorder).frame(width: 180)
                         .accessibilityIdentifier("byom_api_key")
-                        Button { vm.revealAPIKey.toggle() } label: {
+                        Button {
+                            vm.revealAPIKey.toggle()
+                        } label: {
                             Image(systemName: vm.revealAPIKey ? "eye.slash" : "eye")
                         }
                         .buttonStyle(.borderless)
@@ -398,11 +447,14 @@ private struct AISettingsPage: View {
                     }
                 }
                 SettingRow(label: "Ollama endpoint", desc: "Local model server") {
-                    TextField("", text: vm.stringBinding(\.ai.ollamaEndpoint)).textFieldStyle(.roundedBorder).frame(width: 200)
-                        .accessibilityIdentifier("settings_ollama_endpoint")
+                    TextField("", text: vm.stringBinding(\.ai.ollamaEndpoint)).textFieldStyle(.roundedBorder).frame(
+                        width: 200
+                    )
+                    .accessibilityIdentifier("settings_ollama_endpoint")
                 }
                 SettingRow(label: "BYOM custom URL", desc: "Bring Your Own Model endpoint") {
-                    TextField("", text: $vm.byomEndpoint).textFieldStyle(.roundedBorder).frame(width: 250).accessibilityIdentifier("byom_endpoint")
+                    TextField("", text: $vm.byomEndpoint).textFieldStyle(.roundedBorder).frame(width: 250)
+                        .accessibilityIdentifier("byom_endpoint")
                 }
 
                 GroupBox("Autonomy Level Per Action") {
@@ -411,10 +463,13 @@ private struct AISettingsPage: View {
                             HStack {
                                 Text(action).font(.system(size: 12)).foregroundStyle(Color.textPrimary)
                                 Spacer()
-                                Picker("", selection: Binding(
-                                    get: { vm.autonomyPerAction[action] ?? .suggestOnly },
-                                    set: { vm.setAutonomy($0, for: action) }
-                                )) {
+                                Picker(
+                                    "",
+                                    selection: Binding(
+                                        get: { vm.autonomyPerAction[action] ?? .suggestOnly },
+                                        set: { vm.setAutonomy($0, for: action) }
+                                    )
+                                ) {
                                     ForEach(AIAutonomyLevel.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                                 }.frame(width: 170).accessibilityIdentifier("autonomy_\(action)")
                             }
@@ -422,8 +477,12 @@ private struct AISettingsPage: View {
                     }.padding(4)
                 }
 
-                SettingToggle(label: "Proactive suggestions", desc: "AI suggests optimizations automatically", isOn: vm.boolBinding(\.ai.proactiveSuggestions))
-                SettingToggle(label: "Include logs in context", desc: "Send recent logs to the AI for better answers", isOn: vm.boolBinding(\.ai.includeLogsInContext))
+                SettingToggle(
+                    label: "Proactive suggestions", desc: "AI suggests optimizations automatically",
+                    isOn: vm.boolBinding(\.ai.proactiveSuggestions))
+                SettingToggle(
+                    label: "Include logs in context", desc: "Send recent logs to the AI for better answers",
+                    isOn: vm.boolBinding(\.ai.includeLogsInContext))
             }
         }.accessibilityIdentifier("ai_settings")
     }
@@ -444,10 +503,13 @@ private struct ThemeSettingsPage: View {
 
             // Mode picker — "System" follows the macOS appearance setting.
             SettingRow(label: "Mode", desc: "App color scheme") {
-                Picker("", selection: Binding(
-                    get: { tm.mode },
-                    set: { tm.setMode($0) }
-                )) {
+                Picker(
+                    "",
+                    selection: Binding(
+                        get: { tm.mode },
+                        set: { tm.setMode($0) }
+                    )
+                ) {
                     ForEach(ThemeMode.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
                 }
                 .pickerStyle(.segmented)
@@ -462,30 +524,40 @@ private struct ThemeSettingsPage: View {
 
             // Colors
             SettingRow(label: "Accent color", desc: "Primary brand color") {
-                ColorPicker("", selection: Binding(get: { tm.accentColor }, set: { tm.accentColor = $0 })).frame(width: 40)
+                ColorPicker("", selection: Binding(get: { tm.accentColor }, set: { tm.accentColor = $0 })).frame(
+                    width: 40)
             }
             SettingRow(label: "Success color", desc: "Positive status") {
-                ColorPicker("", selection: Binding(get: { tm.successColor }, set: { tm.successColor = $0 })).frame(width: 40)
+                ColorPicker("", selection: Binding(get: { tm.successColor }, set: { tm.successColor = $0 })).frame(
+                    width: 40)
             }
             SettingRow(label: "Error color", desc: "Negative status") {
-                ColorPicker("", selection: Binding(get: { tm.errorColor }, set: { tm.errorColor = $0 })).frame(width: 40)
+                ColorPicker("", selection: Binding(get: { tm.errorColor }, set: { tm.errorColor = $0 })).frame(
+                    width: 40)
             }
             SettingRow(label: "Warning color", desc: "Caution status") {
-                ColorPicker("", selection: Binding(get: { tm.warningColor }, set: { tm.warningColor = $0 })).frame(width: 40)
+                ColorPicker("", selection: Binding(get: { tm.warningColor }, set: { tm.warningColor = $0 })).frame(
+                    width: 40)
             }
 
             // Sliders
             SettingRow(label: "Border radius", desc: "Corner rounding (px)") {
-                Slider(value: Binding(get: { tm.borderRadius }, set: { tm.borderRadius = $0 }), in: 0...16, step: 1).frame(width: 150)
-                Text("\(Int(tm.borderRadius))px").font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.textMuted)
+                Slider(value: Binding(get: { tm.borderRadius }, set: { tm.borderRadius = $0 }), in: 0...16, step: 1)
+                    .frame(width: 150)
+                Text("\(Int(tm.borderRadius))px").font(.system(size: 11, design: .monospaced)).foregroundStyle(
+                    Color.textMuted)
             }
             SettingRow(label: "Font size", desc: "Base UI font size") {
-                Slider(value: Binding(get: { tm.fontSize }, set: { tm.fontSize = $0 }), in: 11...18, step: 1).frame(width: 150)
-                Text("\(Int(tm.fontSize))px").font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.textMuted)
+                Slider(value: Binding(get: { tm.fontSize }, set: { tm.fontSize = $0 }), in: 11...18, step: 1).frame(
+                    width: 150)
+                Text("\(Int(tm.fontSize))px").font(.system(size: 11, design: .monospaced)).foregroundStyle(
+                    Color.textMuted)
             }
             SettingRow(label: "Sidebar width", desc: "Navigation sidebar width") {
-                Slider(value: Binding(get: { tm.sidebarWidth }, set: { tm.sidebarWidth = $0 }), in: 180...320, step: 10).frame(width: 150)
-                Text("\(Int(tm.sidebarWidth))px").font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.textMuted)
+                Slider(value: Binding(get: { tm.sidebarWidth }, set: { tm.sidebarWidth = $0 }), in: 180...320, step: 10)
+                    .frame(width: 150)
+                Text("\(Int(tm.sidebarWidth))px").font(.system(size: 11, design: .monospaced)).foregroundStyle(
+                    Color.textMuted)
             }
 
             // Live preview
@@ -493,7 +565,8 @@ private struct ThemeSettingsPage: View {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
                         Circle().fill(tm.successColor).frame(width: 8, height: 8)
-                        Text("PostgreSQL").font(.system(size: CGFloat(tm.fontSize), weight: .medium)).foregroundStyle(Color.textPrimary)
+                        Text("PostgreSQL").font(.system(size: CGFloat(tm.fontSize), weight: .medium)).foregroundStyle(
+                            Color.textPrimary)
                         Spacer()
                         Text(":5432").font(.system(size: 11, design: .monospaced)).foregroundStyle(tm.accentColor)
                     }
@@ -571,12 +644,17 @@ private struct AboutSettingsPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("About").font(.title2).foregroundStyle(Color.textPrimary)
-            HStack { Text("⚡").font(.title); Text("rawenv").font(.title2.bold()).foregroundStyle(Color.textPrimary) }
+            HStack {
+                Text("⚡").font(.title)
+                Text("rawenv").font(.title2.bold()).foregroundStyle(Color.textPrimary)
+            }
             Group {
                 LabeledContent("Version") { Text("0.1.0").font(.system(.body, design: .monospaced)) }
                 LabeledContent("OS") { Text("macOS (Darwin)").font(.system(.body, design: .monospaced)) }
                 LabeledContent("Service manager") { Text("launchd").font(.system(.body, design: .monospaced)) }
-                LabeledContent("Isolation") { Text("Seatbelt (sandbox-exec)").font(.system(.body, design: .monospaced)) }
+                LabeledContent("Isolation") {
+                    Text("Seatbelt (sandbox-exec)").font(.system(.body, design: .monospaced))
+                }
                 LabeledContent("Store size") { Text("462 MB").font(.system(.body, design: .monospaced)) }
             }.foregroundStyle(Color.textPrimary)
             Divider()
@@ -593,7 +671,8 @@ private struct AboutSettingsPage: View {
 // MARK: - Shared Components
 
 private struct SettingRow<Content: View>: View {
-    let label: String; let desc: String
+    let label: String
+    let desc: String
     @ViewBuilder let content: Content
     var body: some View {
         HStack {
@@ -610,7 +689,8 @@ private struct SettingRow<Content: View>: View {
 }
 
 private struct SettingToggle: View {
-    let label: String; let desc: String
+    let label: String
+    let desc: String
     @Binding var isOn: Bool
     var body: some View {
         Toggle(isOn: $isOn) {
@@ -640,10 +720,12 @@ private struct ValidatedField: View {
     @State private var text: String
     @State private var isValid: Bool = true
 
-    init(label: String, desc: String, initial: String, width: CGFloat = 80,
-         identifier: String, validate: @escaping (String) -> Bool,
-         errorMessage: String, onValid: @escaping (String) -> Void,
-         onInvalid: @escaping (String) -> Void) {
+    init(
+        label: String, desc: String, initial: String, width: CGFloat = 80,
+        identifier: String, validate: @escaping (String) -> Bool,
+        errorMessage: String, onValid: @escaping (String) -> Void,
+        onInvalid: @escaping (String) -> Void
+    ) {
         self.label = label
         self.desc = desc
         self.initial = initial

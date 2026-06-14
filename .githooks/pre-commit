@@ -15,7 +15,8 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 # collect_staged <var> <glob...> — fill array <var> with staged, present files.
 collect_staged() {
-  local __var="$1"; shift
+  local __var="$1"
+  shift
   local __f
   eval "$__var=()"
   while IFS= read -r __f; do
@@ -61,7 +62,7 @@ fi
 collect_staged cs_files '*.cs'
 if [ "${#cs_files[@]}" -gt 0 ] && have dotnet; then
   note "dotnet format (changed C# files)"
-  ( cd gui/windows 2>/dev/null && dotnet format Rawenv.sln --no-restore >/dev/null 2>&1 ) || true
+  (cd gui/windows 2>/dev/null && dotnet format Rawenv.sln --no-restore >/dev/null 2>&1) || true
   restage+=("${cs_files[@]}")
 fi
 
@@ -75,12 +76,18 @@ fail=0
 
 collect_staged sh_now '*.sh' '*.bash'
 if [ "${#sh_now[@]}" -gt 0 ] && have shellcheck; then
-  shellcheck -x --severity=warning "${sh_now[@]}" || { warn "shellcheck warnings/errors above"; fail=1; }
+  shellcheck -x --severity=warning "${sh_now[@]}" || {
+    warn "shellcheck warnings/errors above"
+    fail=1
+  }
 fi
 
 collect_staged yaml_now '*.yml' '*.yaml'
 if [ "${#yaml_now[@]}" -gt 0 ] && have yamllint; then
-  yamllint -c "$ROOT/.yamllint" "${yaml_now[@]}" || { warn "yamllint issues above"; fail=1; }
+  yamllint -c "$ROOT/.yamllint" "${yaml_now[@]}" || {
+    warn "yamllint issues above"
+    fail=1
+  }
 fi
 
 # --- Quality guardrails: review-lesson anti-patterns (hardcoded paths, masked
@@ -90,7 +97,10 @@ fi
 collect_staged all_staged '*'
 if [ "${#all_staged[@]}" -gt 0 ]; then
   QG_DIFF="git diff --cached -U0 --" \
-    quality_guards "${all_staged[@]}" || { warn "quality guardrails failed"; fail=1; }
+    quality_guards "${all_staged[@]}" || {
+    warn "quality guardrails failed"
+    fail=1
+  }
 fi
 
 if [ "$fail" -ne 0 ]; then

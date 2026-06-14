@@ -33,13 +33,17 @@ public struct RawenvServiceBackend: ServiceBackend {
 
     public func list() async throws -> [Service] {
         struct CLIService: Decodable {
-            let name: String; let version: String; let status: String; let port: Int
+            let name: String
+            let version: String
+            let status: String
+            let port: Int
         }
         let result = try await cli.runJSON(["services", "ls"], as: [CLIService].self)
         return result.map {
-            Service(name: $0.name, port: $0.port, version: $0.version,
-                    pid: nil, cpu: nil, mem: nil, uptime: nil,
-                    status: $0.status, icon: Self.iconFor($0.name))
+            Service(
+                name: $0.name, port: $0.port, version: $0.version,
+                pid: nil, cpu: nil, mem: nil, uptime: nil,
+                status: $0.status, icon: Self.iconFor($0.name))
         }
     }
 

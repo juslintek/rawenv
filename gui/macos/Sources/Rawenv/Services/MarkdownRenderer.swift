@@ -33,7 +33,8 @@ public enum MarkdownRenderer {
 
     /// Parses `text` into an ordered list of ``MarkdownBlock`` values.
     public static func parse(_ text: String) -> [MarkdownBlock] {
-        let lines = text
+        let lines =
+            text
             .replacingOccurrences(of: "\r\n", with: "\n")
             .components(separatedBy: "\n")
 
@@ -42,7 +43,8 @@ public enum MarkdownRenderer {
         var i = 0
 
         func flushParagraph() {
-            let joined = paragraph
+            let joined =
+                paragraph
                 .joined(separator: "\n")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !joined.isEmpty { blocks.append(.paragraph(joined)) }
@@ -60,24 +62,29 @@ public enum MarkdownRenderer {
                 var code: [String] = []
                 i += 1
                 while i < lines.count,
-                      !lines[i].trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+                    !lines[i].trimmingCharacters(in: .whitespaces).hasPrefix("```")
+                {
                     code.append(lines[i])
                     i += 1
                 }
-                i += 1 // consume the closing fence (if present)
-                blocks.append(.codeBlock(language: lang.isEmpty ? nil : lang,
-                                         code: code.joined(separator: "\n")))
+                i += 1  // consume the closing fence (if present)
+                blocks.append(
+                    .codeBlock(
+                        language: lang.isEmpty ? nil : lang,
+                        code: code.joined(separator: "\n")))
                 continue
             }
 
             // GFM table: a header row followed by a delimiter row.
             if trimmed.contains("|"),
-               i + 1 < lines.count,
-               isTableSeparator(lines[i + 1]) {
+                i + 1 < lines.count,
+                isTableSeparator(lines[i + 1])
+            {
                 flushParagraph()
                 let header = splitRow(trimmed)
-                let alignments = normalizeAlignments(parseAlignments(lines[i + 1]),
-                                                     to: header.count)
+                let alignments = normalizeAlignments(
+                    parseAlignments(lines[i + 1]),
+                    to: header.count)
                 var rows: [[String]] = []
                 i += 2
                 while i < lines.count {
@@ -146,14 +153,14 @@ public enum MarkdownRenderer {
     /// Splits a table row on unescaped pipes, dropping the optional leading and
     /// trailing pipe and trimming each cell.
     static func splitRow(_ line: String) -> [String] {
-        let placeholder = "\u{0001}" // sentinel for escaped pipes
+        let placeholder = "\u{0001}"  // sentinel for escaped pipes
         var s = line.trimmingCharacters(in: .whitespaces)
             .replacingOccurrences(of: "\\|", with: placeholder)
         if s.hasPrefix("|") { s.removeFirst() }
         if s.hasSuffix("|") { s.removeLast() }
         return s.components(separatedBy: "|").map {
             $0.replacingOccurrences(of: placeholder, with: "|")
-              .trimmingCharacters(in: .whitespaces)
+                .trimmingCharacters(in: .whitespaces)
         }
     }
 
@@ -194,8 +201,10 @@ public enum MarkdownRenderer {
         }
     }
 
-    private static func normalizeAlignments(_ alignments: [MarkdownColumnAlignment],
-                                            to count: Int) -> [MarkdownColumnAlignment] {
+    private static func normalizeAlignments(
+        _ alignments: [MarkdownColumnAlignment],
+        to count: Int
+    ) -> [MarkdownColumnAlignment] {
         if alignments.count == count { return alignments }
         if alignments.count > count { return Array(alignments.prefix(count)) }
         return alignments + Array(repeating: .leading, count: count - alignments.count)

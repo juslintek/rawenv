@@ -60,13 +60,35 @@ usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//' | sed '$d'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --runs)     RUNS="${2:?--runs needs a value}"; shift 2 ;;
-    --tool)     TOOL="${2:?--tool needs a value}"; shift 2 ;;
-    --rawenv)   RAWENV_BIN="${2:?--rawenv needs a value}"; shift 2 ;;
-    --markdown) EMIT_MARKDOWN=1; shift ;;
-    --keep)     KEEP_TMP=1; shift ;;
-    -h|--help)  usage; exit 0 ;;
-    *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
+    --runs)
+      RUNS="${2:?--runs needs a value}"
+      shift 2
+      ;;
+    --tool)
+      TOOL="${2:?--tool needs a value}"
+      shift 2
+      ;;
+    --rawenv)
+      RAWENV_BIN="${2:?--rawenv needs a value}"
+      shift 2
+      ;;
+    --markdown)
+      EMIT_MARKDOWN=1
+      shift
+      ;;
+    --keep)
+      KEEP_TMP=1
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
   esac
 done
 
@@ -81,7 +103,7 @@ if command -v python3 >/dev/null 2>&1; then
 elif command -v perl >/dev/null 2>&1; then
   now_ms() { perl -MTime::HiRes=time -e 'print int(time()*1000)'; }
 else
-  now_ms() { echo $(( $(date +%s) * 1000 )); }
+  now_ms() { echo $(($(date +%s) * 1000)); }
 fi
 
 # port_open HOST PORT — return 0 if a TCP connection succeeds, else 1.
@@ -93,7 +115,7 @@ port_open() {
 # find_free_port START — echo the first free TCP port at or above START.
 find_free_port() {
   local p="$1"
-  while port_open 127.0.0.1 "$p"; do p=$(( p + 1 )); done
+  while port_open 127.0.0.1 "$p"; do p=$((p + 1)); done
   echo "$p"
 }
 
@@ -108,25 +130,43 @@ ms_to_s() { awk -v ms="$1" 'BEGIN { printf "%.2f", ms/1000 }'; }
 # kb_to_mb — pretty-print integer kilobytes as MiB with 1 decimal.
 kb_to_mb() { awk -v kb="$1" 'BEGIN { printf "%.1f", kb/1024 }'; }
 
-log()  { printf '%s\n' "$*" >&2; }
+log() { printf '%s\n' "$*" >&2; }
 step() { printf '\n==> %s\n' "$*" >&2; }
 
 # ----------------------------------------------------------------------------
 # Tool discovery
 # ----------------------------------------------------------------------------
 resolve_rawenv() {
-  if [ -n "$RAWENV_BIN" ]; then echo "$RAWENV_BIN"; return; fi
-  if command -v rawenv >/dev/null 2>&1; then command -v rawenv; return; fi
-  if [ -x "./zig-out/bin/rawenv" ]; then echo "$PWD/zig-out/bin/rawenv"; return; fi
-  if [ -x "$HOME/.rawenv/bin/rawenv" ]; then echo "$HOME/.rawenv/bin/rawenv"; return; fi
+  if [ -n "$RAWENV_BIN" ]; then
+    echo "$RAWENV_BIN"
+    return
+  fi
+  if command -v rawenv >/dev/null 2>&1; then
+    command -v rawenv
+    return
+  fi
+  if [ -x "./zig-out/bin/rawenv" ]; then
+    echo "$PWD/zig-out/bin/rawenv"
+    return
+  fi
+  if [ -x "$HOME/.rawenv/bin/rawenv" ]; then
+    echo "$HOME/.rawenv/bin/rawenv"
+    return
+  fi
   echo ""
 }
 
 # docker_compose — print the working compose invocation ("docker compose" or
 # the legacy "docker-compose"), or nothing if neither works.
 docker_compose() {
-  if docker compose version >/dev/null 2>&1; then echo "docker compose"; return; fi
-  if command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; return; fi
+  if docker compose version >/dev/null 2>&1; then
+    echo "docker compose"
+    return
+  fi
+  if command -v docker-compose >/dev/null 2>&1; then
+    echo "docker-compose"
+    return
+  fi
   echo ""
 }
 
@@ -137,14 +177,14 @@ TMP_PROJECT="$(mktemp -d "${TMPDIR:-/tmp}/rawenv-bench.XXXXXX")"
 COMPOSE_PROJECT="rawenvbench"
 
 cleanup() {
-  if [ -n "${RAWENV:-}" ]; then ( cd "$TMP_PROJECT" 2>/dev/null && "$RAWENV" down >/dev/null 2>&1 || true ); fi
-  if [ -n "${DC:-}" ]; then ( cd "$TMP_PROJECT" 2>/dev/null && $DC -p "$COMPOSE_PROJECT" down -v >/dev/null 2>&1 || true ); fi
+  if [ -n "${RAWENV:-}" ]; then (cd "$TMP_PROJECT" 2>/dev/null && "$RAWENV" down >/dev/null 2>&1 || true); fi
+  if [ -n "${DC:-}" ]; then (cd "$TMP_PROJECT" 2>/dev/null && $DC -p "$COMPOSE_PROJECT" down -v >/dev/null 2>&1 || true); fi
   if [ "$KEEP_TMP" -eq 1 ]; then log "Kept temporary project at: $TMP_PROJECT"; else rm -rf "$TMP_PROJECT"; fi
 }
 trap cleanup EXIT INT TERM
 
 scaffold_rawenv() {
-  cat > "$TMP_PROJECT/rawenv.toml" <<EOF
+  cat >"$TMP_PROJECT/rawenv.toml" <<EOF
 [project]
 name = "rawenv-bench"
 
@@ -155,7 +195,7 @@ EOF
 }
 
 scaffold_compose() {
-  cat > "$TMP_PROJECT/docker-compose.yml" <<EOF
+  cat >"$TMP_PROJECT/docker-compose.yml" <<EOF
 services:
   postgresql:
     image: postgres:16
@@ -174,7 +214,7 @@ EOF
 # assigned to postgresql and redis, updating the globals.
 rawenv_resolve_ports() {
   local json
-  json="$( cd "$TMP_PROJECT" && "$RAWENV" status --json 2>/dev/null || true )"
+  json="$(cd "$TMP_PROJECT" && "$RAWENV" status --json 2>/dev/null || true)"
   [ -z "$json" ] && return 0
   if command -v python3 >/dev/null 2>&1; then
     local out
@@ -206,23 +246,30 @@ print(pg, rd)
 #   MODE=all   → return once ALL listed ports are open.
 # Echoes elapsed milliseconds since START_MS. Returns 1 on timeout.
 wait_ready() {
-  local start_ms="$1" mode="$2"; shift 2
+  local start_ms="$1" mode="$2"
+  shift 2
   local ports=("$@")
-  local deadline=$(( $(now_ms) + READY_TIMEOUT_MS ))
+  local deadline=$(($(now_ms) + READY_TIMEOUT_MS))
   while [ "$(now_ms)" -lt "$deadline" ]; do
     local open=0 total=0 p
     for p in "${ports[@]}"; do
-      total=$(( total + 1 ))
-      port_open 127.0.0.1 "$p" && open=$(( open + 1 ))
+      total=$((total + 1))
+      port_open 127.0.0.1 "$p" && open=$((open + 1))
     done
     if [ "$mode" = "first" ]; then
-      [ "$open" -ge 1 ] && { echo $(( $(now_ms) - start_ms )); return 0; }
+      [ "$open" -ge 1 ] && {
+        echo $(($(now_ms) - start_ms))
+        return 0
+      }
     else
-      [ "$open" -ge "$total" ] && { echo $(( $(now_ms) - start_ms )); return 0; }
+      [ "$open" -ge "$total" ] && {
+        echo $(($(now_ms) - start_ms))
+        return 0
+      }
     fi
     sleep 0.05
   done
-  echo $(( $(now_ms) - start_ms ))
+  echo $(($(now_ms) - start_ms))
   return 1
 }
 
@@ -248,15 +295,15 @@ sample_peak() {
   while [ ! -f "$stop_file" ]; do
     if [ "$tool" = "rawenv" ]; then
       # Sum RSS (KB) of native service processes launched from the rawenv store.
-      cur="$(ps -axo rss=,command= 2>/dev/null \
-        | awk '/\.rawenv\/store/ && (/postgres/ || /redis-server/) { s+=$1 } END { print s+0 }')"
+      cur="$(ps -axo rss=,command= 2>/dev/null |
+        awk '/\.rawenv\/store/ && (/postgres/ || /redis-server/) { s+=$1 } END { print s+0 }')"
     else
       # Sum container memory (→KB) reported by docker stats for this project.
       local ids
       ids="$(docker ps -q --filter "label=com.docker.compose.project=${COMPOSE_PROJECT}" 2>/dev/null)"
       if [ -n "$ids" ]; then
-        cur="$(docker stats --no-stream --format '{{.MemUsage}}' $ids 2>/dev/null \
-          | awk '{ v=$1; u=$1;
+        cur="$(docker stats --no-stream --format '{{.MemUsage}}' $ids 2>/dev/null |
+          awk '{ v=$1; u=$1;
                    sub(/[0-9.]+/,"",u); sub(/[A-Za-z].*/,"",v);
                    mult=1; if(u ~ /GiB/) mult=1024*1024; else if(u ~ /MiB/) mult=1024; else if(u ~ /KiB/) mult=1; else mult=1/1024;
                    s+=v*mult } END { print int(s+0) }')"
@@ -268,7 +315,7 @@ sample_peak() {
     if [ "$cur" -gt "$peak" ] 2>/dev/null; then peak="$cur"; fi
     sleep 0.1
   done
-  echo "$peak" > "$out_file"
+  echo "$peak" >"$out_file"
 }
 
 # ----------------------------------------------------------------------------
@@ -279,7 +326,7 @@ disk_rawenv_kb() {
   for d in "$store"/postgres* "$store"/redis*; do
     [ -d "$d" ] || continue
     sz="$(du -sk "$d" 2>/dev/null | awk '{print $1}')"
-    [ -n "$sz" ] && total=$(( total + sz ))
+    [ -n "$sz" ] && total=$((total + sz))
   done
   echo "$total"
 }
@@ -289,7 +336,7 @@ disk_docker_kb() {
   for img in postgres:16 redis:7-alpine; do
     bytes="$(docker image inspect "$img" --format '{{.Size}}' 2>/dev/null || echo 0)"
     [ -z "$bytes" ] && bytes=0
-    total=$(( total + bytes / 1024 ))
+    total=$((total + bytes / 1024))
   done
   echo "$total"
 }
@@ -297,8 +344,16 @@ disk_docker_kb() {
 # ----------------------------------------------------------------------------
 # Per-tool benchmark drivers
 # ----------------------------------------------------------------------------
-RAWENV_FIRST_MS=0; RAWENV_TOTAL_MS=0; RAWENV_PEAK_KB=0; RAWENV_DISK_KB=0; RAWENV_OK=0
-DOCKER_FIRST_MS=0; DOCKER_TOTAL_MS=0; DOCKER_PEAK_KB=0; DOCKER_DISK_KB=0; DOCKER_OK=0
+RAWENV_FIRST_MS=0
+RAWENV_TOTAL_MS=0
+RAWENV_PEAK_KB=0
+RAWENV_DISK_KB=0
+RAWENV_OK=0
+DOCKER_FIRST_MS=0
+DOCKER_TOTAL_MS=0
+DOCKER_PEAK_KB=0
+DOCKER_DISK_KB=0
+DOCKER_OK=0
 
 # run_once TOOL — one cold-start cycle. Echoes "FIRST_MS TOTAL_MS PEAK_KB".
 run_once() {
@@ -307,13 +362,17 @@ run_once() {
   rm -f "$stop_file" "$peak_file"
 
   local ports
-  if [ "$tool" = "rawenv" ]; then ports=("$RAWENV_PG_PORT" "$RAWENV_REDIS_PORT")
+  if [ "$tool" = "rawenv" ]; then
+    ports=("$RAWENV_PG_PORT" "$RAWENV_REDIS_PORT")
   else ports=("$DOCKER_PG_PORT" "$DOCKER_REDIS_PORT"); fi
 
   # Cold state: ensure everything is stopped before timing.
-  ( cd "$TMP_PROJECT"
-    if [ "$tool" = "rawenv" ]; then "$RAWENV" down >/dev/null 2>&1 || true
-    else $DC -p "$COMPOSE_PROJECT" down -v >/dev/null 2>&1 || true; fi )
+  (
+    cd "$TMP_PROJECT"
+    if [ "$tool" = "rawenv" ]; then
+      "$RAWENV" down >/dev/null 2>&1 || true
+    else $DC -p "$COMPOSE_PROJECT" down -v >/dev/null 2>&1 || true; fi
+  )
   wait_ports_closed "${ports[@]}"
 
   sample_peak "$peak_file" "$stop_file" "$tool" &
@@ -321,12 +380,15 @@ run_once() {
 
   local start_ms first_ms total_ms
   start_ms="$(now_ms)"
-  ( cd "$TMP_PROJECT"
-    if [ "$tool" = "rawenv" ]; then "$RAWENV" up >/dev/null 2>&1 || true
-    else $DC -p "$COMPOSE_PROJECT" up -d >/dev/null 2>&1 || true; fi )
+  (
+    cd "$TMP_PROJECT"
+    if [ "$tool" = "rawenv" ]; then
+      "$RAWENV" up >/dev/null 2>&1 || true
+    else $DC -p "$COMPOSE_PROJECT" up -d >/dev/null 2>&1 || true; fi
+  )
 
   first_ms="$(wait_ready "$start_ms" first "${ports[@]}")" || true
-  total_ms="$(wait_ready "$start_ms" all "${ports[@]}")"  || true
+  total_ms="$(wait_ready "$start_ms" all "${ports[@]}")" || true
 
   touch "$stop_file"
   wait "$sampler_pid" 2>/dev/null || true
@@ -335,9 +397,12 @@ run_once() {
   rm -f "$stop_file" "$peak_file"
 
   # Tear down for the next iteration.
-  ( cd "$TMP_PROJECT"
-    if [ "$tool" = "rawenv" ]; then "$RAWENV" down >/dev/null 2>&1 || true
-    else $DC -p "$COMPOSE_PROJECT" down -v >/dev/null 2>&1 || true; fi )
+  (
+    cd "$TMP_PROJECT"
+    if [ "$tool" = "rawenv" ]; then
+      "$RAWENV" down >/dev/null 2>&1 || true
+    else $DC -p "$COMPOSE_PROJECT" down -v >/dev/null 2>&1 || true; fi
+  )
 
   echo "$first_ms $total_ms $peak_kb"
 }
@@ -348,24 +413,34 @@ run_tool() {
   local firsts="" totals="" peaks="" i out f t p
   for i in $(seq 1 "$RUNS"); do
     out="$(run_once "$tool")"
-    f="$(echo "$out" | awk '{print $1}')"; t="$(echo "$out" | awk '{print $2}')"; p="$(echo "$out" | awk '{print $3}')"
+    f="$(echo "$out" | awk '{print $1}')"
+    t="$(echo "$out" | awk '{print $2}')"
+    p="$(echo "$out" | awk '{print $3}')"
     log "  run $i: first=$(ms_to_s "$f")s total=$(ms_to_s "$t")s peak=$(kb_to_mb "$p")MiB"
     firsts="$firsts$f
-"; totals="$totals$t
-"; peaks="$peaks$p
+"
+    totals="$totals$t
+"
+    peaks="$peaks$p
 "
   done
   local m_first m_total m_peak
   m_first="$(printf '%s' "$firsts" | grep -v '^$' | median_portable)"
   m_total="$(printf '%s' "$totals" | grep -v '^$' | median_portable)"
-  m_peak="$(printf '%s'  "$peaks"  | grep -v '^$' | median_portable)"
+  m_peak="$(printf '%s' "$peaks" | grep -v '^$' | median_portable)"
 
   if [ "$tool" = "rawenv" ]; then
-    RAWENV_FIRST_MS="$m_first"; RAWENV_TOTAL_MS="$m_total"; RAWENV_PEAK_KB="$m_peak"
-    RAWENV_DISK_KB="$(disk_rawenv_kb)"; RAWENV_OK=1
+    RAWENV_FIRST_MS="$m_first"
+    RAWENV_TOTAL_MS="$m_total"
+    RAWENV_PEAK_KB="$m_peak"
+    RAWENV_DISK_KB="$(disk_rawenv_kb)"
+    RAWENV_OK=1
   else
-    DOCKER_FIRST_MS="$m_first"; DOCKER_TOTAL_MS="$m_total"; DOCKER_PEAK_KB="$m_peak"
-    DOCKER_DISK_KB="$(disk_docker_kb)"; DOCKER_OK=1
+    DOCKER_FIRST_MS="$m_first"
+    DOCKER_TOTAL_MS="$m_total"
+    DOCKER_PEAK_KB="$m_peak"
+    DOCKER_DISK_KB="$(disk_docker_kb)"
+    DOCKER_OK=1
   fi
 }
 
@@ -374,9 +449,11 @@ run_tool() {
 # ----------------------------------------------------------------------------
 prewarm_rawenv() {
   step "Pre-installing rawenv packages (postgresql@16, redis@7)"
-  ( cd "$TMP_PROJECT"
+  (
+    cd "$TMP_PROJECT"
     "$RAWENV" add postgresql@16 >/dev/null 2>&1 || true
-    "$RAWENV" add redis@7 >/dev/null 2>&1 || true )
+    "$RAWENV" add redis@7 >/dev/null 2>&1 || true
+  )
 }
 
 prewarm_docker() {
@@ -407,9 +484,9 @@ print_summary() {
   dd=$([ "$DOCKER_OK" -eq 1 ] && kb_to_mb "$DOCKER_DISK_KB" || echo "n/a")
 
   printf '%-26s %12s %12s\n' "time-to-first-ready (s)" "$rf" "$df"
-  printf '%-26s %12s %12s\n' "total time (s)"          "$rt" "$dt"
-  printf '%-26s %12s %12s\n' "peak RAM (MiB)"           "$rp" "$dp"
-  printf '%-26s %12s %12s\n' "disk usage (MiB)"         "$rd" "$dd"
+  printf '%-26s %12s %12s\n' "total time (s)" "$rt" "$dt"
+  printf '%-26s %12s %12s\n' "peak RAM (MiB)" "$rp" "$dp"
+  printf '%-26s %12s %12s\n' "disk usage (MiB)" "$rd" "$dd"
   printf '============================================================\n'
 
   if [ "$RAWENV_OK" -eq 1 ] && [ "$DOCKER_OK" -eq 1 ] && [ "$DOCKER_TOTAL_MS" -gt 0 ] && [ "$RAWENV_TOTAL_MS" -gt 0 ]; then
@@ -446,10 +523,16 @@ main() {
 
   local want_rawenv=0 want_docker=0
   case "$TOOL" in
-    both)   want_rawenv=1; want_docker=1 ;;
+    both)
+      want_rawenv=1
+      want_docker=1
+      ;;
     rawenv) want_rawenv=1 ;;
     docker) want_docker=1 ;;
-    *) echo "Invalid --tool: $TOOL (use both|rawenv|docker)" >&2; exit 2 ;;
+    *)
+      echo "Invalid --tool: $TOOL (use both|rawenv|docker)" >&2
+      exit 2
+      ;;
   esac
 
   RAWENV="$(resolve_rawenv)"
@@ -462,14 +545,17 @@ main() {
   fi
   if [ "$want_docker" -eq 1 ]; then
     if [ -z "$DC" ]; then
-      log "WARNING: docker compose not available — skipping docker benchmark."; want_docker=0
+      log "WARNING: docker compose not available — skipping docker benchmark."
+      want_docker=0
     elif ! docker info >/dev/null 2>&1; then
-      log "WARNING: docker daemon not running — skipping docker benchmark."; want_docker=0
+      log "WARNING: docker daemon not running — skipping docker benchmark."
+      want_docker=0
     fi
   fi
 
   if [ "$want_rawenv" -eq 0 ] && [ "$want_docker" -eq 0 ]; then
-    log "ERROR: no tools available to benchmark."; exit 1
+    log "ERROR: no tools available to benchmark."
+    exit 1
   fi
 
   scaffold_rawenv
@@ -478,7 +564,7 @@ main() {
   fi
   if [ "$want_docker" -eq 1 ]; then
     DOCKER_PG_PORT="$(find_free_port 5432)"
-    DOCKER_REDIS_PORT="$(find_free_port $(( DOCKER_PG_PORT > 6379 ? DOCKER_PG_PORT + 1 : 6379 )) )"
+    DOCKER_REDIS_PORT="$(find_free_port $((DOCKER_PG_PORT > 6379 ? DOCKER_PG_PORT + 1 : 6379)))"
     scaffold_compose
   fi
 

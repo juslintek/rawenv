@@ -1,5 +1,6 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import RawenvLib
 
 @Suite struct AIChatVMTests {
@@ -33,7 +34,7 @@ import Foundation
         let vm = AIChatViewModel(repository: TestDataRepository(), aiProvider: AIProviderCascade())
         vm.inputText = "Test"
         await vm.sendMessage()
-        #expect(vm.inputText == "")
+        #expect(vm.inputText.isEmpty)
     }
 
     // MARK: - AI-2 / AI-3
@@ -64,13 +65,16 @@ import Foundation
 
     @Test @MainActor func loadConfiguresProviderFromSettings() async {
         let cascade = AIProviderCascade()
-        let settings = InMemorySettingsStore(makeSettings(provider: "Ollama (local)",
-                                                          providers: ["Groq", "Ollama (local)"]))
+        let settings = InMemorySettingsStore(
+            makeSettings(
+                provider: "Ollama (local)",
+                providers: ["Groq", "Ollama (local)"]))
         let secrets = InMemorySecretStore()
-        let vm = AIChatViewModel(repository: TestDataRepository(),
-                                 aiProvider: cascade,
-                                 settingsStore: settings,
-                                 secretStore: secrets)
+        let vm = AIChatViewModel(
+            repository: TestDataRepository(),
+            aiProvider: cascade,
+            settingsStore: settings,
+            secretStore: secrets)
         await vm.load()
         #expect(vm.selectedProvider == "Ollama (local)")
         #expect(cascade.plannedProviders().first?.name == "ollama")
@@ -79,12 +83,23 @@ import Foundation
 
 private func makeSettings(provider: String, providers: [String]) -> AppSettings {
     AppSettings(
-        general: GeneralSettings(storeLocation: "~/.rawenv/store/", autoStartServices: true, autoDetectProjects: true, launchAtLogin: false, fileWatcher: true, scanPaths: []),
-        network: NetworkSettings(localDomain: ".test", autoTls: true, proxyPort: 80, tunnelProvider: "bore", relayServer: "bore.pub"),
-        cells: CellsSettings(enableByDefault: true, defaultMemoryLimit: "256MB", defaultCpuLimit: "1", networkIsolation: true),
-        deploy: DeploySettings(provider: "Hetzner", sshKey: "", terraformPath: "", ansiblePath: "", autoGenerate: false, containerRuntime: "Podman", registry: ""),
-        ai: AISettings(provider: provider, providers: providers, apiKey: "", ollamaEndpoint: "http://localhost:11434", proactiveSuggestions: true, autoApplySafeFixes: false, includeLogsInContext: true, maxContextSize: 4096, autonomyLevels: ["suggest-only"], defaultAutonomy: "suggest-only"),
-        theme: ThemeSettings(mode: "dark", accentColor: "#6366f1", successColor: "#34d399", errorColor: "#f87171", warningColor: "#fbbf24", borderRadius: 8, fontSize: 13, sidebarWidth: 240)
+        general: GeneralSettings(
+            storeLocation: "~/.rawenv/store/", autoStartServices: true, autoDetectProjects: true, launchAtLogin: false,
+            fileWatcher: true, scanPaths: []),
+        network: NetworkSettings(
+            localDomain: ".test", autoTls: true, proxyPort: 80, tunnelProvider: "bore", relayServer: "bore.pub"),
+        cells: CellsSettings(
+            enableByDefault: true, defaultMemoryLimit: "256MB", defaultCpuLimit: "1", networkIsolation: true),
+        deploy: DeploySettings(
+            provider: "Hetzner", sshKey: "", terraformPath: "", ansiblePath: "", autoGenerate: false,
+            containerRuntime: "Podman", registry: ""),
+        ai: AISettings(
+            provider: provider, providers: providers, apiKey: "", ollamaEndpoint: "http://localhost:11434",
+            proactiveSuggestions: true, autoApplySafeFixes: false, includeLogsInContext: true, maxContextSize: 4096,
+            autonomyLevels: ["suggest-only"], defaultAutonomy: "suggest-only"),
+        theme: ThemeSettings(
+            mode: "dark", accentColor: "#6366f1", successColor: "#34d399", errorColor: "#f87171",
+            warningColor: "#fbbf24", borderRadius: 8, fontSize: 13, sidebarWidth: 240)
     )
 }
 

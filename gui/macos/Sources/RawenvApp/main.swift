@@ -1,6 +1,6 @@
-import SwiftUI
-import RawenvLib
 import AppKit
+import RawenvLib
+import SwiftUI
 
 // MARK: - Crash-loop safeguards (run before any SwiftUI/AppKit setup)
 //
@@ -26,7 +26,8 @@ func handleCLIInvocationIfNeeded() {
     // Find the real embedded CLI (never ourselves) and forward the args.
     let cli = RawenvCLI()
     if !RawenvCLI.isSelfReference(cli.binaryPath),
-       FileManager.default.isExecutableFile(atPath: cli.binaryPath) {
+        FileManager.default.isExecutableFile(atPath: cli.binaryPath)
+    {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: cli.binaryPath)
         p.arguments = args
@@ -35,7 +36,8 @@ func handleCLIInvocationIfNeeded() {
         exit(p.terminationStatus)
     }
     // No real CLI available — refuse to launch the GUI (prevents self-exec loop).
-    FileHandle.standardError.write(Data("rawenv: GUI binary invoked with CLI arguments; refusing to launch GUI.\n".utf8))
+    FileHandle.standardError.write(
+        Data("rawenv: GUI binary invoked with CLI arguments; refusing to launch GUI.\n".utf8))
     exit(0)
 }
 
@@ -64,7 +66,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // (The Xcode .app build gets its icon from Assets.car / AppIcon instead.)
         #if SPM_BUILD
         if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "png"),
-           let icon = NSImage(contentsOf: url) {
+            let icon = NSImage(contentsOf: url)
+        {
             NSApplication.shared.applicationIconImage = icon
         }
         #endif
@@ -92,10 +95,11 @@ struct RawenvAppMain: App {
     init() {
         let repository: DataRepository = DataStore()
         let aiProvider: AIProvider = AIProviderCascade()
-        _appState = StateObject(wrappedValue: AppState(
-            repository: repository,
-            aiProvider: aiProvider
-        ))
+        _appState = StateObject(
+            wrappedValue: AppState(
+                repository: repository,
+                aiProvider: aiProvider
+            ))
     }
 
     var body: some Scene {

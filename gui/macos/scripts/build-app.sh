@@ -42,8 +42,8 @@ warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*"; }
 # ---------------------------------------------------------------------------
 if [ -z "$SIGN_ID" ]; then
   # Auto-detect the first Developer ID Application identity in the keychain.
-  SIGN_ID="$(security find-identity -v -p codesigning 2>/dev/null \
-    | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
+  SIGN_ID="$(security find-identity -v -p codesigning 2>/dev/null |
+    sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
 fi
 if [ -n "$SIGN_ID" ]; then
   log "Signing identity: $SIGN_ID"
@@ -60,9 +60,12 @@ fi
 # ---------------------------------------------------------------------------
 if [ ! -x "$CLI_BINARY" ]; then
   log "CLI binary not found at $CLI_BINARY — building it with zig…"
-  ( cd "$REPO_ROOT" && zig build -Doptimize=ReleaseSafe -Dversion="$APP_VERSION" )
+  (cd "$REPO_ROOT" && zig build -Doptimize=ReleaseSafe -Dversion="$APP_VERSION")
 fi
-[ -x "$CLI_BINARY" ] || { echo "error: rawenv CLI not found at $CLI_BINARY" >&2; exit 1; }
+[ -x "$CLI_BINARY" ] || {
+  echo "error: rawenv CLI not found at $CLI_BINARY" >&2
+  exit 1
+}
 
 cd "$MACOS_DIR"
 command -v xcodegen >/dev/null && xcodegen generate
@@ -84,11 +87,14 @@ ARCHIVE_ARGS=(
   CODE_SIGNING_ALLOWED=NO
   MARKETING_VERSION="$APP_VERSION"
 )
-[ -n "${DEVELOPMENT_TEAM:-}" ] && ARCHIVE_ARGS+=( DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" )
+[ -n "${DEVELOPMENT_TEAM:-}" ] && ARCHIVE_ARGS+=(DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM")
 xcodebuild archive "${ARCHIVE_ARGS[@]}"
 
 ARCHIVED_APP="$(find "$ARCHIVE/Products/Applications" -maxdepth 1 -name 'Rawenv.app' | head -1)"
-[ -d "$ARCHIVED_APP" ] || { echo "error: archive did not produce Rawenv.app" >&2; exit 1; }
+[ -d "$ARCHIVED_APP" ] || {
+  echo "error: archive did not produce Rawenv.app" >&2
+  exit 1
+}
 rm -rf "$APP_OUT"
 cp -R "$ARCHIVED_APP" "$APP_OUT"
 
@@ -105,10 +111,10 @@ chmod +x "$APP_OUT/Contents/Resources/rawenv"
 # 4. Deep code-sign with the Hardened Runtime. Inner-to-outer: nested
 #    frameworks/dylibs and the embedded CLI must be signed before the bundle.
 # ---------------------------------------------------------------------------
-SIGN_ARGS=( --force --timestamp --options runtime --sign "$SIGN_ID" )
+SIGN_ARGS=(--force --timestamp --options runtime --sign "$SIGN_ID")
 if [ "$ADHOC" -eq 1 ]; then
   # --timestamp and Hardened Runtime are meaningless/unsupported for ad-hoc.
-  SIGN_ARGS=( --force --sign "-" )
+  SIGN_ARGS=(--force --sign "-")
 fi
 
 # 4a. Nested frameworks and loadable libraries (deepest first).
@@ -125,8 +131,8 @@ codesign "${SIGN_ARGS[@]}" "$APP_OUT/Contents/Resources/rawenv"
 
 # 4c. The outer app bundle (with entitlements when signing for real).
 log "Signing Rawenv.app (Hardened Runtime + entitlements)…"
-APP_SIGN_ARGS=( "${SIGN_ARGS[@]}" )
-[ "$ADHOC" -eq 0 ] && APP_SIGN_ARGS+=( --entitlements "$ENTITLEMENTS" )
+APP_SIGN_ARGS=("${SIGN_ARGS[@]}")
+[ "$ADHOC" -eq 0 ] && APP_SIGN_ARGS+=(--entitlements "$ENTITLEMENTS")
 codesign "${APP_SIGN_ARGS[@]}" "$APP_OUT"
 
 # ---------------------------------------------------------------------------
@@ -135,8 +141,8 @@ codesign "${APP_SIGN_ARGS[@]}" "$APP_OUT"
 log "Verifying signature…"
 codesign --verify --strict --verbose=2 "$APP_OUT" || warn "codesign verify reported issues"
 if [ "$ADHOC" -eq 0 ]; then
-  spctl --assess --type execute --verbose=2 "$APP_OUT" 2>&1 \
-    || warn "spctl assessment failed (expected until the app is notarized & stapled)"
+  spctl --assess --type execute --verbose=2 "$APP_OUT" 2>&1 ||
+    warn "spctl assessment failed (expected until the app is notarized & stapled)"
 fi
 
 echo ""

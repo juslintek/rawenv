@@ -1,6 +1,7 @@
-import Testing
-import SwiftUI
 import AppKit
+import SwiftUI
+import Testing
+
 @testable import RawenvLib
 
 /// Backs up the UI-001 dashboard exploration documented in
@@ -16,12 +17,23 @@ final class EmptyDataRepository: DataRepository, @unchecked Sendable {
     func fetchProjects() async -> [Project] { [] }
     func fetchSettings() async -> AppSettings {
         AppSettings(
-            general: GeneralSettings(storeLocation: "", autoStartServices: false, autoDetectProjects: false, launchAtLogin: false, fileWatcher: false, scanPaths: []),
-            network: NetworkSettings(localDomain: ".test", autoTls: false, proxyPort: 80, tunnelProvider: "bore", relayServer: "bore.pub"),
-            cells: CellsSettings(enableByDefault: false, defaultMemoryLimit: "256MB", defaultCpuLimit: "1", networkIsolation: false),
-            deploy: DeploySettings(provider: "Hetzner", sshKey: "", terraformPath: "", ansiblePath: "", autoGenerate: false, containerRuntime: "podman", registry: ""),
-            ai: AISettings(provider: "groq", providers: ["groq"], apiKey: "", ollamaEndpoint: "", proactiveSuggestions: false, autoApplySafeFixes: false, includeLogsInContext: false, maxContextSize: 4096, autonomyLevels: ["suggest-only"], defaultAutonomy: "suggest-only"),
-            theme: ThemeSettings(mode: "system", accentColor: "#6366f1", successColor: "#34d399", errorColor: "#f87171", warningColor: "#fbbf24", borderRadius: 8, fontSize: 13, sidebarWidth: 240)
+            general: GeneralSettings(
+                storeLocation: "", autoStartServices: false, autoDetectProjects: false, launchAtLogin: false,
+                fileWatcher: false, scanPaths: []),
+            network: NetworkSettings(
+                localDomain: ".test", autoTls: false, proxyPort: 80, tunnelProvider: "bore", relayServer: "bore.pub"),
+            cells: CellsSettings(
+                enableByDefault: false, defaultMemoryLimit: "256MB", defaultCpuLimit: "1", networkIsolation: false),
+            deploy: DeploySettings(
+                provider: "Hetzner", sshKey: "", terraformPath: "", ansiblePath: "", autoGenerate: false,
+                containerRuntime: "podman", registry: ""),
+            ai: AISettings(
+                provider: "groq", providers: ["groq"], apiKey: "", ollamaEndpoint: "", proactiveSuggestions: false,
+                autoApplySafeFixes: false, includeLogsInContext: false, maxContextSize: 4096,
+                autonomyLevels: ["suggest-only"], defaultAutonomy: "suggest-only"),
+            theme: ThemeSettings(
+                mode: "system", accentColor: "#6366f1", successColor: "#34d399", errorColor: "#f87171",
+                warningColor: "#fbbf24", borderRadius: 8, fontSize: 13, sidebarWidth: 240)
         )
     }
     func fetchDeployConfig() async -> DeployConfig { DeployConfig(terraform: "", ansible: "", containerfile: "") }

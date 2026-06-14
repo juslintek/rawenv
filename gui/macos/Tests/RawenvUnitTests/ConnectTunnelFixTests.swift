@@ -1,5 +1,6 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import RawenvLib
 
 /// In-memory ``ConnectionModePersisting`` double so connection-mode persistence
@@ -92,14 +93,15 @@ final class InMemoryConnectionModeStore: ConnectionModePersisting, @unchecked Se
 
 @Suite struct TunnelExecutionTests {
     @Test @MainActor func createTunnelRunsCommandAndCapturesOutput() async {
-        let vm = TunnelVM(toolInstalled: { _ in true },
-                          commandRunner: { "bore local \($0) --to bore.pub" })
+        let vm = TunnelVM(
+            toolInstalled: { _ in true },
+            commandRunner: { "bore local \($0) --to bore.pub" })
         vm.port = "3000"
         vm.createTunnel()
         #expect(vm.tunnels.count == 1)
         // The detached runner updates lastOutput on the main actor shortly after.
         for _ in 0..<50 where vm.lastOutput == nil {
-            try? await Task.sleep(nanoseconds: 10_000_000) // poll for the async output
+            try? await Task.sleep(nanoseconds: 10_000_000)  // poll for the async output
         }
         #expect(vm.lastOutput == "bore local 3000 --to bore.pub")
     }
@@ -112,8 +114,9 @@ final class InMemoryConnectionModeStore: ConnectionModePersisting, @unchecked Se
         var settings = await TestDataRepository().fetchSettings()
         settings.network.tunnelProvider = "ngrok"
         settings.network.relayServer = "my.relay.io"
-        let store = SettingsStore(fileURL: FileManager.default.temporaryDirectory
-            .appendingPathComponent("rawenv-tunnel-\(UUID().uuidString).json"))
+        let store = SettingsStore(
+            fileURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("rawenv-tunnel-\(UUID().uuidString).json"))
         try? store.save(settings)
 
         let vm = TunnelVM(toolInstalled: { _ in true }, settingsStore: store)

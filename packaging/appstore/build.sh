@@ -33,7 +33,7 @@ xcodebuild archive \
   -allowProvisioningUpdates
 
 # ExportOptions generated from env so no team id is committed.
-cat > "${BUILD_DIR}/ExportOptions.plist" <<PLIST
+cat >"${BUILD_DIR}/ExportOptions.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">

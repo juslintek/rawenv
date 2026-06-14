@@ -20,8 +20,10 @@ public final class RawenvCLI: Sendable {
     /// system install so a notarized, self-contained Rawenv.app always runs the
     /// exact CLI it was shipped and signed with — even on a machine with no
     /// `rawenv` on the PATH.
-    static func candidatePaths(bundle: Bundle = .main, home: String = NSHomeDirectory(),
-                               cwd: String = FileManager.default.currentDirectoryPath) -> [String] {
+    static func candidatePaths(
+        bundle: Bundle = .main, home: String = NSHomeDirectory(),
+        cwd: String = FileManager.default.currentDirectoryPath
+    ) -> [String] {
         var paths: [String] = []
 
         // 1. Embedded CLI in the app bundle (Developer ID / App Store distribution).
@@ -101,7 +103,8 @@ public final class RawenvCLI: Sendable {
                     try process.run()
                     process.waitUntilExit()
                     let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                    let output = String(data: data, encoding: .utf8)?
+                    let output =
+                        String(data: data, encoding: .utf8)?
                         .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                     continuation.resume(returning: output)
                 } catch {
@@ -137,7 +140,8 @@ public final class RawenvCLI: Sendable {
                     try process.run()
                     process.waitUntilExit()
                     let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                    let output = String(data: data, encoding: .utf8)?
+                    let output =
+                        String(data: data, encoding: .utf8)?
                         .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                     continuation.resume(returning: (process.terminationStatus, output))
                 } catch {
