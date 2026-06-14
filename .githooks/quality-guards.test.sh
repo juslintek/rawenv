@@ -48,6 +48,10 @@ assert 0 "quoted SHA-pinned action is not flagged" .github/workflows/pinned.yml
 mk .github/workflows/unpinned.yml '+++ b/w\n+      - uses: actions/checkout@v4\n'
 assert 1 "unpinned action is flagged" .github/workflows/unpinned.yml
 
+# Pinned action with an inline comment containing '@' -> NOT flagged (comment stripped).
+mk .github/workflows/cmt.yml '+++ b/w\n+      - uses: owner/repo@abcdef1234567890abcdef1234567890abcdef12 # pin @ v4\n'
+assert 0 "inline comment with @ does not override the ref" .github/workflows/cmt.yml
+
 # docker:// ref -> skipped (not a GitHub action).
 mk .github/workflows/docker.yml '+++ b/w\n+      - uses: docker://alpine:3.20\n'
 assert 0 "docker:// ref is skipped" .github/workflows/docker.yml

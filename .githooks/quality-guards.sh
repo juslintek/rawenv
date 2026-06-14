@@ -59,7 +59,7 @@ quality_guards() {
         uses_lines=$(printf '%s\n' "$added" | grep -E "uses:[[:space:]]*[\"']?[^[:space:]./][^[:space:]]*/[^@[:space:]]+@") || uses_lines=
         while IFS= read -r line; do
           [ -n "$line" ] || continue
-          norm=$(printf '%s' "$line" | sed "s/[\"']//g")
+          norm=$(printf '%s' "$line" | sed -E "s/[\"']//g; s/[[:space:]]+#.*$//")
           case "$norm" in *docker://*) continue ;; esac
           owner=$(printf '%s' "$norm" | sed -E 's/.*uses:[[:space:]]*//; s#/.*##')
           ref=$(printf '%s' "$norm" | sed -E 's/.*@//; s/[[:space:]].*//')
