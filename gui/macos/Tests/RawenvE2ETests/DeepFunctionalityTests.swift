@@ -9,7 +9,7 @@ import Testing
 
 private let testRoot = "/tmp/rawenv-deep-test"
 private let cli = RawenvCLI(
-    binaryPath: (ProcessInfo.processInfo.environment["RAWENV_BINARY"] ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"))
+    binaryPath: resolvedRawenvBinary())
 
 /// Build an installer engine pointed at an isolated temp dir with an offline,
 /// deterministic source binary so install runs are hermetic (no network, no
