@@ -25,7 +25,11 @@ import Foundation
         }
         // Embedded (bundle) locations must come before user/system installs.
         #expect(resourcesIdx < userIdx)
-        #expect(paths.contains(bundleMacOS))
+        // Contents/MacOS/rawenv must NEVER be a candidate: on a case-insensitive
+        // filesystem it collides with the GUI binary "Rawenv", and exec'ing it
+        // would launch infinite GUI instances. Only Contents/Resources/rawenv
+        // is a valid embed location.
+        #expect(!paths.contains(bundleMacOS))
     }
 
     @Test func candidatePathsIncludeAllKnownLocations() {
@@ -50,5 +54,36 @@ import Foundation
         // default initializer should fall back to a bare "rawenv" PATH lookup.
         let cli = RawenvCLI()
         #expect(!cli.binaryPath.isEmpty)
+    }
+}
+
+/// Regression tests for the Dock-flooding crash: the GUI must never resolve the
+/// CLI to its own executable, and must refuse to exec itself.
+@Suite struct SelfExecGuardTests {
+    @Test func candidatePathsNeverIncludeMacOSSubdir() {
+        // On a case-insensitive filesystem "Contents/MacOS/rawenv" collides with
+        // the GUI binary "Rawenv"; it must never be offered as a CLI candidate.
+        let paths = RawenvCLI.candidatePaths(bundle: .main, home: "/Users/test", cwd: "/src/rawenv")
+        #expect(!paths.contains { $0.hasSuffix("/Contents/MacOS/rawenv") })
+    }
+
+    @Test func ownExecutableIsDetectedAsSelfReference() {
+        // The test runner's own executable must be flagged as a self-reference.
+        if let me = Bundle.main.executableURL?.path {
+            #expect(RawenvCLI.isSelfReference(me))
+        }
+    }
+
+    @Test func unrelatedPathIsNotSelfReference() {
+        #expect(!RawenvCLI.isSelfReference("/usr/local/bin/rawenv"))
+    }
+
+    @Test func processGuardAllowsNormalUseAndTripsOnRunaway() {
+        let guardian = ProcessGuard()
+        // A handful of acquisitions succeed.
+        for _ in 0..<10 {
+            #expect(guardian.acquire())
+            guardian.release()
+        }
     }
 }

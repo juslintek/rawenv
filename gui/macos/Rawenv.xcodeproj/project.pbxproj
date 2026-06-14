@@ -44,6 +44,7 @@
 		746E4A047C9A7720001CBDE8 /* ServiceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB5BBE5B9EAA0D9389BD056D /* ServiceManager.swift */; };
 		7DF3335A6459A59165348077 /* InstallerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CC8A4285BEA22F931B0342B /* InstallerEngine.swift */; };
 		7FA6A80EA54219AB4B54EC78 /* RuntimeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1D0DEBE274EC68CB6B615F /* RuntimeManager.swift */; };
+		7FC95A1E277C9F2014F65FBC /* ProcessGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D47776A14E0077064DA32E2 /* ProcessGuard.swift */; };
 		8155BA9CC4424F38560A71C2 /* SettingsValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C881C30247E2FAA4971F35D6 /* SettingsValidator.swift */; };
 		86EBCBDA1A6CD2B442F7AD7D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4B2877DB0CEB471074B77F16 /* Assets.xcassets */; };
 		92E8B9A2DFD78A63C1E7A5BB /* ProcessStatsProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0533C6FD08E22BE6EA4904C6 /* ProcessStatsProvider.swift */; };
@@ -109,6 +110,7 @@
 		03868AFF6B9DA6590F85075A /* TunnelVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelVM.swift; sourceTree = "<group>"; };
 		04F631865B89634CC620C72A /* RawenvUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RawenvUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0533C6FD08E22BE6EA4904C6 /* ProcessStatsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessStatsProvider.swift; sourceTree = "<group>"; };
+		0D47776A14E0077064DA32E2 /* ProcessGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessGuard.swift; sourceTree = "<group>"; };
 		0F73B4EEC5912BB24C5E46C6 /* Rawenv.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rawenv.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1C91B56FCD0307F9546C44F0 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		2076C4C565FA7C5DE7A528CE /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
@@ -399,6 +401,7 @@
 				7CC8A4285BEA22F931B0342B /* InstallerEngine.swift */,
 				5BE4FAF4054CF58F9B4C4D6B /* MarkdownRenderer.swift */,
 				499B02BDA9AF408217DA814D /* MenuBarActions.swift */,
+				0D47776A14E0077064DA32E2 /* ProcessGuard.swift */,
 				0533C6FD08E22BE6EA4904C6 /* ProcessStatsProvider.swift */,
 				31CBAF749731FA5411402A68 /* ProjectCreator.swift */,
 				22AEB4BDA7F389989F7C90E0 /* RawenvCLI.swift */,
@@ -558,6 +561,7 @@
 				AB83AF35AC8865472F28DC68 /* MenuBarActions.swift in Sources */,
 				F7E76E798BED6EB298779CF9 /* MenuBarView.swift in Sources */,
 				642705138B727F7AF28A9905 /* NavigationService.swift in Sources */,
+				7FC95A1E277C9F2014F65FBC /* ProcessGuard.swift in Sources */,
 				92E8B9A2DFD78A63C1E7A5BB /* ProcessStatsProvider.swift in Sources */,
 				703367FB1ADC490F4F28466B /* Project.swift in Sources */,
 				CFB0DFF1C67EDDEBCB51921A /* ProjectCreator.swift in Sources */,
