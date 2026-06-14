@@ -85,6 +85,7 @@ public final class RecipeLibrary: ObservableObject {
             "cms-ecommerce.json", "selfhosted.json", "forums-erp-crm.json",
         ]
         let searchPaths = [
+            ProcessInfo.processInfo.environment["RAWENV_REPO"].map { "\($0)/shared/recipes" },
             Bundle.main.resourcePath,
             "\(FileManager.default.currentDirectoryPath)/shared/recipes",
             "\(FileManager.default.currentDirectoryPath)/../../shared/recipes",
