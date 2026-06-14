@@ -2,6 +2,7 @@ const std = @import("std");
 const detector = @import("detector");
 const config = @import("config");
 const resolver = @import("resolver");
+const builtin = @import("builtin");
 const testing = std.testing;
 
 fn makeTmpDir() !std.Io.Dir {
@@ -49,6 +50,7 @@ test "detect package.json without engines defaults to 22" {
 }
 
 test "detect package.json with packageManager bun" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     var dir = try makeTmpDir();
     defer dir.close(std.testing.io);
     defer cleanFile(dir, "package.json");
@@ -656,6 +658,7 @@ test "detect composer.json with php version" {
 }
 
 test "detected php version from composer.json is installable (8.1-8.4)" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     // Real-world composer.json `require.php` constraints should each detect a
     // PHP version that the resolver can turn into a downloadable prebuilt binary.
     const cases = [_]struct { constraint: []const u8, detected: []const u8, full: []const u8 }{

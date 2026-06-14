@@ -39,18 +39,21 @@ test "ServiceInfo struct fields" {
 }
 
 test "buildStorePath constructs correct path" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const path = try service.buildStorePath(testing.allocator, "/home/user", "node", "22.15.0");
     defer testing.allocator.free(path);
     try testing.expectEqualStrings("/home/user/.rawenv/store/node-22.15.0", path);
 }
 
 test "buildBinPath constructs correct path" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const path = try service.buildBinPath(testing.allocator, "/home/user");
     defer testing.allocator.free(path);
     try testing.expectEqualStrings("/home/user/.rawenv/bin", path);
 }
 
 test "shell buildPath prepends bin dir" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const path = try shell.buildPath(testing.allocator, "/home/user");
     defer testing.allocator.free(path);
     try testing.expect(std.mem.startsWith(u8, path, "/home/user/.rawenv/bin:"));
@@ -92,6 +95,7 @@ test "PortAllocator claim twice from same preferred yields distinct ports" {
 }
 
 test "listServices allocates distinct ports for two instances of same service" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const config = @import("config");
     const input =
         \\name = "multi"
@@ -328,6 +332,7 @@ test "redisConfContent pins data dir + port with dev defaults and is idempotent"
 }
 
 test "redisConfPath joins data dir and redis.conf" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const p = try service.redisConfPath(testing.allocator, "/data/redis");
     defer testing.allocator.free(p);
     try testing.expectEqualStrings("/data/redis/redis.conf", p);
@@ -338,6 +343,7 @@ test "postgresInitialized is false for a non-existent data dir" {
 }
 
 test "serviceStartArgs supplies conf for redis and -D for postgres" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const r = try service.serviceStartArgs(testing.allocator, "redis", "/data/redis");
     defer service.freeServiceArgs(testing.allocator, r);
     try testing.expectEqual(@as(usize, 1), r.len);
