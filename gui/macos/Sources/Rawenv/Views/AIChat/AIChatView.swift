@@ -9,12 +9,19 @@ struct AIChatView: View {
             if viewModel.showProactiveBanner {
                 HStack(spacing: 8) {
                     Text("🤖")
-                    Text("I detected PostgreSQL with 100 max_connections but only 3 active. Reduce to 20 to save ~40MB RAM?")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.textPrimary)
+                    Text(
+                        "I detected PostgreSQL with 100 max_connections but only 3 active. Reduce to 20 to save ~40MB RAM?"
+                    )
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.textPrimary)
                     Spacer()
-                    Button("Apply") { Task { viewModel.inputText = "optimize memory"; await viewModel.sendMessage() } }
-                        .buttonStyle(.borderedProminent).controlSize(.small)
+                    Button("Apply") {
+                        Task {
+                            viewModel.inputText = "optimize memory"
+                            await viewModel.sendMessage()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent).controlSize(.small)
                     Button("Dismiss") { viewModel.dismissProactiveBanner() }.buttonStyle(.bordered).controlSize(.small)
                 }
                 .padding(10)
@@ -28,10 +35,13 @@ struct AIChatView: View {
             HStack {
                 Text("🤖 AI Assistant").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.textPrimary)
                 Spacer()
-                Picker("", selection: Binding(
-                    get: { viewModel.selectedProvider },
-                    set: { viewModel.setProvider($0) }
-                )) {
+                Picker(
+                    "",
+                    selection: Binding(
+                        get: { viewModel.selectedProvider },
+                        set: { viewModel.setProvider($0) }
+                    )
+                ) {
                     ForEach(viewModel.providers, id: \.self) { p in Text(p).tag(p) }
                 }
                 .frame(width: 200)
@@ -67,14 +77,16 @@ struct AIChatView: View {
                         ErrorStateView(
                             title: "Couldn't load conversation",
                             message: errorMessage,
-                            idPrefix: "ai") {
-                                Task { await viewModel.load() }
-                            }
+                            idPrefix: "ai"
+                        ) {
+                            Task { await viewModel.load() }
+                        }
                     } else {
                         EmptyStateView(
                             icon: "bubble.left.and.bubble.right",
                             title: "Ask the AI assistant",
-                            guidance: "No messages yet. Ask about your services, configuration, or deployment to get started.",
+                            guidance:
+                                "No messages yet. Ask about your services, configuration, or deployment to get started.",
                             idPrefix: "ai")
                     }
                 }
@@ -119,7 +131,7 @@ struct AIChatView: View {
                     TypingIndicator()
                     Spacer()
                 }.padding(.horizontal, 16)
-                .accessibilityIdentifier("ai_typing")
+                    .accessibilityIdentifier("ai_typing")
             }
         }
         .padding(.vertical, 12)

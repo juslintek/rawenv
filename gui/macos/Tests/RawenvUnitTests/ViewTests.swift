@@ -1,6 +1,7 @@
-import Testing
-import SwiftUI
 import AppKit
+import SwiftUI
+import Testing
+
 @testable import RawenvLib
 
 // Helper to force SwiftUI body evaluation
@@ -16,7 +17,8 @@ private func makeAppState() -> AppState {
     UserDefaults.standard.set(true, forKey: "rawenv.installed")
     UserDefaults.standard.set(true, forKey: "rawenv.setupComplete")
     let state = AppState(repository: TestDataRepository(), aiProvider: TestAIProvider())
-    state.activeProject = Project(name: "utilio", path: "~/Projects/utilio", stack: ["Node.js", "Redis"], deps: "5 deps")
+    state.activeProject = Project(
+        name: "utilio", path: "~/Projects/utilio", stack: ["Node.js", "Redis"], deps: "5 deps")
     state.managedProjects = [state.activeProject!]
     return state
 }

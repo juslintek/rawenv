@@ -1,5 +1,6 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import RawenvLib
 
 /// A repository whose every fetch throws, so we can assert that view models

@@ -1,5 +1,6 @@
-import Testing
 import SwiftUI
+import Testing
+
 @testable import RawenvLib
 
 @Suite struct AppStateTests {
@@ -77,7 +78,7 @@ import SwiftUI
 
     @Test @MainActor func serviceManagerAccessible() {
         let state = AppState(repository: TestDataRepository(), aiProvider: TestAIProvider())
-        #expect(state.serviceManager.services.isEmpty || true) // just access it
+        #expect(state.serviceManager.services.isEmpty || true)  // just access it
         #expect(state.aiEngine.messages.isEmpty)
         #expect(state.installerEngine.state == .welcome)
         #expect(state.scannerEngine.isScanning == false)
@@ -89,7 +90,10 @@ import SwiftUI
 @Suite struct ThemeManagerTests {
     @Test @MainActor func defaultValues() {
         // Clean any persisted values first
-        for key in ["theme.mode", "theme.borderRadius", "theme.fontSize", "theme.sidebarWidth", "theme.accent", "theme.success", "theme.error", "theme.warning"] {
+        for key in [
+            "theme.mode", "theme.borderRadius", "theme.fontSize", "theme.sidebarWidth", "theme.accent", "theme.success",
+            "theme.error", "theme.warning",
+        ] {
             UserDefaults.standard.removeObject(forKey: key)
         }
         let tm = ThemeManager()
@@ -137,7 +141,10 @@ import SwiftUI
 
     @Test @MainActor func persistence() async {
         // Clean first
-        for key in ["theme.mode", "theme.borderRadius", "theme.fontSize", "theme.sidebarWidth", "theme.accent", "theme.success", "theme.error", "theme.warning"] {
+        for key in [
+            "theme.mode", "theme.borderRadius", "theme.fontSize", "theme.sidebarWidth", "theme.accent", "theme.success",
+            "theme.error", "theme.warning",
+        ] {
             UserDefaults.standard.removeObject(forKey: key)
         }
         let tm = ThemeManager()
@@ -153,7 +160,10 @@ import SwiftUI
         tm.sidebarWidth = 280
         #expect(tm.sidebarWidth == 280)
         // Clean up
-        for key in ["theme.mode", "theme.borderRadius", "theme.fontSize", "theme.sidebarWidth", "theme.accent", "theme.success", "theme.error", "theme.warning"] {
+        for key in [
+            "theme.mode", "theme.borderRadius", "theme.fontSize", "theme.sidebarWidth", "theme.accent", "theme.success",
+            "theme.error", "theme.warning",
+        ] {
             UserDefaults.standard.removeObject(forKey: key)
         }
     }
@@ -203,7 +213,10 @@ import SwiftUI
         #expect(tm.fontSize == 14)
         #expect(tm.sidebarWidth == 200)
         // Clean up
-        for key in ["theme.mode", "theme.borderRadius", "theme.fontSize", "theme.sidebarWidth", "theme.accent", "theme.success", "theme.error", "theme.warning"] {
+        for key in [
+            "theme.mode", "theme.borderRadius", "theme.fontSize", "theme.sidebarWidth", "theme.accent", "theme.success",
+            "theme.error", "theme.warning",
+        ] {
             UserDefaults.standard.removeObject(forKey: key)
         }
     }
@@ -246,7 +259,10 @@ import SwiftUI
 @Suite struct ScannerEngineTests {
     @Test @MainActor func initialState() {
         let engine = ScannerEngine()
-        #expect(engine.paths.count == 6)
+        // Default scan roots are all under the user's home — no machine-specific mounts.
+        let home = NSHomeDirectory()
+        #expect(engine.paths.count == 5)
+        #expect(engine.paths.allSatisfy { $0.path.hasPrefix(home) })
         #expect(engine.totalProjects == 0)
         #expect(engine.isScanning == false)
         #expect(engine.scanComplete == false)
@@ -267,7 +283,7 @@ import SwiftUI
         let engine = ScannerEngine()
         engine.scanFullDisk()
         #expect(engine.isScanning == true)
-        #expect(engine.paths.count > 6) // extras added
+        #expect(engine.paths.count > 6)  // extras added
         try? await Task.sleep(nanoseconds: 6_000_000_000)
         #expect(engine.scanComplete == true)
     }
@@ -330,7 +346,7 @@ import SwiftUI
         // Wait for deploy to complete/fail
         try? await Task.sleep(nanoseconds: 5_000_000_000)
         #expect(engine.isRunning == false)
-        #expect(engine.hasError == true) // terraform not installed, fails on first step
+        #expect(engine.hasError == true)  // terraform not installed, fails on first step
         #expect(!engine.logs.isEmpty)
     }
 

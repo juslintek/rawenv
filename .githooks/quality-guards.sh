@@ -33,7 +33,7 @@ quality_guards() {
     # 1. Hardcoded developer paths in code/CI (portability + privacy).
     case "$f" in
       *.swift | *.zig | *.vala | *.cs | *.sh | *.bash | *.py | *.yml | *.yaml | *.toml | *.csproj | Dockerfile* | */Dockerfile*)
-        hits=$(printf '%s\n' "$added" | grep -nE '/Volumes/|/Users/[^/" '"'"']+/|/home/[^/" '"'"']+/') || hits=
+        hits=$(printf '%s\n' "$added" | grep -nE '/Volumes/|/Users/[^/" '"'"']+/|/home/[^/" '"'"']+/' | grep -vF '/Volumes/My Shared Files/') || hits=
         if [ -n "$hits" ]; then
           _qg_hit "$f: hardcoded developer path in added lines — use \$ENV, repo-relative, or discovery"
           printf '%s\n' "$hits" | head -3 | sed 's/^/        + /'

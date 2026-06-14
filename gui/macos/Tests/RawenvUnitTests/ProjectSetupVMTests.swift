@@ -1,19 +1,20 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import RawenvLib
 
 @Suite struct ProjectSetupVMTests {
     @Test func updatedTomlReplacesExistingNodeLine() {
         let toml = """
-        [project]
-        name = "app"
+            [project]
+            name = "app"
 
-        [runtimes]
-        node = "18"
+            [runtimes]
+            node = "18"
 
-        [services]
-        postgresql = "16"
-        """
+            [services]
+            postgresql = "16"
+            """
         let out = ProjectSetupVM.updatedToml(toml, nodeVersion: "22")
         #expect(out.contains("node = \"22\""))
         #expect(!out.contains("node = \"18\""))
@@ -24,12 +25,12 @@ import Foundation
 
     @Test func updatedTomlInsertsNodeWhenMissingInRuntimes() {
         let toml = """
-        [project]
-        name = "app"
+            [project]
+            name = "app"
 
-        [runtimes]
-        php = "8.3"
-        """
+            [runtimes]
+            php = "8.3"
+            """
         let out = ProjectSetupVM.updatedToml(toml, nodeVersion: "20")
         #expect(out.contains("node = \"20\""))
         #expect(out.contains("php = \"8.3\""))
@@ -37,9 +38,9 @@ import Foundation
 
     @Test func updatedTomlAppendsRuntimesSectionWhenAbsent() {
         let toml = """
-        [project]
-        name = "app"
-        """
+            [project]
+            name = "app"
+            """
         let out = ProjectSetupVM.updatedToml(toml, nodeVersion: "22")
         #expect(out.contains("[runtimes]"))
         #expect(out.contains("node = \"22\""))
@@ -57,7 +58,8 @@ import Foundation
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(atPath: dir) }
         let tomlPath = "\(dir)/rawenv.toml"
-        try "[project]\nname = \"app\"\n\n[runtimes]\nnode = \"18\"\n".write(toFile: tomlPath, atomically: true, encoding: .utf8)
+        try "[project]\nname = \"app\"\n\n[runtimes]\nnode = \"18\"\n".write(
+            toFile: tomlPath, atomically: true, encoding: .utf8)
 
         let vm = ProjectSetupVM()
         vm.projectPath = dir

@@ -1,4 +1,5 @@
 import Testing
+
 @testable import RawenvLib
 
 /// Covers AI-2: the provider picker drives the actual backend, and the cascade
@@ -54,20 +55,25 @@ import Testing
     }
 
     @Test func ollamaEndpointWithExistingPathIsNotDoubled() {
-        #expect(AIProviderCascade.normalizedOllamaURL("http://localhost:11434/v1/chat/completions")
+        #expect(
+            AIProviderCascade.normalizedOllamaURL("http://localhost:11434/v1/chat/completions")
                 == "http://localhost:11434/v1/chat/completions")
-        #expect(AIProviderCascade.normalizedOllamaURL("http://localhost:11434/v1")
+        #expect(
+            AIProviderCascade.normalizedOllamaURL("http://localhost:11434/v1")
                 == "http://localhost:11434/v1/chat/completions")
-        #expect(AIProviderCascade.normalizedOllamaURL("http://localhost:11434/")
+        #expect(
+            AIProviderCascade.normalizedOllamaURL("http://localhost:11434/")
                 == "http://localhost:11434/v1/chat/completions")
     }
 
     @Test func planIsPureForSelection() {
-        let local = AIProviderCascade.plan(selection: "Ollama (local)", apiKey: "k",
-                                           ollamaEndpoint: "http://localhost:11434")
+        let local = AIProviderCascade.plan(
+            selection: "Ollama (local)", apiKey: "k",
+            ollamaEndpoint: "http://localhost:11434")
         #expect(local.map(\.name) == ["ollama"])
-        let cloud = AIProviderCascade.plan(selection: "groq", apiKey: "k",
-                                           ollamaEndpoint: "http://localhost:11434")
+        let cloud = AIProviderCascade.plan(
+            selection: "groq", apiKey: "k",
+            ollamaEndpoint: "http://localhost:11434")
         #expect(cloud.map(\.name) == ["groq"])
     }
 }

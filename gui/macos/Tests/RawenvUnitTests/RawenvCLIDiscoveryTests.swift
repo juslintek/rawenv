@@ -1,5 +1,6 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import RawenvLib
 
 /// Verifies RawenvCLI's binary-discovery ordering, in particular that a CLI
@@ -19,7 +20,8 @@ import Foundation
         let userInstall = "/Users/test/.rawenv/bin/rawenv"
 
         guard let resourcesIdx = paths.firstIndex(of: bundleResources),
-              let userIdx = paths.firstIndex(of: userInstall) else {
+            let userIdx = paths.firstIndex(of: userInstall)
+        else {
             Issue.record("expected bundle and user-install candidates to be present: \(paths)")
             return
         }

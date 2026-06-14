@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 
 public enum DashboardTab: String, CaseIterable {
     case logs, config, connection, cell, backups

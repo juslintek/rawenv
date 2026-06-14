@@ -25,19 +25,19 @@ struct MarkdownMessageView: View {
     @ViewBuilder
     private func blockView(_ block: MarkdownBlock) -> some View {
         switch block {
-        case let .heading(level, text):
+        case .heading(let level, let text):
             MarkdownInline.text(text)
                 .font(.system(size: headingSize(level), weight: .semibold))
                 .foregroundStyle(Color.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-        case let .paragraph(text):
+        case .paragraph(let text):
             MarkdownInline.text(text)
                 .font(.system(size: baseFontSize))
                 .foregroundStyle(Color.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-        case let .bulletList(items):
+        case .bulletList(let items):
             VStack(alignment: .leading, spacing: 3) {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                     HStack(alignment: .top, spacing: 6) {
@@ -50,7 +50,7 @@ struct MarkdownMessageView: View {
                 }
             }
 
-        case let .orderedList(items):
+        case .orderedList(let items):
             VStack(alignment: .leading, spacing: 3) {
                 ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
                     HStack(alignment: .top, spacing: 6) {
@@ -65,7 +65,7 @@ struct MarkdownMessageView: View {
                 }
             }
 
-        case let .codeBlock(_, code):
+        case .codeBlock(_, let code):
             Text(code)
                 .font(.system(size: baseFontSize - 1, design: .monospaced))
                 .foregroundStyle(Color.textPrimary)
@@ -75,9 +75,10 @@ struct MarkdownMessageView: View {
                 .background(Color.bgTertiary)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
 
-        case let .table(header, alignments, rows):
-            MarkdownTableView(header: header, alignments: alignments, rows: rows,
-                              fontSize: baseFontSize)
+        case .table(let header, let alignments, let rows):
+            MarkdownTableView(
+                header: header, alignments: alignments, rows: rows,
+                fontSize: baseFontSize)
         }
     }
 
@@ -156,7 +157,8 @@ enum MarkdownInline {
     static func text(_ raw: String) -> Text {
         if let attributed = try? AttributedString(
             markdown: raw,
-            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))
+        {
             return Text(attributed)
         }
         return Text(raw)

@@ -4,7 +4,7 @@ const io = testing.io;
 const Io = std.Io;
 
 fn rawenvBin() []const u8 {
-    return "/Volumes/Projects/rawenv/zig-out/bin/rawenv";
+    return if (std.c.getenv("RAWENV_BINARY")) |s| std.mem.sliceTo(s, 0) else "zig-out/bin/rawenv";
 }
 
 test "rawenv init detects package.json" {

@@ -50,18 +50,20 @@ struct DeployView: View {
         switch viewModel.phase {
         case .idle, .loading:
             LoadingStateView("Generating deployment config…", idPrefix: "deploy")
-        case let .failed(message):
+        case .failed(let message):
             ErrorStateView(
                 title: "Couldn't generate deployment config",
                 message: message,
-                idPrefix: "deploy") {
-                    Task { await viewModel.load() }
-                }
+                idPrefix: "deploy"
+            ) {
+                Task { await viewModel.load() }
+            }
         case .empty, .loaded:
             switch activeTab {
             case .terraform: CodeTab(viewModel: viewModel, title: "Terraform", code: viewModel.config?.terraform ?? "")
             case .ansible: CodeTab(viewModel: viewModel, title: "Ansible", code: viewModel.config?.ansible ?? "")
-            case .containerfile: CodeTab(viewModel: viewModel, title: "Containerfile", code: viewModel.config?.containerfile ?? "")
+            case .containerfile:
+                CodeTab(viewModel: viewModel, title: "Containerfile", code: viewModel.config?.containerfile ?? "")
             case .deployLog: EmptyView()
             }
         }
@@ -212,14 +214,19 @@ private struct DeployLogTab: View {
         }
         .padding(16)
         // Explicit confirmation before any destructive `terraform apply`.
-        .alert("Apply infrastructure changes?", isPresented: Binding(
-            get: { engine.awaitingConfirmation },
-            set: { if !$0 { engine.cancelApply() } }
-        )) {
+        .alert(
+            "Apply infrastructure changes?",
+            isPresented: Binding(
+                get: { engine.awaitingConfirmation },
+                set: { if !$0 { engine.cancelApply() } }
+            )
+        ) {
             Button("Cancel", role: .cancel) { engine.cancelApply() }
             Button("Apply", role: .destructive) { engine.confirmApply() }
         } message: {
-            Text("This runs `terraform apply` and may provision real cloud infrastructure. It can incur costs and is not easily reversible.")
+            Text(
+                "This runs `terraform apply` and may provision real cloud infrastructure. It can incur costs and is not easily reversible."
+            )
         }
     }
 }

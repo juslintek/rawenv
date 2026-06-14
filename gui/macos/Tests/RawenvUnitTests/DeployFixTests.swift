@@ -1,5 +1,6 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import RawenvLib
 
 /// Tests for the FIX-DEPLOY work: confirmation gating, Save-to-disk, real
@@ -11,14 +12,15 @@ import Foundation
     /// The shipping engine must never embed `-auto-approve`; apply is gated by
     /// an explicit confirmation instead.
     @Test func engineSourceHasNoAutoApprove() throws {
-        let source = URL(fileURLWithPath: #filePath)        // .../Tests/RawenvUnitTests/DeployFixTests.swift
-            .deletingLastPathComponent()                     // .../RawenvUnitTests
-            .deletingLastPathComponent()                     // .../Tests
-            .deletingLastPathComponent()                     // .../macos
+        let source = URL(fileURLWithPath: #filePath)  // .../Tests/RawenvUnitTests/DeployFixTests.swift
+            .deletingLastPathComponent()  // .../RawenvUnitTests
+            .deletingLastPathComponent()  // .../Tests
+            .deletingLastPathComponent()  // .../macos
             .appendingPathComponent("Sources/Rawenv/Services/DeployEngine.swift")
         let text = try String(contentsOf: source, encoding: .utf8)
-        #expect(!text.contains("-auto-approve"),
-                "DeployEngine must not pass -auto-approve; apply requires explicit confirmation")
+        #expect(
+            !text.contains("-auto-approve"),
+            "DeployEngine must not pass -auto-approve; apply requires explicit confirmation")
     }
 
     @Test @MainActor func cancelApplyStopsWithoutChanges() {
@@ -54,7 +56,7 @@ import Foundation
 
     @Test @MainActor func saveWithoutConfigReportsNothingToSave() {
         let vm = DeployViewModel(repository: TestDataRepository())
-        let written = vm.save() // no load() → config nil
+        let written = vm.save()  // no load() → config nil
         #expect(written.isEmpty)
         #expect(vm.saveMessage?.contains("Nothing to save") == true)
     }

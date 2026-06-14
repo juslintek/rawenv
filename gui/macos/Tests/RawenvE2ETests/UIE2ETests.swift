@@ -1,6 +1,7 @@
-import Testing
-import Foundation
 import AppKit
+import Foundation
+import Testing
+
 @testable import RawenvLib
 
 // MARK: - UI E2E Tests using Accessibility APIs
@@ -13,7 +14,9 @@ import AppKit
 
 @Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["RAWENV_RUN_UI_E2E"] == "1"))
 struct UIE2ETests {
-    private let binaryPath = "/Volumes/Projects/rawenv/gui/macos/.build/debug/Rawenv"
+    private let binaryPath =
+        ProcessInfo.processInfo.environment["RAWENV_GUI_BINARY"]
+        ?? "\(FileManager.default.currentDirectoryPath)/.build/debug/Rawenv"
 
     // MARK: - Helpers
 
@@ -88,7 +91,9 @@ struct UIE2ETests {
     }
 
     /// Find all elements matching a predicate
-    private func findAll(_ root: AXUIElement, depth: Int = 0, maxDepth: Int = 15, where predicate: (AXUIElement) -> Bool) -> [AXUIElement] {
+    private func findAll(
+        _ root: AXUIElement, depth: Int = 0, maxDepth: Int = 15, where predicate: (AXUIElement) -> Bool
+    ) -> [AXUIElement] {
         var results: [AXUIElement] = []
         if predicate(root) { results.append(root) }
         guard depth < maxDepth else { return results }
@@ -133,16 +138,19 @@ struct UIE2ETests {
 
         let windows = getWindows(app)
         guard let window = windows.first else {
-            Issue.record("No window found"); return
+            Issue.record("No window found")
+            return
         }
 
-        let navIds = ["nav_dashboard", "nav_discovery", "nav_ai_chat",
-                      "nav_connections", "nav_deploy", "nav_tunnel",
-                      "nav_uninstall", "nav_settings"]
+        let navIds = [
+            "nav_dashboard", "nav_discovery", "nav_ai_chat",
+            "nav_connections", "nav_deploy", "nav_tunnel",
+            "nav_uninstall", "nav_settings",
+        ]
 
         var found: [String] = []
-        for id in navIds {
-            if findById(window, id) != nil { found.append(id) }
+        for id in navIds where findById(window, id) != nil {
+            found.append(id)
         }
 
         #expect(found.count == 8, "Should find all 8 nav items, found \(found.count): \(found)")
@@ -154,7 +162,8 @@ struct UIE2ETests {
 
         let windows = getWindows(app)
         guard let window = windows.first else {
-            Issue.record("No window found"); return
+            Issue.record("No window found")
+            return
         }
 
         // dashboard_view identifier is present on elements in the detail area
@@ -168,7 +177,8 @@ struct UIE2ETests {
 
         let windows = getWindows(app)
         guard let window = windows.first else {
-            Issue.record("No window found"); return
+            Issue.record("No window found")
+            return
         }
 
         // Stats cards expose their labels as AXStaticText with value
@@ -187,14 +197,15 @@ struct UIE2ETests {
 
         let windows = getWindows(app)
         guard let window = windows.first else {
-            Issue.record("No window found"); return
+            Issue.record("No window found")
+            return
         }
 
         // Tab buttons are AXButton with AXDescription matching tab names
         let tabNames = ["Logs", "Config", "Connection", "Cell", "Backups"]
         var found: [String] = []
-        for name in tabNames {
-            if findByDescription(window, name) != nil { found.append(name) }
+        for name in tabNames where findByDescription(window, name) != nil {
+            found.append(name)
         }
 
         #expect(found.count == 5, "Should find all 5 tabs, found \(found.count): \(found)")
@@ -206,16 +217,19 @@ struct UIE2ETests {
 
         let windows = getWindows(app)
         guard let window = windows.first else {
-            Issue.record("No window found"); return
+            Issue.record("No window found")
+            return
         }
 
         guard let sidebar = findById(window, "sidebar") else {
-            Issue.record("Sidebar not found"); return
+            Issue.record("Sidebar not found")
+            return
         }
 
         // Navigate to AI Chat by selecting its row in the outline
         guard let aiChatRow = findParentRow(window, containingId: "nav_ai_chat") else {
-            Issue.record("AI Chat row not found"); return
+            Issue.record("AI Chat row not found")
+            return
         }
 
         let rowArray = [aiChatRow] as CFArray
@@ -228,7 +242,8 @@ struct UIE2ETests {
 
         // Navigate back to Dashboard
         guard let dashRow = findParentRow(window, containingId: "nav_dashboard") else {
-            Issue.record("Dashboard row not found"); return
+            Issue.record("Dashboard row not found")
+            return
         }
         let dashArray = [dashRow] as CFArray
         AXUIElementSetAttributeValue(sidebar, "AXSelectedRows" as CFString, dashArray)
@@ -244,7 +259,8 @@ struct UIE2ETests {
 
         let windows = getWindows(app)
         guard let window = windows.first else {
-            Issue.record("No window found"); return
+            Issue.record("No window found")
+            return
         }
 
         let sidebar = findById(window, "sidebar")
@@ -257,7 +273,8 @@ struct UIE2ETests {
 
         let windows = getWindows(app)
         guard let window = windows.first else {
-            Issue.record("No window found"); return
+            Issue.record("No window found")
+            return
         }
 
         let startBtn = findById(window, "start_all_btn")

@@ -20,8 +20,14 @@
 set -euo pipefail
 
 ARTIFACT="${1:-}"
-[ -n "$ARTIFACT" ] || { echo "usage: $0 <path-to-dmg|zip|pkg>" >&2; exit 2; }
-[ -e "$ARTIFACT" ] || { echo "error: artifact not found: $ARTIFACT" >&2; exit 2; }
+[ -n "$ARTIFACT" ] || {
+  echo "usage: $0 <path-to-dmg|zip|pkg>" >&2
+  exit 2
+}
+[ -e "$ARTIFACT" ] || {
+  echo "error: artifact not found: $ARTIFACT" >&2
+  exit 2
+}
 
 log() { printf '\033[0;32m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*"; }
@@ -31,11 +37,11 @@ warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*"; }
 # ---------------------------------------------------------------------------
 AUTH=()
 if [ -n "${NOTARY_PROFILE:-}" ]; then
-  AUTH=( --keychain-profile "$NOTARY_PROFILE" )
+  AUTH=(--keychain-profile "$NOTARY_PROFILE")
 elif [ -n "${NOTARY_KEY_ID:-}" ] && [ -n "${NOTARY_KEY_ISSUER:-}" ] && [ -n "${NOTARY_KEY_PATH:-}" ]; then
-  AUTH=( --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_KEY_ISSUER" )
+  AUTH=(--key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_KEY_ISSUER")
 elif [ -n "${NOTARY_APPLE_ID:-}" ] && [ -n "${NOTARY_TEAM_ID:-}" ] && [ -n "${NOTARY_PASSWORD:-}" ]; then
-  AUTH=( --apple-id "$NOTARY_APPLE_ID" --team-id "$NOTARY_TEAM_ID" --password "$NOTARY_PASSWORD" )
+  AUTH=(--apple-id "$NOTARY_APPLE_ID" --team-id "$NOTARY_TEAM_ID" --password "$NOTARY_PASSWORD")
 else
   warn "No notarization credentials in environment — SKIPPING notarization."
   warn "Set NOTARY_PROFILE (or NOTARY_KEY_* / NOTARY_APPLE_ID+NOTARY_TEAM_ID+NOTARY_PASSWORD) to enable."

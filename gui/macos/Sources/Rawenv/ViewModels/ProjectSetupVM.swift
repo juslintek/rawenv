@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 
 /// Real project setup: detect services from the project (via the rawenv CLI),
 /// install them with their recipe command, and activate the isolated environment.
@@ -30,12 +30,25 @@ public final class ProjectSetupVM: ObservableObject {
         self.recipes = recipes
     }
 
-    private struct SvcJSON: Decodable { let name: String; let port: Int; let version: String; let status: String }
+    private struct SvcJSON: Decodable {
+        let name: String
+        let port: Int
+        let version: String
+        let status: String
+    }
 
     /// Shape of `rawenv detect --json`: detected runtimes + services, no files written.
     private struct DetectJSON: Decodable {
-        struct Runtime: Decodable { let name: String; let version: String }
-        struct Svc: Decodable { let name: String; let port: Int; let version: String; let status: String }
+        struct Runtime: Decodable {
+            let name: String
+            let version: String
+        }
+        struct Svc: Decodable {
+            let name: String
+            let port: Int
+            let version: String
+            let status: String
+        }
         let runtimes: [Runtime]
         let services: [Svc]
     }
@@ -46,11 +59,18 @@ public final class ProjectSetupVM: ObservableObject {
     public func detect(project: Project) async {
         projectName = project.name
         projectPath = project.path
-        services = []; runtimes = []; nodeVersion = ""; installed = []; error = nil; isDetecting = true
+        services = []
+        runtimes = []
+        nodeVersion = ""
+        installed = []
+        error = nil
+        isDetecting = true
         defer { isDetecting = false }
         if let detected = try? await cli.runJSON(["detect"], as: DetectJSON.self, cwd: project.path) {
             services = detected.services.map {
-                Service(name: $0.name, port: $0.port, version: $0.version, pid: nil, cpu: nil, mem: nil, uptime: nil, status: $0.status, icon: Self.icon($0.name))
+                Service(
+                    name: $0.name, port: $0.port, version: $0.version, pid: nil, cpu: nil, mem: nil, uptime: nil,
+                    status: $0.status, icon: Self.icon($0.name))
             }
             runtimes = detected.runtimes.map { DetectedRuntime(name: $0.name, version: $0.version) }
             if let node = runtimes.first(where: { $0.name.lowercased().contains("node") }) {
@@ -84,22 +104,27 @@ public final class ProjectSetupVM: ObservableObject {
     private func writeNodeVersionToConfig(_ version: String) {
         guard !projectPath.isEmpty else { return }
         let tomlPath = "\(projectPath)/rawenv.toml"
-        let existing = (try? String(contentsOfFile: tomlPath, encoding: .utf8)) ?? "[project]\nname = \"\(projectName)\"\n"
+        let existing =
+            (try? String(contentsOfFile: tomlPath, encoding: .utf8)) ?? "[project]\nname = \"\(projectName)\"\n"
         let updated = Self.updatedToml(existing, nodeVersion: version)
         try? updated.write(toFile: tomlPath, atomically: true, encoding: .utf8)
     }
 
     public func refresh() async {
-        guard let list = try? await cli.runJSON(["services", "ls", "--json"], as: [SvcJSON].self, cwd: projectPath) else { return }
+        guard let list = try? await cli.runJSON(["services", "ls", "--json"], as: [SvcJSON].self, cwd: projectPath)
+        else { return }
         services = list.map {
-            Service(name: $0.name, port: $0.port, version: $0.version, pid: nil, cpu: nil, mem: nil, uptime: nil, status: $0.status, icon: Self.icon($0.name))
+            Service(
+                name: $0.name, port: $0.port, version: $0.version, pid: nil, cpu: nil, mem: nil, uptime: nil,
+                status: $0.status, icon: Self.icon($0.name))
         }
     }
 
     /// Really install a service via `rawenv add <name>@<version>`, then activate
     /// the isolated env. Surfaces the CLI's real output and exit status.
     public func install(_ svc: Service) async {
-        installing.insert(svc.name); error = nil
+        installing.insert(svc.name)
+        error = nil
         defer { installing.remove(svc.name) }
         let pkg = "\(svc.name)@\(svc.version)"
         log.append("$ rawenv add \(pkg)")
@@ -110,7 +135,7 @@ public final class ProjectSetupVM: ObservableObject {
         if !result.output.isEmpty { log.append(result.output) }
         if result.status == 0 {
             installed.insert(svc.name)
-            _ = try? await cli.run(["up"], cwd: projectPath) // activate isolated env (symlinks)
+            _ = try? await cli.run(["up"], cwd: projectPath)  // activate isolated env (symlinks)
         } else {
             error = "rawenv add \(pkg) failed (exit \(result.status)). Output: \(result.output)"
         }
@@ -143,7 +168,10 @@ public final class ProjectSetupVM: ObservableObject {
                 let key = trimmed.split(separator: "=", maxSplits: 1).first.map {
                     $0.trimmingCharacters(in: .whitespaces)
                 }
-                if key == "node" { nodeLineIndex = i; break }
+                if key == "node" {
+                    nodeLineIndex = i
+                    break
+                }
             }
         }
 
@@ -163,9 +191,13 @@ public final class ProjectSetupVM: ObservableObject {
     }
 
     nonisolated static func toolInstalled(_ name: String) -> Bool {
-        let bin = ["postgresql": "postgres", "postgres": "postgres", "redis": "redis-server",
-                   "mysql": "mysqld", "mariadb": "mariadbd", "meilisearch": "meilisearch"][name.lowercased()] ?? name.lowercased()
-        for dir in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"] where FileManager.default.isExecutableFile(atPath: "\(dir)/\(bin)") {
+        let bin =
+            [
+                "postgresql": "postgres", "postgres": "postgres", "redis": "redis-server",
+                "mysql": "mysqld", "mariadb": "mariadbd", "meilisearch": "meilisearch",
+            ][name.lowercased()] ?? name.lowercased()
+        for dir in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"]
+        where FileManager.default.isExecutableFile(atPath: "\(dir)/\(bin)") {
             return true
         }
         return false
@@ -188,11 +220,15 @@ public final class ProjectSetupVM: ObservableObject {
                 let p = Process()
                 p.executableURL = URL(fileURLWithPath: "/bin/bash")
                 p.arguments = ["-lc", cmd]
-                let pipe = Pipe(); p.standardOutput = pipe; p.standardError = pipe
+                let pipe = Pipe()
+                p.standardOutput = pipe
+                p.standardError = pipe
                 do {
-                    try p.run(); p.waitUntilExit()
+                    try p.run()
+                    p.waitUntilExit()
                     let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                    cont.resume(returning: (p.terminationStatus == 0, out.trimmingCharacters(in: .whitespacesAndNewlines)))
+                    cont.resume(
+                        returning: (p.terminationStatus == 0, out.trimmingCharacters(in: .whitespacesAndNewlines)))
                 } catch {
                     cont.resume(returning: (false, "\(error)"))
                 }

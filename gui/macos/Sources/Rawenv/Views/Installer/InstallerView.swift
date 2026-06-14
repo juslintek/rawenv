@@ -211,9 +211,11 @@ struct InstallerView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("$ rawenv --version")
                     .foregroundStyle(Color.textMuted)
-                Text(engine.verifiedVersion.map { $0.hasPrefix("rawenv") ? $0 : "rawenv \($0)" }
-                        ?? "rawenv (installed)")
-                    .foregroundStyle(Color.textPrimary)
+                Text(
+                    engine.verifiedVersion.map { $0.hasPrefix("rawenv") ? $0 : "rawenv \($0)" }
+                        ?? "rawenv (installed)"
+                )
+                .foregroundStyle(Color.textPrimary)
                 Text("$ rawenv")
                     .foregroundStyle(Color.textMuted)
                     .padding(.top, 8)

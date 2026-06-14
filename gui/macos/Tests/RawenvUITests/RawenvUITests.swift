@@ -378,8 +378,10 @@ final class RawenvUITests: XCTestCase {
         uninstallButton.tap()
         let uninstallView = app.otherElements["uninstall_view"]
         XCTAssertTrue(uninstallView.waitForExistence(timeout: 5))
-        let checkboxes = ["uninstall_binary", "uninstall_packages", "uninstall_services",
-                          "uninstall_data", "uninstall_config", "uninstall_dns_proxy"]
+        let checkboxes = [
+            "uninstall_binary", "uninstall_packages", "uninstall_services",
+            "uninstall_data", "uninstall_config", "uninstall_dns_proxy",
+        ]
         for checkbox in checkboxes {
             let cb = app.checkBoxes[checkbox]
             if cb.exists { cb.tap() }

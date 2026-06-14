@@ -5,9 +5,9 @@ import Testing
 
 @testable import RawenvLib
 
-/// Covers the FIX-DASH wiring (DB-1…DB-4): project-level start/stop via the
-/// CLI, real CPU/memory readings, per-service log/config scoping, and the
-/// config tab sourced from `rawenv.toml`.
+// Covers the FIX-DASH wiring (DB-1…DB-4): project-level start/stop via the
+// CLI, real CPU/memory readings, per-service log/config scoping, and the
+// config tab sourced from `rawenv.toml`.
 
 // MARK: - Test doubles
 

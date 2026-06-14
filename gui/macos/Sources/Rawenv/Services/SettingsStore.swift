@@ -23,7 +23,8 @@ public final class SettingsStore: SettingsPersisting, @unchecked Sendable {
             self.location = fileURL
         } else {
             let home = FileManager.default.homeDirectoryForCurrentUser
-            self.location = home
+            self.location =
+                home
                 .appendingPathComponent(".rawenv", isDirectory: true)
                 .appendingPathComponent("settings.json", isDirectory: false)
         }

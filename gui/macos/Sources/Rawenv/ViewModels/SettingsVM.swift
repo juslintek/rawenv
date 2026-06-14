@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 
 public enum SettingsPage: String, CaseIterable {
     case general, services, runtimes, network, cells, deploy, ai, theme, about
@@ -18,7 +18,7 @@ public final class SettingsViewModel: ObservableObject {
         "restart": .confirmDangerous,
         "deploy": .confirmDangerous,
         "edit-config": .autoApplySafe,
-        "delete": .confirmDangerous
+        "delete": .confirmDangerous,
     ]
 
     /// All configured services (Settings → Services lists every one, not just
@@ -41,10 +41,12 @@ public final class SettingsViewModel: ObservableObject {
     private let runtimeManager: RuntimeManaging
     private var loaded = false
 
-    public init(repository: DataRepository,
-                settingsStore: SettingsPersisting = SettingsStore(),
-                secretStore: SecretStoring = KeychainSecretStore(),
-                runtimeManager: RuntimeManaging = CLIRuntimeManager()) {
+    public init(
+        repository: DataRepository,
+        settingsStore: SettingsPersisting = SettingsStore(),
+        secretStore: SecretStoring = KeychainSecretStore(),
+        runtimeManager: RuntimeManaging = CLIRuntimeManager()
+    ) {
         self.repository = repository
         self.settingsStore = settingsStore
         self.secretStore = secretStore
