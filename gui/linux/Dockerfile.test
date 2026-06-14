@@ -37,11 +37,7 @@ ENV DISPLAY=:99
 ENV GTK_A11Y=atspi
 ENV DBUS_SESSION_BUS_ADDRESS=autolaunch:
 
-CMD ["sh", "-c", "\
-    Xvfb :99 -screen 0 1280x1024x24 & \
-    sleep 1 && \
-    dbus-run-session -- sh -c '\
-        meson test -C build && \
-        cd tests/e2e && \
-        (python3 -m pytest -v || true) \
-    '"]
+# Default command runs the headless Vala unit tests — the hard gate. The dogtail
+# GUI e2e is run separately by CI as a non-blocking step (see gui-tests.yml) so
+# its (environment-fragile) failures stay visible without masking regressions.
+CMD ["sh", "-c", "meson test -C build"]
