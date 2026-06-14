@@ -361,8 +361,8 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
         var sysinfo = utsname()
         uname(&sysinfo)
         return withUnsafeBytes(of: &sysinfo.machine) { raw -> String in
-            let ptr = raw.baseAddress!.assumingMemoryBound(to: CChar.self)
-            return String(cString: ptr)
+            guard let base = raw.baseAddress else { return "" }
+            return String(cString: base.assumingMemoryBound(to: CChar.self))
         }
     }
 
@@ -370,8 +370,8 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
         var sysinfo = utsname()
         uname(&sysinfo)
         let machine = withUnsafeBytes(of: &sysinfo.machine) { raw -> String in
-            let ptr = raw.baseAddress!.assumingMemoryBound(to: CChar.self)
-            return String(cString: ptr)
+            guard let base = raw.baseAddress else { return "" }
+            return String(cString: base.assumingMemoryBound(to: CChar.self))
         }
         switch machine {
         case "arm64": return "Apple Silicon"

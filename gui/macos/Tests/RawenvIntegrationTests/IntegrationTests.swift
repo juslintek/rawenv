@@ -10,11 +10,20 @@ private func binaryPath() -> String {
     if let env = ProcessInfo.processInfo.environment["RAWENV_BINARY"] { return env }
     // Try relative to project root
     let candidates = [
-        (ProcessInfo.processInfo.environment["RAWENV_BINARY"] ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"),
-        "\(FileManager.default.currentDirectoryPath)/../../zig-out/bin/rawenv",
+        "\(FileManager.default.currentDirectoryPath)/../../zig-out/bin/rawenv"
     ]
     for c in candidates where FileManager.default.isExecutableFile(atPath: c) { return c }
     return "rawenv"
+}
+
+/// Repo root used as a fixture: RAWENV_REPO when set and non-empty, else repo-relative.
+private func repoPath() -> String {
+    if let env = ProcessInfo.processInfo.environment["RAWENV_REPO"],
+        !env.trimmingCharacters(in: .whitespaces).isEmpty
+    {
+        return env
+    }
+    return "\(FileManager.default.currentDirectoryPath)/../.."
 }
 
 @Suite(.serialized) struct RawenvCLITests {
@@ -37,7 +46,7 @@ private func binaryPath() -> String {
         }
         let services: [S] = try await cli.runJSON(
             ["services", "ls"], as: [S].self,
-            cwd: (ProcessInfo.processInfo.environment["RAWENV_REPO"] ?? "/Volumes/Projects/rawenv"))
+            cwd: repoPath())
         #expect(!services.isEmpty)
         #expect(services[0].port > 0)
     }
@@ -60,7 +69,7 @@ private func binaryPath() -> String {
         }
         let conns: [C] = try await cli.runJSON(
             ["connections"], as: [C].self,
-            cwd: (ProcessInfo.processInfo.environment["RAWENV_REPO"] ?? "/Volumes/Projects/rawenv"))
+            cwd: repoPath())
         // May be empty
         _ = conns
     }
@@ -74,7 +83,7 @@ private func binaryPath() -> String {
 @Suite(.serialized) struct RealDataRepositoryTests {
     let repo = RealDataRepository(
         cli: RawenvCLI(binaryPath: binaryPath()),
-        projectPath: (ProcessInfo.processInfo.environment["RAWENV_REPO"] ?? "/Volumes/Projects/rawenv"))
+        projectPath: repoPath())
 
     @Test func fetchServices() async throws {
         let services = try await repo.fetchServices()
@@ -152,7 +161,7 @@ private func binaryPath() -> String {
     @Test @MainActor func initializes() async {
         let cli = RawenvCLI(binaryPath: binaryPath())
         let repo = DataStore(
-            cli: cli, projectPath: (ProcessInfo.processInfo.environment["RAWENV_REPO"] ?? "/Volumes/Projects/rawenv"))
+            cli: cli, projectPath: repoPath())
         let mgr = RealServiceManager(repository: repo, cli: cli)
         try? await Task.sleep(nanoseconds: 500_000_000)
         // Services loaded from CLI
