@@ -1,13 +1,15 @@
-import Testing
-import Foundation
 import AppKit
+import Foundation
+import Testing
+
 @testable import RawenvLib
 
 /// Deep functionality tests for: isolation cells, DNS, proxy, tunneling, AI,
 /// deploy orchestrator, shell env, service lifecycle, multi-project, theme, installer.
 
 private let testRoot = "/tmp/rawenv-deep-test"
-private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/rawenv")
+private let cli = RawenvCLI(
+    binaryPath: (ProcessInfo.processInfo.environment["RAWENV_BINARY"] ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"))
 
 /// Build an installer engine pointed at an isolated temp dir with an offline,
 /// deterministic source binary so install runs are hermetic (no network, no
@@ -270,7 +272,8 @@ private func makeOfflineInstallerEngine() -> (engine: InstallerEngine, binPath: 
         try """
         {"name":"backend","engines":{"node":">=20"},"dependencies":{"fastify":"^4","pg":"^8"}}
         """.write(toFile: "\(dir2)/package.json", atomically: true, encoding: .utf8)
-        try "DATABASE_URL=postgres://localhost:5433/backend_dev\n".write(toFile: "\(dir2)/.env", atomically: true, encoding: .utf8)
+        try "DATABASE_URL=postgres://localhost:5433/backend_dev\n".write(
+            toFile: "\(dir2)/.env", atomically: true, encoding: .utf8)
         _ = try? await cli.run(["init"], cwd: dir2)
 
         // Both projects should have rawenv.toml
@@ -289,7 +292,8 @@ private func makeOfflineInstallerEngine() -> (engine: InstallerEngine, binPath: 
     }
 
     @Test @MainActor func multiProjectSwitching() {
-        let state = AppState(repository: DataStore(cli: cli, projectPath: "\(testRoot)/myapp"), aiProvider: AIProviderCascade())
+        let state = AppState(
+            repository: DataStore(cli: cli, projectPath: "\(testRoot)/myapp"), aiProvider: AIProviderCascade())
         let p1 = Project(name: "myapp", path: "\(testRoot)/myapp", stack: ["Node.js"], deps: "3 deps")
         let p2 = Project(name: "backend", path: "\(testRoot)/backend", stack: ["Node.js"], deps: "2 deps")
         state.addManagedProject(p1)
@@ -303,7 +307,10 @@ private func makeOfflineInstallerEngine() -> (engine: InstallerEngine, binPath: 
 
     @Test func multiProjectPortConflict() async throws {
         // Both projects use postgres - different ports needed
-        struct S: Decodable { let name: String; let port: Int }
+        struct S: Decodable {
+            let name: String
+            let port: Int
+        }
         let s1: [S] = try await cli.runJSON(["services", "ls"], as: [S].self, cwd: "\(testRoot)/myapp")
         let s2: [S] = try await cli.runJSON(["services", "ls"], as: [S].self, cwd: "\(testRoot)/backend")
         // Both have postgres
@@ -381,7 +388,9 @@ private func makeOfflineInstallerEngine() -> (engine: InstallerEngine, binPath: 
 
     @Test @MainActor func connectionsAllModes() {
         let vm = ConnectionsViewModel(repository: DataStore(cli: cli, projectPath: "\(testRoot)/myapp"))
-        let conn = Connection(envVar: "DATABASE_URL", original: "postgres://remote:5432/db", local: "postgres://localhost:5432/db", mode: "remote", badge: "Remote", proxy: "localhost:5432 → remote:5432", alternative: nil)
+        let conn = Connection(
+            envVar: "DATABASE_URL", original: "postgres://remote:5432/db", local: "postgres://localhost:5432/db",
+            mode: "remote", badge: "Remote", proxy: "localhost:5432 → remote:5432", alternative: nil)
 
         vm.setMode("local", for: "DATABASE_URL")
         #expect(vm.connectionString(for: conn) == "postgres://localhost:5432/db")
@@ -395,7 +404,8 @@ private func makeOfflineInstallerEngine() -> (engine: InstallerEngine, binPath: 
 
     @Test @MainActor func connectionsCopyToClipboard() {
         let vm = ConnectionsViewModel(repository: DataStore(cli: cli, projectPath: "\(testRoot)/myapp"))
-        let conn = Connection(envVar: "TEST", original: "test-value", local: nil, mode: "remote", badge: "", proxy: nil, alternative: nil)
+        let conn = Connection(
+            envVar: "TEST", original: "test-value", local: nil, mode: "remote", badge: "", proxy: nil, alternative: nil)
         vm.copyConnectionString(for: conn)
         let clipboard = NSPasteboard.general.string(forType: .string)
         #expect(clipboard == "test-value")
@@ -432,7 +442,8 @@ private func makeOfflineInstallerEngine() -> (engine: InstallerEngine, binPath: 
     // MARK: - Navigation Deep
 
     @Test @MainActor func navigationAllDestinations() {
-        let state = AppState(repository: DataStore(cli: cli, projectPath: "\(testRoot)/myapp"), aiProvider: AIProviderCascade())
+        let state = AppState(
+            repository: DataStore(cli: cli, projectPath: "\(testRoot)/myapp"), aiProvider: AIProviderCascade())
         for dest in Destination.allCases {
             state.navigate(to: dest)
             #expect(state.currentDestination == dest)

@@ -20,14 +20,14 @@ private func pollUntilInstallFlow(timeoutMs: Int = 20_000, _ condition: @MainAct
 
 private func binaryPath() -> String {
     let candidates = [
-        "/Volumes/Projects/rawenv/zig-out/bin/rawenv",
+        (ProcessInfo.processInfo.environment["RAWENV_BINARY"] ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"),
         "\(FileManager.default.currentDirectoryPath)/../../zig-out/bin/rawenv",
     ]
     for c in candidates where FileManager.default.isExecutableFile(atPath: c) { return c }
     return "rawenv"
 }
 
-private let projectDir = "/Volumes/Projects/rawenv"
+private let projectDir = (ProcessInfo.processInfo.environment["RAWENV_REPO"] ?? "/Volumes/Projects/rawenv")
 
 // MARK: - CLI Layer
 

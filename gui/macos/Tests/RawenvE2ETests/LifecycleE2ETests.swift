@@ -1,5 +1,6 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import RawenvLib
 
 /// Full lifecycle E2E test: create projects → detect → configure → install services →
@@ -7,7 +8,8 @@ import Foundation
 /// Tests every capability of rawenv against real filesystem and CLI.
 
 private let testRoot = "/tmp/rawenv-lifecycle-test"
-private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/rawenv")
+private let cli = RawenvCLI(
+    binaryPath: (ProcessInfo.processInfo.environment["RAWENV_BINARY"] ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"))
 
 /// Poll a condition on the main actor until it holds or a generous timeout
 /// elapses — keeps InstallFlowVM walkthrough tests robust under parallel load.
@@ -27,43 +29,65 @@ private func pollUntilInstallFlow(timeoutMs: Int = 20_000, _ condition: @MainAct
     @Test func phase01_createNodeProject() throws {
         let dir = "\(testRoot)/webapp"
         try setup(dir)
-        try write(dir, "package.json", """
-        {"name":"webapp","version":"1.0.0","engines":{"node":">=22"},"scripts":{"start":"node server.js"},"dependencies":{"express":"^4.18"}}
-        """)
-        try write(dir, "server.js", "const http = require('http'); http.createServer((q,s)=>{s.end('ok')}).listen(3000);")
-        try write(dir, ".env", "DATABASE_URL=postgres://user:pass@localhost:5432/webapp_dev\nREDIS_URL=redis://localhost:6379\nS3_ENDPOINT=http://localhost:9000")
+        try write(
+            dir, "package.json",
+            """
+            {"name":"webapp","version":"1.0.0","engines":{"node":">=22"},"scripts":{"start":"node server.js"},"dependencies":{"express":"^4.18"}}
+            """)
+        try write(
+            dir, "server.js", "const http = require('http'); http.createServer((q,s)=>{s.end('ok')}).listen(3000);")
+        try write(
+            dir, ".env",
+            "DATABASE_URL=postgres://user:pass@localhost:5432/webapp_dev\nREDIS_URL=redis://localhost:6379\nS3_ENDPOINT=http://localhost:9000"
+        )
         #expect(FileManager.default.fileExists(atPath: "\(dir)/package.json"))
     }
 
     @Test func phase01_createPhpProject() throws {
         let dir = "\(testRoot)/api"
         try setup(dir)
-        try write(dir, "composer.json", """
-        {"name":"myapi","require":{"php":"^8.4","laravel/framework":"^11.0"},"require-dev":{"phpunit/phpunit":"^11.0"}}
-        """)
-        try write(dir, ".env", "DB_CONNECTION=mysql\nDB_HOST=127.0.0.1\nDB_PORT=3306\nDB_DATABASE=api_dev\nREDIS_HOST=127.0.0.1")
+        try write(
+            dir, "composer.json",
+            """
+            {"name":"myapi","require":{"php":"^8.4","laravel/framework":"^11.0"},"require-dev":{"phpunit/phpunit":"^11.0"}}
+            """)
+        try write(
+            dir, ".env",
+            "DB_CONNECTION=mysql\nDB_HOST=127.0.0.1\nDB_PORT=3306\nDB_DATABASE=api_dev\nREDIS_HOST=127.0.0.1")
     }
 
     @Test func phase01_createRustProject() throws {
         let dir = "\(testRoot)/engine"
         try setup(dir)
         try setup("\(dir)/src")
-        try write(dir, "Cargo.toml", "[package]\nname = \"engine\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ntokio = { version = \"1\", features = [\"full\"] }\nsqlx = { version = \"0.7\", features = [\"postgres\"] }")
+        try write(
+            dir, "Cargo.toml",
+            "[package]\nname = \"engine\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ntokio = { version = \"1\", features = [\"full\"] }\nsqlx = { version = \"0.7\", features = [\"postgres\"] }"
+        )
         try write("\(dir)/src", "main.rs", "fn main() { println!(\"hello\"); }")
     }
 
     @Test func phase01_createPythonProject() throws {
         let dir = "\(testRoot)/ml-pipeline"
         try setup(dir)
-        try write(dir, "pyproject.toml", "[project]\nname = \"ml-pipeline\"\nversion = \"0.1.0\"\ndependencies = [\"fastapi\", \"redis\", \"sqlalchemy\"]")
+        try write(
+            dir, "pyproject.toml",
+            "[project]\nname = \"ml-pipeline\"\nversion = \"0.1.0\"\ndependencies = [\"fastapi\", \"redis\", \"sqlalchemy\"]"
+        )
         try write(dir, "requirements.txt", "fastapi==0.111.0\nredis==5.0.4\nsqlalchemy==2.0.30\ncelery==5.4.0")
-        try write(dir, ".env", "DATABASE_URL=postgresql://localhost/ml_dev\nREDIS_URL=redis://localhost:6379\nCELERY_BROKER=amqp://localhost:5672")
+        try write(
+            dir, ".env",
+            "DATABASE_URL=postgresql://localhost/ml_dev\nREDIS_URL=redis://localhost:6379\nCELERY_BROKER=amqp://localhost:5672"
+        )
     }
 
     @Test func phase01_createGoProject() throws {
         let dir = "\(testRoot)/microservice"
         try setup(dir)
-        try write(dir, "go.mod", "module microservice\n\ngo 1.22\n\nrequire (\n\tgithub.com/gin-gonic/gin v1.9.1\n\tgithub.com/go-redis/redis/v9 v9.5.1\n)")
+        try write(
+            dir, "go.mod",
+            "module microservice\n\ngo 1.22\n\nrequire (\n\tgithub.com/gin-gonic/gin v1.9.1\n\tgithub.com/go-redis/redis/v9 v9.5.1\n)"
+        )
     }
 
     // MARK: - Phase 2: Project Detection via CLI
@@ -141,14 +165,24 @@ private func pollUntilInstallFlow(timeoutMs: Int = 20_000, _ condition: @MainAct
     // MARK: - Phase 5: Service listing via CLI
 
     @Test func phase05_servicesListNode() async throws {
-        struct S: Decodable { let name: String; let version: String; let status: String; let port: Int }
+        struct S: Decodable {
+            let name: String
+            let version: String
+            let status: String
+            let port: Int
+        }
         let services: [S] = try await cli.runJSON(["services", "ls"], as: [S].self, cwd: "\(testRoot)/webapp")
         #expect(!services.isEmpty)
         #expect(!services.isEmpty)
     }
 
     @Test func phase05_servicesListPhp() async throws {
-        struct S: Decodable { let name: String; let version: String; let status: String; let port: Int }
+        struct S: Decodable {
+            let name: String
+            let version: String
+            let status: String
+            let port: Int
+        }
         let services: [S] = try await cli.runJSON(["services", "ls"], as: [S].self, cwd: "\(testRoot)/api")
         #expect(!services.isEmpty)
     }
@@ -362,7 +396,9 @@ private func pollUntilInstallFlow(timeoutMs: Int = 20_000, _ condition: @MainAct
         await vm.load()
 
         // Set modes
-        let conn = Connection(envVar: "DATABASE_URL", original: "postgres://remote/db", local: "postgres://localhost/db", mode: "remote", badge: "Remote", proxy: "localhost:5432 → remote:5432", alternative: nil)
+        let conn = Connection(
+            envVar: "DATABASE_URL", original: "postgres://remote/db", local: "postgres://localhost/db", mode: "remote",
+            badge: "Remote", proxy: "localhost:5432 → remote:5432", alternative: nil)
         vm.setMode("local", for: conn.envVar)
         #expect(vm.connectionString(for: conn) == "postgres://localhost/db")
         vm.setMode("remote", for: conn.envVar)

@@ -1,11 +1,14 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import RawenvLib
 
 /// E2E: find a project on disk (ScannerEngine), then set it up with REAL detection
 /// (ProjectSetupVM runs `rawenv init` + `services ls --json`). No simulation.
 @Suite(.serialized) struct FindAndSetupE2ETests {
-    private let cli = RawenvCLI(binaryPath: "/Volumes/Projects/rawenv/zig-out/bin/rawenv")
+    private let cli = RawenvCLI(
+        binaryPath: (ProcessInfo.processInfo.environment["RAWENV_BINARY"]
+            ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"))
     private let root = "/tmp/rawenv-find-setup"
 
     @Test @MainActor func scanFindsProjectThenDetectsRealServices() async throws {
@@ -16,7 +19,8 @@ import Foundation
         // data dir under Swift Testing parallelism. See E2E-113.
         let proj = "\(root)/findsetup-webapp"
         try FileManager.default.createDirectory(atPath: proj, withIntermediateDirectories: true)
-        try #"{"name":"findsetup-webapp","engines":{"node":">=22"},"dependencies":{"express":"^4","pg":"^8","redis":"^4"}}"#
+        try
+            #"{"name":"findsetup-webapp","engines":{"node":">=22"},"dependencies":{"express":"^4","pg":"^8","redis":"^4"}}"#
             .write(toFile: "\(proj)/package.json", atomically: true, encoding: .utf8)
         try "DATABASE_URL=postgres://localhost:5432/app\nREDIS_URL=redis://localhost:6379\n"
             .write(toFile: "\(proj)/.env", atomically: true, encoding: .utf8)
@@ -34,7 +38,8 @@ import Foundation
         // 2. SET IT UP via real detection (rawenv init + services ls --json).
         let setup = ProjectSetupVM(cli: cli)
         await setup.detect(project: found!)
-        #expect(FileManager.default.fileExists(atPath: "\(proj)/rawenv.toml"), "rawenv init created the isolated config")
+        #expect(
+            FileManager.default.fileExists(atPath: "\(proj)/rawenv.toml"), "rawenv init created the isolated config")
         let names = setup.services.map(\.name)
         #expect(names.contains("postgresql"), "postgres detected from deps/.env, got \(names)")
         #expect(names.contains("redis"), "redis detected, got \(names)")
