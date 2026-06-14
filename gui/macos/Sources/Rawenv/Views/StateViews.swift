@@ -131,15 +131,17 @@ struct StatefulContent<Content: View>: View {
     let retry: () -> Void
     @ViewBuilder let content: () -> Content
 
-    init(phase: LoadPhase,
-         idPrefix: String,
-         emptyIcon: String = "tray",
-         emptyTitle: String,
-         emptyGuidance: String,
-         errorTitle: String,
-         loadingMessage: String = "Loading…",
-         retry: @escaping () -> Void,
-         @ViewBuilder content: @escaping () -> Content) {
+    init(
+        phase: LoadPhase,
+        idPrefix: String,
+        emptyIcon: String = "tray",
+        emptyTitle: String,
+        emptyGuidance: String,
+        errorTitle: String,
+        loadingMessage: String = "Loading…",
+        retry: @escaping () -> Void,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
         self.phase = phase
         self.idPrefix = idPrefix
         self.emptyIcon = emptyIcon
@@ -157,7 +159,7 @@ struct StatefulContent<Content: View>: View {
             LoadingStateView(loadingMessage, idPrefix: idPrefix)
         case .empty:
             EmptyStateView(icon: emptyIcon, title: emptyTitle, guidance: emptyGuidance, idPrefix: idPrefix)
-        case let .failed(message):
+        case .failed(let message):
             ErrorStateView(title: errorTitle, message: message, idPrefix: idPrefix, retry: retry)
         case .loaded:
             content()

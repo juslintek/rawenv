@@ -1,5 +1,6 @@
-import Testing
 import SwiftUI
+import Testing
+
 @testable import RawenvLib
 
 /// Poll a condition on the main actor until it holds or a generous timeout
@@ -17,7 +18,7 @@ private func pollUntilInstallFlow(timeoutMs: Int = 20_000, _ condition: @MainAct
     @Test @MainActor func initialState() {
         let vm = InstallFlowVM()
         #expect(vm.isShowing == false)
-        #expect(vm.target == "")
+        #expect(vm.target.isEmpty)
         #expect(vm.isInstalling == false)
         #expect(vm.isComplete == false)
         #expect(vm.error == nil)
@@ -187,8 +188,9 @@ private func pollUntilInstallFlow(timeoutMs: Int = 20_000, _ condition: @MainAct
     @Test func tunnelInfoEquatable() {
         let t1 = TunnelInfo(port: "3000", provider: "bore", relay: "bore.pub", url: "bore.pub:123")
         let t2 = TunnelInfo(port: "3000", provider: "bore", relay: "bore.pub", url: "bore.pub:123")
-        #expect(t1 != t2) // different UUIDs
-        #expect(t1 == t1)
+        #expect(t1 != t2)  // different UUIDs
+        let sameAsT1 = t1
+        #expect(t1 == sameAsT1)
     }
 }
 

@@ -11,22 +11,31 @@ ARCH="$(uname -m)"
 case "$OS" in
   Darwin)
     case "$ARCH" in
-      arm64|aarch64) ARTIFACT="rawenv-aarch64-macos.tar.gz" ;;
-      x86_64|amd64)  ARTIFACT="rawenv-x86_64-macos.tar.gz" ;;
-      *) echo "Error: unsupported architecture: $ARCH" >&2; exit 1 ;;
+      arm64 | aarch64) ARTIFACT="rawenv-aarch64-macos.tar.gz" ;;
+      x86_64 | amd64) ARTIFACT="rawenv-x86_64-macos.tar.gz" ;;
+      *)
+        echo "Error: unsupported architecture: $ARCH" >&2
+        exit 1
+        ;;
     esac
     ;;
   Linux)
     case "$ARCH" in
-      aarch64|arm64) ARTIFACT="rawenv-aarch64-linux.tar.gz" ;;
-      x86_64|amd64)  ARTIFACT="rawenv-x86_64-linux.tar.gz" ;;
-      *) echo "Error: unsupported architecture: $ARCH" >&2; exit 1 ;;
+      aarch64 | arm64) ARTIFACT="rawenv-aarch64-linux.tar.gz" ;;
+      x86_64 | amd64) ARTIFACT="rawenv-x86_64-linux.tar.gz" ;;
+      *)
+        echo "Error: unsupported architecture: $ARCH" >&2
+        exit 1
+        ;;
     esac
     ;;
-  MINGW*|MSYS*|CYGWIN*)
+  MINGW* | MSYS* | CYGWIN*)
     ARTIFACT="rawenv-x86_64-windows.zip"
     ;;
-  *) echo "Error: unsupported OS: $OS" >&2; exit 1 ;;
+  *)
+    echo "Error: unsupported OS: $OS" >&2
+    exit 1
+    ;;
 esac
 
 # Get latest version if not specified
@@ -48,12 +57,12 @@ mkdir -p "$INSTALL_DIR"
 case "$ARTIFACT" in
   *.tar.gz)
     tar -xzf "${TMP}/${ARTIFACT}" -C "$TMP"
-    mv "${TMP}/rawenv" "$INSTALL_DIR/rawenv" 2>/dev/null || \
+    mv "${TMP}/rawenv" "$INSTALL_DIR/rawenv" 2>/dev/null ||
       find "$TMP" -name rawenv -type f -exec mv {} "$INSTALL_DIR/rawenv" \;
     ;;
   *.zip)
     unzip -qo "${TMP}/${ARTIFACT}" -d "$TMP"
-    mv "${TMP}/rawenv.exe" "$INSTALL_DIR/rawenv.exe" 2>/dev/null || \
+    mv "${TMP}/rawenv.exe" "$INSTALL_DIR/rawenv.exe" 2>/dev/null ||
       find "$TMP" -name "rawenv.exe" -type f -exec mv {} "$INSTALL_DIR/rawenv.exe" \;
     ;;
 esac

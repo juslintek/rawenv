@@ -57,7 +57,6 @@ opt_in_rules:
   - static_operator
   - toggle_bool
   - unavailable_function
-  - unused_import
   - yoda_condition
 
 analyzer_rules:
@@ -70,11 +69,6 @@ line_length:
   ignores_comments: true
   ignores_urls: true
 
-type_name:
-  min_length: 1          # allow inline throwaway Decodable structs in tests (struct V: Decodable …)
-  max_length:
-    warning: 50
-    error: 70
 
 type_body_length:
   warning: 400
@@ -93,10 +87,6 @@ cyclomatic_complexity:
   warning: 15
   error: 25
 
-identifier_name:
-  min_length: 1          # allow short SwiftUI idioms (e.g. vm, id)
-  max_length: 60
-  excluded: [id, vm, ai, x, y, p, e, s, l, c]
 
 nesting:
   type_level: 3

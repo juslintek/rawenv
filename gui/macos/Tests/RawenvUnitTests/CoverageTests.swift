@@ -212,7 +212,7 @@ private func makeAppState() -> AppState {
     @Test @MainActor func deployVMCurrentContent() async {
         let vm = DeployViewModel(repository: TestDataRepository())
         // Before load, content is empty
-        #expect(vm.currentContent == "")
+        #expect(vm.currentContent.isEmpty)
         await vm.load()
         vm.selectedTab = .terraform
         #expect(!vm.currentContent.isEmpty)

@@ -89,7 +89,6 @@ public final class RecipeLibrary: ObservableObject {
             Bundle.main.resourcePath,
             "\(FileManager.default.currentDirectoryPath)/shared/recipes",
             "\(FileManager.default.currentDirectoryPath)/../../shared/recipes",
-            "/Volumes/Projects/rawenv/shared/recipes",
             "\(NSHomeDirectory())/.rawenv/recipes",
         ].compactMap { $0 }
 

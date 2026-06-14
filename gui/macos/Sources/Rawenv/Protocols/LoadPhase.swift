@@ -22,7 +22,7 @@ public enum LoadPhase: Equatable, Sendable {
 
     /// The error message when in the `.failed` state, otherwise `nil`.
     public var errorMessage: String? {
-        if case let .failed(message) = self { return message }
+        if case .failed(let message) = self { return message }
         return nil
     }
 }

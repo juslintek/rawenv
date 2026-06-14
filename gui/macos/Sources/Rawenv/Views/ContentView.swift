@@ -162,7 +162,12 @@ public struct ContentView: View {
     private func runtimesForProject(_ project: Project) -> [RuntimeInfo] {
         // Extract runtimes from services that match project stack
         sidebarServices
-            .filter { service in project.stack.contains(where: { $0.localizedCaseInsensitiveContains(service.name) || service.name.localizedCaseInsensitiveContains($0) }) }
+            .filter { service in
+                project.stack.contains(where: {
+                    $0.localizedCaseInsensitiveContains(service.name)
+                        || service.name.localizedCaseInsensitiveContains($0)
+                })
+            }
             .map { RuntimeInfo(name: $0.name, version: $0.version) }
     }
 

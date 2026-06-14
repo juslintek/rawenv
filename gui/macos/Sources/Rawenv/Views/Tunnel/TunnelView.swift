@@ -36,8 +36,10 @@ struct TunnelView: View {
                         }
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Relay server").font(.system(size: 11)).foregroundStyle(Color.textMuted)
-                            TextField("bore.pub", text: $viewModel.relayServer).textFieldStyle(.roundedBorder).frame(width: 150)
-                                .accessibilityIdentifier("tunnel_relay_input")
+                            TextField("bore.pub", text: $viewModel.relayServer).textFieldStyle(.roundedBorder).frame(
+                                width: 150
+                            )
+                            .accessibilityIdentifier("tunnel_relay_input")
                         }
                         Spacer()
                         Button("Create Tunnel") { viewModel.createTunnel() }
@@ -57,11 +59,13 @@ struct TunnelView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.warning)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("\(missing) is not installed").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.textPrimary)
+                            Text("\(missing) is not installed").font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Color.textPrimary)
                             if let err = viewModel.installError {
                                 Text(err).font(.system(size: 11)).foregroundStyle(Color.error)
                             } else {
-                                Text("Install it to create a \(missing) tunnel.").font(.system(size: 11)).foregroundStyle(Color.textMuted)
+                                Text("Install it to create a \(missing) tunnel.").font(.system(size: 11))
+                                    .foregroundStyle(Color.textMuted)
                             }
                         }
                         Spacer()
@@ -123,14 +127,18 @@ struct TunnelView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Active Tunnels").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.textPrimary)
                     if viewModel.tunnels.isEmpty {
-                        Text("No active tunnels. Create one above.").font(.system(size: 12)).foregroundStyle(Color.textMuted).padding(20).frame(maxWidth: .infinity)
+                        Text("No active tunnels. Create one above.").font(.system(size: 12)).foregroundStyle(
+                            Color.textMuted
+                        ).padding(20).frame(maxWidth: .infinity)
                     } else {
                         ForEach(viewModel.tunnels) { t in
                             HStack {
                                 StatusDot(isRunning: true)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("localhost:\(t.port) → \(t.url)").font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.textPrimary)
-                                    Text("\(t.provider) · \(t.relay)").font(.system(size: 11)).foregroundStyle(Color.textMuted)
+                                    Text("localhost:\(t.port) → \(t.url)").font(.system(size: 12, design: .monospaced))
+                                        .foregroundStyle(Color.textPrimary)
+                                    Text("\(t.provider) · \(t.relay)").font(.system(size: 11)).foregroundStyle(
+                                        Color.textMuted)
                                 }
                                 Spacer()
                                 Button("Stop") { viewModel.removeTunnel(id: t.id) }

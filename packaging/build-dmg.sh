@@ -33,7 +33,10 @@ log "Building rawenv ${VERSION} DMG for ${ARCH}…"
 log "Building release CLI…"
 zig build -Doptimize=ReleaseSafe -Dversion="$VERSION"
 CLI_BINARY="${REPO_ROOT}/zig-out/bin/rawenv"
-[ -x "$CLI_BINARY" ] || { echo "error: CLI build failed ($CLI_BINARY)" >&2; exit 1; }
+[ -x "$CLI_BINARY" ] || {
+  echo "error: CLI build failed ($CLI_BINARY)" >&2
+  exit 1
+}
 echo "  CLI: $(ls -lh "$CLI_BINARY" | awk '{print $5}')"
 
 # ---------------------------------------------------------------------------
@@ -42,7 +45,10 @@ echo "  CLI: $(ls -lh "$CLI_BINARY" | awk '{print $5}')"
 log "Building & signing Rawenv.app…"
 APP_PATH="$(APP_VERSION="$VERSION" CLI_BINARY="$CLI_BINARY" \
   bash "${MACOS_DIR}/scripts/build-app.sh" | tail -1)"
-[ -d "$APP_PATH" ] || { echo "error: build-app.sh did not produce an .app ($APP_PATH)" >&2; exit 1; }
+[ -d "$APP_PATH" ] || {
+  echo "error: build-app.sh did not produce an .app ($APP_PATH)" >&2
+  exit 1
+}
 
 # ---------------------------------------------------------------------------
 # 3. Stage DMG contents: Rawenv.app + /Applications symlink + standalone CLI.
@@ -55,7 +61,7 @@ ln -s /Applications "$STAGE_DIR/Applications"
 mkdir -p "$STAGE_DIR/rawenv (CLI only)"
 cp "$CLI_BINARY" "$STAGE_DIR/rawenv (CLI only)/rawenv"
 chmod +x "$STAGE_DIR/rawenv (CLI only)/rawenv"
-cat > "$STAGE_DIR/rawenv (CLI only)/README.txt" << 'README'
+cat >"$STAGE_DIR/rawenv (CLI only)/README.txt" <<'README'
 Rawenv.app already bundles this CLI — just drag Rawenv.app to Applications.
 
 To install ONLY the command-line tool:
@@ -81,8 +87,8 @@ rm -rf "$STAGE_DIR"
 # 5. Sign the DMG itself (Developer ID), then notarize + staple.
 # ---------------------------------------------------------------------------
 SIGN_ID="${DEVELOPER_ID_APP:-}"
-[ -z "$SIGN_ID" ] && SIGN_ID="$(security find-identity -v -p codesigning 2>/dev/null \
-  | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
+[ -z "$SIGN_ID" ] && SIGN_ID="$(security find-identity -v -p codesigning 2>/dev/null |
+  sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
 if [ -n "$SIGN_ID" ]; then
   log "Signing DMG with $SIGN_ID…"
   codesign --force --timestamp --sign "$SIGN_ID" "$DMG_PATH"

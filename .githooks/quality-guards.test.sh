@@ -56,6 +56,10 @@ assert 0 "inline comment with @ does not override the ref" .github/workflows/cmt
 mk .github/workflows/docker.yml '+++ b/w\n+      - uses: docker://alpine:3.20\n'
 assert 0 "docker:// ref is skipped" .github/workflows/docker.yml
 
+# Standard macOS VM virtfs share is a fixed mount, not a dev path -> NOT flagged.
+mk vm.sh '+++ b/s\n+  ssh_cmd "cd /Volumes/My Shared Files/$MOUNT/gui && swift build"\n'
+assert 0 "macOS VM shared-folder mount is not flagged" vm.sh
+
 # Root-level vendor file -> skipped entirely.
 mk vendor/lib.go '+++ b/v\n+x := "/Users/bob/x"\n'
 assert 0 "root vendor/ is skipped" vendor/lib.go

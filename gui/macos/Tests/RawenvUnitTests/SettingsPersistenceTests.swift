@@ -1,13 +1,15 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import RawenvLib
 
 // MARK: - SettingsStore persistence
 
 @Suite struct SettingsStoreTests {
     private func tempStore() -> SettingsStore {
-        SettingsStore(fileURL: FileManager.default.temporaryDirectory
-            .appendingPathComponent("rawenv-settings-test-\(UUID().uuidString).json"))
+        SettingsStore(
+            fileURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("rawenv-settings-test-\(UUID().uuidString).json"))
     }
 
     @Test func loadReturnsNilWhenMissing() {
@@ -44,8 +46,9 @@ import Foundation
     @Test @MainActor func togglePersistsAndSurvivesReload() async {
         let store = SettingsStore(fileURL: storeURL())
         let secrets = InMemorySecretStore()
-        let vm = SettingsViewModel(repository: TestDataRepository(), settingsStore: store,
-                                   secretStore: secrets, runtimeManager: TestRuntimeManager())
+        let vm = SettingsViewModel(
+            repository: TestDataRepository(), settingsStore: store,
+            secretStore: secrets, runtimeManager: TestRuntimeManager())
         await vm.load()
         vm.update { $0.general.autoStartServices = false }
         vm.update { $0.general.launchAtLogin = true }
@@ -56,8 +59,9 @@ import Foundation
         #expect(persisted?.general.launchAtLogin == true)
 
         // A fresh view model loading the same store sees the saved values.
-        let vm2 = SettingsViewModel(repository: TestDataRepository(), settingsStore: store,
-                                    secretStore: secrets, runtimeManager: TestRuntimeManager())
+        let vm2 = SettingsViewModel(
+            repository: TestDataRepository(), settingsStore: store,
+            secretStore: secrets, runtimeManager: TestRuntimeManager())
         await vm2.load()
         #expect(vm2.settings?.general.launchAtLogin == true)
         #expect(vm2.settings?.general.autoStartServices == false)
@@ -67,8 +71,9 @@ import Foundation
     @Test @MainActor func apiKeyStoredInSecretStoreNotJSON() async throws {
         let store = SettingsStore(fileURL: storeURL())
         let secrets = InMemorySecretStore()
-        let vm = SettingsViewModel(repository: TestDataRepository(), settingsStore: store,
-                                   secretStore: secrets, runtimeManager: TestRuntimeManager())
+        let vm = SettingsViewModel(
+            repository: TestDataRepository(), settingsStore: store,
+            secretStore: secrets, runtimeManager: TestRuntimeManager())
         await vm.load()
         vm.setAPIKey("sk-super-secret-123")
         vm.persist()
@@ -78,7 +83,7 @@ import Foundation
         // ...and never lands in the JSON file.
         let raw = try String(contentsOf: store.location, encoding: .utf8)
         #expect(!raw.contains("sk-super-secret-123"))
-        #expect(store.load()?.ai.apiKey == "")
+        #expect(store.load()?.ai.apiKey.isEmpty == true)
         try? FileManager.default.removeItem(at: store.location)
     }
 

@@ -15,13 +15,14 @@ struct DashboardView: View {
                     title: "No services running",
                     guidance: "No services configured. Run rawenv init to get started.",
                     idPrefix: "dashboard")
-            case let .failed(message):
+            case .failed(let message):
                 ErrorStateView(
                     title: "Couldn't load services",
                     message: message,
-                    idPrefix: "dashboard") {
-                        Task { await viewModel.load() }
-                    }
+                    idPrefix: "dashboard"
+                ) {
+                    Task { await viewModel.load() }
+                }
             case .loaded:
                 loadedContent
             }
@@ -42,12 +43,15 @@ struct DashboardView: View {
             .padding(12)
 
             // Service list
-            List(viewModel.services, selection: Binding(
-                get: { viewModel.selectedService },
-                set: { newValue in
-                    Task { await viewModel.selectService(newValue) }
-                }
-            )) { service in
+            List(
+                viewModel.services,
+                selection: Binding(
+                    get: { viewModel.selectedService },
+                    set: { newValue in
+                        Task { await viewModel.selectService(newValue) }
+                    }
+                )
+            ) { service in
                 let isSelected = viewModel.selectedService == service
                 HStack(spacing: 10) {
                     Text(service.icon)
@@ -93,7 +97,10 @@ struct DashboardView: View {
                         Text(tab.rawValue.capitalized)
                             .font(.caption).fontWeight(.medium)
                             .padding(.horizontal, 12).padding(.vertical, 6)
-                            .background(viewModel.selectedTab == tab ? Color.accent.opacity(colorScheme == .light ? 0.15 : 0.3) : Color.clear)
+                            .background(
+                                viewModel.selectedTab == tab
+                                    ? Color.accent.opacity(colorScheme == .light ? 0.15 : 0.3) : Color.clear
+                            )
                             .foregroundStyle(viewModel.selectedTab == tab ? Color.accent : Color.textMuted)
                             .clipShape(Capsule())
                     }
@@ -119,7 +126,8 @@ struct DashboardView: View {
                 EmptyStateView(
                     icon: "doc.text.magnifyingglass",
                     title: "No logs yet",
-                    guidance: "Logs appear here once \(viewModel.selectedService?.name ?? "this service") starts producing output. Start the service to see activity.",
+                    guidance:
+                        "Logs appear here once \(viewModel.selectedService?.name ?? "this service") starts producing output. Start the service to see activity.",
                     idPrefix: "logs")
             } else {
                 List(viewModel.logs) { log in
@@ -182,14 +190,18 @@ struct DashboardView: View {
     }
 
     private var totalCPU: String {
-        let values = viewModel.services.compactMap { $0.cpu }.compactMap { Double($0.replacingOccurrences(of: "%", with: "")) }
+        let values = viewModel.services.compactMap { $0.cpu }.compactMap {
+            Double($0.replacingOccurrences(of: "%", with: ""))
+        }
         guard !values.isEmpty else { return "—" }
         let sum = values.reduce(0, +)
         return String(format: "%.0f%%", sum)
     }
 
     private var totalMem: String {
-        let values = viewModel.services.compactMap { $0.mem }.compactMap { Double($0.replacingOccurrences(of: " MB", with: "").replacingOccurrences(of: "MB", with: "")) }
+        let values = viewModel.services.compactMap { $0.mem }.compactMap {
+            Double($0.replacingOccurrences(of: " MB", with: "").replacingOccurrences(of: "MB", with: ""))
+        }
         guard !values.isEmpty else { return "—" }
         let sum = values.reduce(0, +)
         return String(format: "%.0f MB", sum)

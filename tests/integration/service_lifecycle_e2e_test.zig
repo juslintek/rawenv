@@ -42,7 +42,7 @@ fn rawenvBin() []const u8 {
         const s = std.mem.sliceTo(p, 0);
         if (s.len > 0) return s;
     }
-    return "/Volumes/Projects/rawenv/zig-out/bin/rawenv";
+    return if (std.c.getenv("RAWENV_BIN")) |s| std.mem.sliceTo(s, 0) else "zig-out/bin/rawenv";
 }
 
 /// The services exercised by E2E-107, each pinned to a unique ephemeral-range

@@ -34,11 +34,14 @@ public struct SystemProcessStatsProvider: ProcessStatsProvider {
 
     /// Returns the pid of the first process listening on `port`, or `nil`.
     static func listeningPID(forPort port: Int) -> Int? {
-        let out = runTool("/usr/sbin/lsof", ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN", "-t"])
+        let out =
+            runTool("/usr/sbin/lsof", ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN", "-t"])
             ?? runTool("/usr/bin/lsof", ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN", "-t"])
-        guard let first = out?
-            .split(whereSeparator: { $0 == "\n" || $0 == " " })
-            .first, let pid = Int(first) else { return nil }
+        guard
+            let first = out?
+                .split(whereSeparator: { $0 == "\n" || $0 == " " })
+                .first, let pid = Int(first)
+        else { return nil }
         return pid
     }
 
@@ -47,8 +50,9 @@ public struct SystemProcessStatsProvider: ProcessStatsProvider {
         guard let out = runTool("/bin/ps", ["-o", "%cpu=,rss=", "-p", "\(pid)"]) else { return nil }
         let fields = out.split(whereSeparator: { $0 == " " || $0 == "\n" }).map(String.init)
         guard fields.count >= 2,
-              let cpu = Double(fields[0]),
-              let rssKB = Double(fields[1]) else { return nil }
+            let cpu = Double(fields[0]),
+            let rssKB = Double(fields[1])
+        else { return nil }
         return ProcessStats(cpu: formatCPU(cpu), mem: formatMem(rssKB))
     }
 
@@ -78,7 +82,8 @@ public struct SystemProcessStatsProvider: ProcessStatsProvider {
             return nil
         }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let text = String(data: data, encoding: .utf8)?
+        let text =
+            String(data: data, encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return text.isEmpty ? nil : text
     }

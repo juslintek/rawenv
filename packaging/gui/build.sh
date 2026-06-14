@@ -10,7 +10,7 @@ mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 
 swiftc -O -parse-as-library -o "$APP_DIR/Contents/MacOS/rawenv-gui" "$SCRIPT_DIR/DashboardApp.swift"
 
-cat > "$APP_DIR/Contents/Info.plist" << 'PLIST'
+cat >"$APP_DIR/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>

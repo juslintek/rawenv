@@ -20,7 +20,7 @@ public partial class MockScannerEngine : ObservableObject
         ("~/Projects/GOTAS/utilio", new Project("utilio", "~/Projects/GOTAS/utilio", ["Node.js", "Qwik", "PostgreSQL", "Redis", "Meilisearch", "SQL Server"], "14 deps")),
         ("~/Projects/GOTAS/vialietuva-legacy", new Project("vialietuva-legacy", "~/Projects/GOTAS/vialietuva-legacy", ["PHP", "Laravel", "MySQL", "Redis"], "8 deps")),
         ("~/Projects/rawenv", new Project("rawenv", "~/Projects/rawenv", ["Zig"], "1 dep")),
-        ("/Volumes/Projects/mcp-for-page-builders", new Project("mcp-for-page-builders", "/Volumes/Projects/mcp-for-page-builders", ["Rust", "Cargo"], "2 deps")),
+        ("~/Projects/mcp-for-page-builders", new Project("mcp-for-page-builders", "~/Projects/mcp-for-page-builders", ["Rust", "Cargo"], "2 deps")),
         ("~/Projects/my-saas", new Project("my-saas", "~/Projects/my-saas", ["Node.js", "Next.js", "PostgreSQL", "Redis", "S3"], "10 deps")),
         ("~/Projects/blog", new Project("blog", "~/Projects/blog", ["Ruby", "Jekyll"], "3 deps")),
         ("~/Projects/data-pipeline", new Project("data-pipeline", "~/Projects/data-pipeline", ["Python", "PostgreSQL", "Redis"], "6 deps")),

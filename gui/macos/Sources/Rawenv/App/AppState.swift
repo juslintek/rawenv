@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 
 @MainActor
 public final class AppState: ObservableObject, NavigationService {
@@ -23,8 +23,10 @@ public final class AppState: ObservableObject, NavigationService {
     public lazy var dashboardVM: DashboardViewModel = DashboardViewModel(repository: repository)
     public lazy var aiChatVM: AIChatViewModel = AIChatViewModel(repository: repository, aiProvider: aiProvider)
     public lazy var connectionsVM: ConnectionsViewModel = ConnectionsViewModel(repository: repository)
-    public lazy var deployVM: DeployViewModel = DeployViewModel(repository: repository, projectPath: activeProject?.path, deployEngine: deployEngine)
-    public lazy var tunnelVM: TunnelVM = TunnelVM(commandRunner: { TunnelVM.runRawenvTunnel(port: $0) }, repository: repository)
+    public lazy var deployVM: DeployViewModel = DeployViewModel(
+        repository: repository, projectPath: activeProject?.path, deployEngine: deployEngine)
+    public lazy var tunnelVM: TunnelVM = TunnelVM(
+        commandRunner: { TunnelVM.runRawenvTunnel(port: $0) }, repository: repository)
     public lazy var projectsVM: ProjectsViewModel = ProjectsViewModel(repository: repository)
 
     // Real implementations (used when useTestDoubles = false)
@@ -34,8 +36,8 @@ public final class AppState: ObservableObject, NavigationService {
     public let realDeployEngine: RealDeployEngine?
 
     public static var useTestDoubles: Bool = {
-        ProcessInfo.processInfo.arguments.contains("--ui-testing") ||
-        ProcessInfo.processInfo.environment["RAWENV_TEST_MODE"] == "1"
+        ProcessInfo.processInfo.arguments.contains("--ui-testing")
+            || ProcessInfo.processInfo.environment["RAWENV_TEST_MODE"] == "1"
     }()
 
     public init(repository: DataRepository, aiProvider: AIProvider) {

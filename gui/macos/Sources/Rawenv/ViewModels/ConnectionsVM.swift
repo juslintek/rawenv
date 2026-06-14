@@ -1,6 +1,6 @@
-import Foundation
-import Combine
 import AppKit
+import Combine
+import Foundation
 
 @MainActor
 public final class ConnectionsViewModel: ObservableObject {
@@ -12,8 +12,10 @@ public final class ConnectionsViewModel: ObservableObject {
     private let repository: DataRepository
     private let modeStore: ConnectionModePersisting
 
-    public init(repository: DataRepository,
-                modeStore: ConnectionModePersisting = ConnectionModeStore()) {
+    public init(
+        repository: DataRepository,
+        modeStore: ConnectionModePersisting = ConnectionModeStore()
+    ) {
         self.repository = repository
         self.modeStore = modeStore
     }

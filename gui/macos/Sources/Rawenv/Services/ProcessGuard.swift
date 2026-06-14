@@ -52,7 +52,10 @@ public final class ProcessGuard: @unchecked Sendable {
 
         // Circuit breaker in cooldown?
         if let until = trippedUntil {
-            if now < until { lock.unlock(); return false }
+            if now < until {
+                lock.unlock()
+                return false
+            }
             // Cooldown elapsed — reset.
             trippedUntil = nil
             windowStart = now
@@ -68,7 +71,9 @@ public final class ProcessGuard: @unchecked Sendable {
         if windowCount > maxPerWindow {
             trippedUntil = now.addingTimeInterval(cooldownSeconds)
             lock.unlock()
-            NSLog("[rawenv] ProcessGuard circuit breaker TRIPPED — refusing subprocess launches for \(Int(cooldownSeconds))s (runaway spawn rate detected)")
+            NSLog(
+                "[rawenv] ProcessGuard circuit breaker TRIPPED — refusing subprocess launches for \(Int(cooldownSeconds))s (runaway spawn rate detected)"
+            )
             return false
         }
         lock.unlock()
