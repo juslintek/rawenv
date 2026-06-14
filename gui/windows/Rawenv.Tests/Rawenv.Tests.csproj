@@ -13,7 +13,7 @@
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="..\..\shared\mock-data.json" Link="Assets\mock-data.json">
+    <Content Include="..\..\..\shared\mock-data.json" Link="Assets\mock-data.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

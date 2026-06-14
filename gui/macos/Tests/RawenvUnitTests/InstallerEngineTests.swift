@@ -111,6 +111,18 @@ import Testing
         #expect(result.ok == false)
     }
 
+    @Test func defaultDownloadURLUsesPublishedArchAssetName() {
+        // The download fallback must request an asset name the release workflow
+        // actually publishes: rawenv-<aarch64|x86_64>-macos.tar.gz.
+        let url = InstallerEngine.defaultDownloadURL()
+        #expect(url.hasSuffix("-macos.tar.gz"))
+        #expect(url.contains("/releases/latest/download/"))
+        #expect(url.contains("aarch64") || url.contains("x86_64"))
+        // Never the old, non-existent naming that caused the first-run 404.
+        #expect(!url.contains("darwin-arm64"))
+        #expect(!url.contains("darwin-x64"))
+    }
+
     @Test func embeddedCLIPathNeverReturnsHostExecutable() {
         // In the test bundle there is no embedded rawenv, so this must be nil —
         // and it must NEVER return the running host executable (the self-exec

@@ -77,7 +77,7 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
     /// Release asset URL for the current architecture. Matches the names the
     /// release workflow publishes (`rawenv-<arch>-macos.tar.gz`) — used only as
     /// a last-resort fallback when no embedded or dev-build CLI is available.
-    private static func defaultDownloadURL() -> String {
+    nonisolated static func defaultDownloadURL() -> String {
         let asset =
             machineArchRaw() == "arm64"
             ? "rawenv-aarch64-macos.tar.gz"
@@ -208,7 +208,7 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
         }
         do {
             if installURL.hasSuffix(".tar.gz") || installURL.hasSuffix(".tgz") {
-                try extractArchive(data: data, fm: fm)
+                try await extractArchive(data: data, fm: fm)
             } else {
                 if fm.fileExists(atPath: binPath) { try fm.removeItem(atPath: binPath) }
                 try data.write(to: URL(fileURLWithPath: binPath))
@@ -241,8 +241,23 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
     }
 
     /// Extract a downloaded `.tar.gz` release archive and install the `rawenv`
-    /// binary it contains.
-    private func extractArchive(data: Data, fm: FileManager) throws {
+    /// binary it contains. The blocking `tar` process runs on a background queue
+    /// (like ``probeBinary``) so the install wizard's UI never freezes.
+    private func extractArchive(data: Data, fm: FileManager) async throws {
+        let dest = binPath
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try Self.extractArchiveSync(data: data, binPath: dest, fm: fm)
+                    cont.resume()
+                } catch {
+                    cont.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    nonisolated static func extractArchiveSync(data: Data, binPath: String, fm: FileManager) throws {
         let tmpDir = fm.temporaryDirectory.appendingPathComponent("rawenv-dl-\(UUID().uuidString)")
         try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: tmpDir) }
@@ -341,7 +356,7 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
     }
 
     /// Raw machine architecture (e.g. "arm64", "x86_64").
-    private static func machineArchRaw() -> String {
+    nonisolated private static func machineArchRaw() -> String {
         var sysinfo = utsname()
         uname(&sysinfo)
         return withUnsafeBytes(of: &sysinfo.machine) { raw -> String in
