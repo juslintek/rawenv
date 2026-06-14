@@ -1,6 +1,6 @@
 import Foundation
 
-public struct Connection: Codable, Identifiable, Equatable {
+public struct Connection: Codable, Identifiable, Equatable, Sendable {
     public var id: String { envVar }
     public let envVar: String
     public let original: String
