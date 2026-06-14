@@ -67,10 +67,12 @@ public final class ProjectCreator: ObservableObject {
 
     private func loadTemplates() {
         let searchPaths = [
+            ProcessInfo.processInfo.environment["RAWENV_REPO"].map { "\($0)/shared/recipes" },
             "\(FileManager.default.currentDirectoryPath)/shared/recipes",
+            "\(FileManager.default.currentDirectoryPath)/../../shared/recipes",
             "/Volumes/Projects/rawenv/shared/recipes",
             "\(NSHomeDirectory())/.rawenv/recipes",
-        ]
+        ].compactMap { $0 }
         for base in searchPaths {
             let path = "\(base)/templates.json"
             guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
