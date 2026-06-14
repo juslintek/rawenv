@@ -95,15 +95,6 @@ import Testing
         #expect(ic.platforms["macos"]?.serviceManager == "launchd")
     }
 
-
-
-
-
-
-
-
-
-
     @Test func destinationCases() {
         let all = Destination.allCases
         #expect(all.contains(.dashboard))

@@ -333,7 +333,6 @@ struct ProjectsView: View {
         .padding(24)
     }
 
-
     private var filteredProjects: [Project] {
         if filterText.isEmpty { return engine.discoveredProjects }
         return engine.discoveredProjects.filter {

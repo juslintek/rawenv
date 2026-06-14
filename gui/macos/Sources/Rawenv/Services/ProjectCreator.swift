@@ -66,7 +66,7 @@ public final class ProjectCreator: ObservableObject {
         let searchPaths = [
             "\(FileManager.default.currentDirectoryPath)/shared/recipes",
             "/Volumes/Projects/rawenv/shared/recipes",
-            "\(NSHomeDirectory())/.rawenv/recipes",
+            "\(NSHomeDirectory())/.rawenv/recipes"
         ]
         for base in searchPaths {
             let path = "\(base)/templates.json"

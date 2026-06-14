@@ -49,8 +49,7 @@ public struct MenuBarView: View {
                         Spacer()
                         // Custom toggle pill
                         Button(action: {
-                            if isOn { appState.serviceManager.stopService(name: service.name) }
-                            else { appState.serviceManager.startService(name: service.name) }
+                            if isOn { appState.serviceManager.stopService(name: service.name) } else { appState.serviceManager.startService(name: service.name) }
                         }) {
                             RoundedRectangle(cornerRadius: 10)
                                 .fill(isOn ? Color.green : Color.gray.opacity(0.3))

@@ -11,7 +11,7 @@ import Testing
             Service(name: "Redis", port: 6379, version: "7.4", pid: 1235,
                     cpu: "0.3%", mem: "12MB", uptime: "2h", status: "running", icon: "🔴"),
             Service(name: "SQL Server", port: 1433, version: "2025", pid: nil,
-                    cpu: nil, mem: nil, uptime: nil, status: "stopped", icon: "🗄️"),
+                    cpu: nil, mem: nil, uptime: nil, status: "stopped", icon: "🗄️")
         ])
         let mgr = ServiceManager(repository: TestDataRepository(), backend: backend)
         await mgr.loadInitial(repository: TestDataRepository())

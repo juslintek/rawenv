@@ -106,7 +106,7 @@ private let serviceTests: [ServiceTestCase] = [
         port: 14222,
         healthCheck: .tcp,
         writeTest: nil
-    ),
+    )
 ]
 
 // MARK: - Combo Test Definitions (multiple services together)
@@ -120,7 +120,7 @@ struct ComboTestCase: CustomStringConvertible {
 private let comboTests: [ComboTestCase] = [
     ComboTestCase(name: "Node-Stack", services: ["Redis", "PostgreSQL"]),
     ComboTestCase(name: "Cache-Layer", services: ["Redis", "Redis-Cluster-Mode", "Memcached"]),
-    ComboTestCase(name: "Full-Backend", services: ["Redis", "PostgreSQL", "Meilisearch"]),
+    ComboTestCase(name: "Full-Backend", services: ["Redis", "PostgreSQL", "Meilisearch"])
 ]
 
 // MARK: - Recipe Project Test Definitions
@@ -139,7 +139,7 @@ private let recipeProjectTests: [RecipeProjectTest] = [
     RecipeProjectTest(templateName: "Gin (Go)", expectedServices: ["postgresql", "redis"]),
     RecipeProjectTest(templateName: "Ruby on Rails", expectedServices: ["postgresql", "redis"]),
     RecipeProjectTest(templateName: "Django", expectedServices: ["postgresql", "redis"]),
-    RecipeProjectTest(templateName: "Actix Web (Rust)", expectedServices: ["postgresql", "redis"]),
+    RecipeProjectTest(templateName: "Actix Web (Rust)", expectedServices: ["postgresql", "redis"])
 ]
 
 // MARK: - Tests

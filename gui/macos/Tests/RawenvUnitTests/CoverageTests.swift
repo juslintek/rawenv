@@ -141,7 +141,7 @@ private func makeAppState() -> AppState {
         let tm = ThemeManager()
         let vm = TunnelVM(tunnels: [
             TunnelInfo(port: "3000", provider: "bore", relay: "bore.pub", url: "bore.pub:34567"),
-            TunnelInfo(port: "8080", provider: "cloudflared", relay: "cloudflared.io", url: "cloudflared.io/abc123"),
+            TunnelInfo(port: "8080", provider: "cloudflared", relay: "cloudflared.io", url: "cloudflared.io/abc123")
         ])
         render(TunnelView(viewModel: vm).environmentObject(tm))
     }

@@ -54,7 +54,7 @@ public final class AIEngine: ObservableObject, @unchecked Sendable {
         let body: [String: Any] = [
             "model": key != nil ? "llama-3.3-70b-versatile" : "llama3.2",
             "messages": [["role": "user", "content": prompt]],
-            "max_tokens": 1024,
+            "max_tokens": 1024
         ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 

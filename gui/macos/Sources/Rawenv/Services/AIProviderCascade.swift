@@ -127,7 +127,7 @@ public final class AIProviderCascade: AIProvider, @unchecked Sendable {
         let body: [String: Any] = [
             "model": model,
             "messages": [["role": "user", "content": prompt]],
-            "max_tokens": 1024,
+            "max_tokens": 1024
         ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 

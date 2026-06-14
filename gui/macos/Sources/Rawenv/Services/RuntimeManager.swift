@@ -46,7 +46,7 @@ public final class CLIRuntimeManager: RuntimeManaging, @unchecked Sendable {
             ("python", "3.13"),
             ("ruby", "3.4"),
             ("go", "1.23"),
-            ("bun", "1"),
+            ("bun", "1")
         ]
     }
 

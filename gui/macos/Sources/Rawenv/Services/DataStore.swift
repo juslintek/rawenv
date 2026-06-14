@@ -203,7 +203,7 @@ public final class DataStore: DataRepository, @unchecked Sendable {
                "restart": AIAutonomyLevel.confirmDangerous.rawValue,
                "deploy": AIAutonomyLevel.confirmDangerous.rawValue,
                "edit-config": AIAutonomyLevel.autoApplySafe.rawValue,
-               "delete": AIAutonomyLevel.confirmDangerous.rawValue,
+               "delete": AIAutonomyLevel.confirmDangerous.rawValue
            ]),
            theme: .init(mode: "system", accentColor: "#6366f1", successColor: "#34d399", errorColor: "#f87171", warningColor: "#fbbf24", borderRadius: 8, fontSize: 13, sidebarWidth: 240)
        )

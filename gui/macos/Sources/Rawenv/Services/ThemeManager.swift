@@ -8,7 +8,7 @@ public enum ThemeMode: String, CaseIterable {
 
 @MainActor
 public final class ThemeManager: ObservableObject {
-    @Published public var colorScheme: ColorScheme? = nil
+    @Published public var colorScheme: ColorScheme?
     @Published public var accentColor: Color = Color(red: 99/255, green: 102/255, blue: 241/255)
     @Published public var successColor: Color = Color(red: 52/255, green: 211/255, blue: 153/255)
     @Published public var errorColor: Color = Color(red: 248/255, green: 113/255, blue: 113/255)

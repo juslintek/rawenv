@@ -59,7 +59,7 @@ public final class DeployEngine: ObservableObject, @unchecked Sendable {
             Step(label: "terraform plan", cmd: "terraform", args: ["plan"], requiresConfirmation: false),
             // `apply` is gated: it is only run after the user confirms in the
             // UI, and approval is never granted via a command-line flag.
-            Step(label: "terraform apply", cmd: "terraform", args: ["apply"], requiresConfirmation: true),
+            Step(label: "terraform apply", cmd: "terraform", args: ["apply"], requiresConfirmation: true)
         ]
     }
 
@@ -240,7 +240,7 @@ public final class DeployEngine: ObservableObject, @unchecked Sendable {
         guard !text.isEmpty else { return nil }
         let patterns = [
             #"port[^0-9]{0,4}([0-9]{2,5})"#,
-            #":([0-9]{2,5})\b"#,
+            #":([0-9]{2,5})\b"#
         ]
         for pattern in patterns {
             guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }

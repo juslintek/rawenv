@@ -56,7 +56,7 @@ private struct StubStatsProvider: ProcessStatsProvider {
     @MainActor private func makeManager() async -> ServiceManager {
         let backend = FakeServiceBackend([
             Service(name: "PostgreSQL", port: 5432, version: "16", pid: nil, cpu: nil, mem: nil, uptime: nil, status: "stopped", icon: "🐘"),
-            Service(name: "Redis", port: 6379, version: "7.4", pid: 1, cpu: nil, mem: nil, uptime: nil, status: "running", icon: "🔴"),
+            Service(name: "Redis", port: 6379, version: "7.4", pid: 1, cpu: nil, mem: nil, uptime: nil, status: "running", icon: "🔴")
         ])
         let mgr = ServiceManager(repository: TestDataRepository(), backend: backend)
         await mgr.loadInitial(repository: TestDataRepository())

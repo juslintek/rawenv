@@ -44,7 +44,7 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
         "Downloading rawenv binary…",
         "Installing to ~/.rawenv/bin/…",
         "Verifying binary…",
-        "Adding to PATH…",
+        "Adding to PATH…"
     ]
 
     private let installURL: String

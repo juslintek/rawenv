@@ -97,7 +97,7 @@ private func makeState() -> AppState {
         engine.paths = [
             .init(path: "~/Done/", status: .done, projectCount: 3, cached: true),
             .init(path: "~/Scanning/", status: .scanning, projectCount: 0, cached: false),
-            .init(path: "~/Queued/", status: .queued, projectCount: 0, cached: false),
+            .init(path: "~/Queued/", status: .queued, projectCount: 0, cached: false)
         ]
         engine.scanComplete = false
         engine.isScanning = true
@@ -351,4 +351,3 @@ private func makeState() -> AppState {
 }
 
 // MARK: - DataStore fallback paths
-

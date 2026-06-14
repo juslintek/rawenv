@@ -22,14 +22,14 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
 
     private let markers = [
         "package.json", "composer.json", "Cargo.toml", "go.mod",
-        "build.zig", "Gemfile", "requirements.txt", "pyproject.toml",
+        "build.zig", "Gemfile", "requirements.txt", "pyproject.toml"
     ]
 
     public init() {
         let home = NSHomeDirectory()
         let scanDirs = [
             "\(home)/Projects", "\(home)/Developer", "\(home)/Code",
-            "/Volumes/Projects", "\(home)/Desktop", "\(home)/Documents",
+            "/Volumes/Projects", "\(home)/Desktop", "\(home)/Documents"
         ]
         paths = scanDirs.map {
             ScanPath(path: $0, status: .queued, projectCount: 0, cached: false)
@@ -95,7 +95,7 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
     private let stackNames: [String: String] = [
         "package.json": "Node.js", "composer.json": "PHP", "Cargo.toml": "Rust",
         "go.mod": "Go", "build.zig": "Zig", "Gemfile": "Ruby",
-        "requirements.txt": "Python", "pyproject.toml": "Python",
+        "requirements.txt": "Python", "pyproject.toml": "Python"
     ]
 
     private func scanDirectory(_ path: String) -> [Project] {

@@ -10,7 +10,7 @@ private func binaryPath() -> String {
     // Try relative to project root
     let candidates = [
         "/Volumes/Projects/rawenv/zig-out/bin/rawenv",
-        "\(FileManager.default.currentDirectoryPath)/../../zig-out/bin/rawenv",
+        "\(FileManager.default.currentDirectoryPath)/../../zig-out/bin/rawenv"
     ]
     for c in candidates where FileManager.default.isExecutableFile(atPath: c) { return c }
     return "rawenv"

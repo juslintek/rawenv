@@ -10,7 +10,7 @@ public final class InstallFlowVM: ObservableObject {
     @Published public var progress: Double = 0
     @Published public var isInstalling = false
     @Published public var isComplete = false
-    @Published public var error: String? = nil
+    @Published public var error: String?
     @Published public var showPortInput = false
     @Published public var newPort = "1434"
     @Published public var installedRuntimes: Set<String> = []

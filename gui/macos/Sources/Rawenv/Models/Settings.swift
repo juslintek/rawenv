@@ -89,5 +89,3 @@ public struct PlatformInfo: Codable, Equatable {
     public let isolation: String
     public let dns: String
 }
-
-

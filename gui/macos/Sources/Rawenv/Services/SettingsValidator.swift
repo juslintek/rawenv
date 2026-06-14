@@ -60,31 +60,31 @@ public enum DeployProviders {
             return [
                 CredentialField(key: "accessKeyId", label: "Access Key ID", isSecret: false),
                 CredentialField(key: "secretAccessKey", label: "Secret Access Key", isSecret: true),
-                CredentialField(key: "region", label: "Default Region", isSecret: false),
+                CredentialField(key: "region", label: "Default Region", isSecret: false)
             ]
         case "GCP":
             return [
                 CredentialField(key: "projectId", label: "Project ID", isSecret: false),
-                CredentialField(key: "serviceAccountJSON", label: "Service Account JSON", isSecret: true),
+                CredentialField(key: "serviceAccountJSON", label: "Service Account JSON", isSecret: true)
             ]
         case "Azure":
             return [
                 CredentialField(key: "subscriptionId", label: "Subscription ID", isSecret: false),
                 CredentialField(key: "tenantId", label: "Tenant ID", isSecret: false),
                 CredentialField(key: "clientId", label: "Client ID", isSecret: false),
-                CredentialField(key: "clientSecret", label: "Client Secret", isSecret: true),
+                CredentialField(key: "clientSecret", label: "Client Secret", isSecret: true)
             ]
         case "DigitalOcean":
             return [
-                CredentialField(key: "apiToken", label: "API Token", isSecret: true),
+                CredentialField(key: "apiToken", label: "API Token", isSecret: true)
             ]
         case "Hetzner":
             return [
-                CredentialField(key: "apiToken", label: "API Token", isSecret: true),
+                CredentialField(key: "apiToken", label: "API Token", isSecret: true)
             ]
         default:
             return [
-                CredentialField(key: "apiToken", label: "API Token", isSecret: true),
+                CredentialField(key: "apiToken", label: "API Token", isSecret: true)
             ]
         }
     }

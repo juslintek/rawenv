@@ -182,8 +182,7 @@ public final class TunnelVM: ObservableObject {
         proc.executableURL = URL(fileURLWithPath: brew)
         proc.arguments = ["install", formula]
         proc.standardOutput = Pipe(); proc.standardError = Pipe()
-        do { try proc.run(); proc.waitUntilExit(); return proc.terminationStatus == 0 }
-        catch { return false }
+        do { try proc.run(); proc.waitUntilExit(); return proc.terminationStatus == 0 } catch { return false }
     }
 
     /// Run `rawenv tunnel <port>` synchronously and return its combined output.

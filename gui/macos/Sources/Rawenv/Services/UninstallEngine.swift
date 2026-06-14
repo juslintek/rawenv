@@ -92,7 +92,7 @@ public final class UninstallEngine: ObservableObject, @unchecked Sendable {
                      desc: "dnsmasq config, .test domains",
                      size: "—", selected: true,
                      paths: ["\(root)/dnsmasq", "\(root)/Caddyfile", "\(root)/proxy"],
-                     cleansRcFiles: false, stopsServices: false),
+                     cleansRcFiles: false, stopsServices: false)
         ]
     }
 

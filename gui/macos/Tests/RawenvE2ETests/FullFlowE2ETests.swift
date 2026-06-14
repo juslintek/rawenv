@@ -289,9 +289,6 @@ private struct AnyDecodable: Decodable {
     let value: Any
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        if let s = try? container.decode(String.self) { value = s }
-        else if let i = try? container.decode(Int.self) { value = i }
-        else if let b = try? container.decode(Bool.self) { value = b }
-        else { value = "" }
+        if let s = try? container.decode(String.self) { value = s } else if let i = try? container.decode(Int.self) { value = i } else if let b = try? container.decode(Bool.self) { value = b } else { value = "" }
     }
 }
