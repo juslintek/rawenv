@@ -243,12 +243,12 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
     /// Extract a downloaded `.tar.gz` release archive and install the `rawenv`
     /// binary it contains. The blocking `tar` process runs on a background queue
     /// (like ``probeBinary``) so the install wizard's UI never freezes.
-    private func extractArchive(data: Data, fm: FileManager) async throws {
+    private func extractArchive(data: Data, fm _: FileManager) async throws {
         let dest = binPath
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    try Self.extractArchiveSync(data: data, binPath: dest, fm: fm)
+                    try Self.extractArchiveSync(data: data, binPath: dest)
                     cont.resume()
                 } catch {
                     cont.resume(throwing: error)
@@ -257,7 +257,8 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
         }
     }
 
-    nonisolated static func extractArchiveSync(data: Data, binPath: String, fm: FileManager) throws {
+    nonisolated static func extractArchiveSync(data: Data, binPath: String) throws {
+        let fm = FileManager.default
         let tmpDir = fm.temporaryDirectory.appendingPathComponent("rawenv-dl-\(UUID().uuidString)")
         try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: tmpDir) }
