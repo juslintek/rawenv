@@ -95,6 +95,7 @@ fi
 . "$ROOT/.githooks/quality-guards.sh"
 collect_changed qg_changed '*'
 if [ "${#qg_changed[@]}" -gt 0 ]; then
+  QG_DIFF="git diff -U0 ${BASE}...HEAD --"
   step "quality guardrails" quality_guards "${qg_changed[@]}"
 fi
 
