@@ -841,7 +841,6 @@ pub fn uninstallAll(allocator: std.mem.Allocator, home: []const u8) bool {
 ///     defaults (idempotent — regenerated deterministically).
 /// All operations are best-effort and safe to run twice.
 /// ---------------------------------------------------------------------------
-
 /// True for services rawenv knows how to auto-configure on first install.
 /// Accepts both the store package name ("postgresql") and config key family.
 pub fn isConfigurableService(name: []const u8) bool {

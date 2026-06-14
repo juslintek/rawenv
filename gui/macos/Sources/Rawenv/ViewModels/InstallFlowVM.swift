@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 
 @MainActor
 public final class InstallFlowVM: ObservableObject {
@@ -20,11 +20,20 @@ public final class InstallFlowVM: ObservableObject {
     public func stepsForAction(_ action: String) -> [String] {
         switch action {
         case "migrate":
-            return ["Stopping existing service", "Copying data directory", "Applying optimized config", "Starting in rawenv cell", "Verifying & updating PATH"]
+            return [
+                "Stopping existing service", "Copying data directory", "Applying optimized config",
+                "Starting in rawenv cell", "Verifying & updating PATH",
+            ]
         case "minio":
-            return ["Downloading MinIO binary", "Configuring storage", "Creating default bucket", "Updating .env", "Starting in cell"]
+            return [
+                "Downloading MinIO binary", "Configuring storage", "Creating default bucket", "Updating .env",
+                "Starting in cell",
+            ]
         default:
-            return ["Downloading binary", "Verifying SHA256", "Extracting to ~/.rawenv/store/", "Configuring service", "Starting in isolation cell"]
+            return [
+                "Downloading binary", "Verifying SHA256", "Extracting to ~/.rawenv/store/", "Configuring service",
+                "Starting in isolation cell",
+            ]
         }
     }
 
@@ -80,16 +89,16 @@ public final class InstallFlowVM: ObservableObject {
         let failAtStep = 2
         for i in steps.indices {
             if triggersPortConflict && i == failAtStep {
-                try? await Task.sleep(nanoseconds: 400_000_000) // step animation pacing
+                try? await Task.sleep(nanoseconds: 400_000_000)  // step animation pacing
                 error = "Port 1433 is occupied by another process (PID 4521)."
                 isInstalling = false
                 return
             }
-            try? await Task.sleep(nanoseconds: 400_000_000) // step animation pacing
+            try? await Task.sleep(nanoseconds: 400_000_000)  // step animation pacing
             steps[i].1 = true
             progress = Double(i + 1) / Double(steps.count)
         }
-        try? await Task.sleep(nanoseconds: 300_000_000) // final step animation pacing
+        try? await Task.sleep(nanoseconds: 300_000_000)  // final step animation pacing
         installedRuntimes.insert(name)
         isComplete = true
         isInstalling = false

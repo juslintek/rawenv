@@ -12,9 +12,15 @@ fn readFileSimple(allocator: std.mem.Allocator, path: [*:0]const u8) ?[]const u8
     var buf_list: std.ArrayList(u8) = .empty;
     var read_buf: [4096]u8 = undefined;
     while (true) {
-        const n = std.posix.read(fd, &read_buf) catch { buf_list.deinit(allocator); return null; };
+        const n = std.posix.read(fd, &read_buf) catch {
+            buf_list.deinit(allocator);
+            return null;
+        };
         if (n == 0) break;
-        buf_list.appendSlice(allocator, read_buf[0..n]) catch { buf_list.deinit(allocator); return null; };
+        buf_list.appendSlice(allocator, read_buf[0..n]) catch {
+            buf_list.deinit(allocator);
+            return null;
+        };
     }
     return buf_list.toOwnedSlice(allocator) catch null;
 }

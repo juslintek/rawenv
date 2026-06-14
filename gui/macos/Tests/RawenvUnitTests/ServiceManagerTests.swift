@@ -1,4 +1,5 @@
 import Testing
+
 @testable import RawenvLib
 
 @Suite struct ServiceManagerTests {
@@ -6,12 +7,15 @@ import Testing
     /// and loads that initial state deterministically.
     @MainActor private func makeManager() async -> ServiceManager {
         let backend = FakeServiceBackend([
-            Service(name: "PostgreSQL", port: 5432, version: "16", pid: 1234,
-                    cpu: "2.1%", mem: "84MB", uptime: "2h", status: "running", icon: "🐘"),
-            Service(name: "Redis", port: 6379, version: "7.4", pid: 1235,
-                    cpu: "0.3%", mem: "12MB", uptime: "2h", status: "running", icon: "🔴"),
-            Service(name: "SQL Server", port: 1433, version: "2025", pid: nil,
-                    cpu: nil, mem: nil, uptime: nil, status: "stopped", icon: "🗄️")
+            Service(
+                name: "PostgreSQL", port: 5432, version: "16", pid: 1234,
+                cpu: "2.1%", mem: "84MB", uptime: "2h", status: "running", icon: "🐘"),
+            Service(
+                name: "Redis", port: 6379, version: "7.4", pid: 1235,
+                cpu: "0.3%", mem: "12MB", uptime: "2h", status: "running", icon: "🔴"),
+            Service(
+                name: "SQL Server", port: 1433, version: "2025", pid: nil,
+                cpu: nil, mem: nil, uptime: nil, status: "stopped", icon: "🗄️"),
         ])
         let mgr = ServiceManager(repository: TestDataRepository(), backend: backend)
         await mgr.loadInitial(repository: TestDataRepository())
@@ -61,7 +65,7 @@ import Testing
         let mgr = await makeManager()
         let count = mgr.services.count
         await mgr.performStart(name: "nonexistent")
-        #expect(mgr.services.count == count) // no change
+        #expect(mgr.services.count == count)  // no change
     }
 
     @Test @MainActor func stopNonexistentService() async {

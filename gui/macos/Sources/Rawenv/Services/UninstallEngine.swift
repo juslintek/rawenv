@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 
 /// Drives the in-app "remove rawenv" wizard with real filesystem operations:
 /// it discovers the on-disk artifacts, measures their real sizes, and deletes
@@ -38,11 +38,13 @@ public final class UninstallEngine: ObservableObject, @unchecked Sendable {
     private let projectDataDirs: [String]
     private var cancelled = false
 
-    public init(home: String = NSHomeDirectory(),
-                rcFiles: [String]? = nil,
-                launchAgentsDir: String? = nil,
-                projectDataDirs: [String] = [],
-                initialPhase: Phase = .selection) {
+    public init(
+        home: String = NSHomeDirectory(),
+        rcFiles: [String]? = nil,
+        launchAgentsDir: String? = nil,
+        projectDataDirs: [String] = [],
+        initialPhase: Phase = .selection
+    ) {
         self.home = home
         self.rcFiles = rcFiles ?? ["\(home)/.zshrc", "\(home)/.bashrc", "\(home)/.profile"]
         self.launchAgentsDir = launchAgentsDir ?? "\(home)/Library/LaunchAgents"
@@ -57,49 +59,56 @@ public final class UninstallEngine: ObservableObject, @unchecked Sendable {
     private func buildArtifacts() -> [Artifact] {
         let root = "\(home)/.rawenv"
         return [
-            Artifact(key: "binary",
-                     label: "Remove rawenv binary",
-                     desc: "\(root)/bin/rawenv",
-                     size: "—", selected: true,
-                     paths: ["\(root)/bin"],
-                     cleansRcFiles: true, stopsServices: false),
-            Artifact(key: "packages",
-                     label: "Remove installed packages",
-                     desc: "\(root)/store/",
-                     size: "—", selected: true,
-                     paths: ["\(root)/store"],
-                     cleansRcFiles: false, stopsServices: false),
-            Artifact(key: "services",
-                     label: "Stop and remove services",
-                     desc: "launchd plists",
-                     size: "—", selected: true,
-                     paths: launchAgentPlists(),
-                     cleansRcFiles: false, stopsServices: true),
-            Artifact(key: "data",
-                     label: "Remove service data",
-                     desc: ".rawenv/data/ in each project",
-                     size: "—", selected: true,
-                     paths: ["\(root)/data"] + projectDataDirs,
-                     cleansRcFiles: false, stopsServices: false),
-            Artifact(key: "config",
-                     label: "Remove configuration",
-                     desc: "\(root)/theme.toml, config.toml",
-                     size: "—", selected: false,
-                     paths: ["\(root)/theme.toml", "\(root)/config.toml"],
-                     cleansRcFiles: false, stopsServices: false),
-            Artifact(key: "dns_proxy",
-                     label: "Remove DNS and proxy",
-                     desc: "dnsmasq config, .test domains",
-                     size: "—", selected: true,
-                     paths: ["\(root)/dnsmasq", "\(root)/Caddyfile", "\(root)/proxy"],
-                     cleansRcFiles: false, stopsServices: false)
+            Artifact(
+                key: "binary",
+                label: "Remove rawenv binary",
+                desc: "\(root)/bin/rawenv",
+                size: "—", selected: true,
+                paths: ["\(root)/bin"],
+                cleansRcFiles: true, stopsServices: false),
+            Artifact(
+                key: "packages",
+                label: "Remove installed packages",
+                desc: "\(root)/store/",
+                size: "—", selected: true,
+                paths: ["\(root)/store"],
+                cleansRcFiles: false, stopsServices: false),
+            Artifact(
+                key: "services",
+                label: "Stop and remove services",
+                desc: "launchd plists",
+                size: "—", selected: true,
+                paths: launchAgentPlists(),
+                cleansRcFiles: false, stopsServices: true),
+            Artifact(
+                key: "data",
+                label: "Remove service data",
+                desc: ".rawenv/data/ in each project",
+                size: "—", selected: true,
+                paths: ["\(root)/data"] + projectDataDirs,
+                cleansRcFiles: false, stopsServices: false),
+            Artifact(
+                key: "config",
+                label: "Remove configuration",
+                desc: "\(root)/theme.toml, config.toml",
+                size: "—", selected: false,
+                paths: ["\(root)/theme.toml", "\(root)/config.toml"],
+                cleansRcFiles: false, stopsServices: false),
+            Artifact(
+                key: "dns_proxy",
+                label: "Remove DNS and proxy",
+                desc: "dnsmasq config, .test domains",
+                size: "—", selected: true,
+                paths: ["\(root)/dnsmasq", "\(root)/Caddyfile", "\(root)/proxy"],
+                cleansRcFiles: false, stopsServices: false),
         ]
     }
 
     private func launchAgentPlists() -> [String] {
         let fm = FileManager.default
         guard let entries = try? fm.contentsOfDirectory(atPath: launchAgentsDir) else { return [] }
-        return entries
+        return
+            entries
             .filter { $0.hasPrefix("com.rawenv") && $0.hasSuffix(".plist") }
             .sorted()
             .map { "\(launchAgentsDir)/\($0)" }
@@ -139,7 +148,10 @@ public final class UninstallEngine: ObservableObject, @unchecked Sendable {
 
     private func runRemoval() async {
         let selected = items.filter(\.selected)
-        guard !selected.isEmpty else { phase = .done; return }
+        guard !selected.isEmpty else {
+            phase = .done
+            return
+        }
 
         var failures: [String] = []
         for (index, item) in selected.enumerated() {
@@ -204,7 +216,8 @@ public final class UninstallEngine: ObservableObject, @unchecked Sendable {
     private func cleanRcFiles() {
         for rc in rcFiles {
             guard let content = try? String(contentsOfFile: rc, encoding: .utf8) else { continue }
-            let kept = content
+            let kept =
+                content
                 .components(separatedBy: "\n")
                 .filter { !$0.contains("# rawenv") }
                 .joined(separator: "\n")
@@ -235,7 +248,8 @@ public final class UninstallEngine: ObservableObject, @unchecked Sendable {
         var total: Int64 = 0
         if let enumerator = fm.enumerator(
             at: URL(fileURLWithPath: path),
-            includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey]) {
+            includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey])
+        {
             for case let url as URL in enumerator {
                 let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
                 if values?.isRegularFile == true {

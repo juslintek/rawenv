@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 
 @MainActor
 public final class ScannerEngine: ObservableObject, @unchecked Sendable {
@@ -22,14 +22,14 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
 
     private let markers = [
         "package.json", "composer.json", "Cargo.toml", "go.mod",
-        "build.zig", "Gemfile", "requirements.txt", "pyproject.toml"
+        "build.zig", "Gemfile", "requirements.txt", "pyproject.toml",
     ]
 
     public init() {
         let home = NSHomeDirectory()
         let scanDirs = [
             "\(home)/Projects", "\(home)/Developer", "\(home)/Code",
-            "/Volumes/Projects", "\(home)/Desktop", "\(home)/Documents"
+            "/Volumes/Projects", "\(home)/Desktop", "\(home)/Documents",
         ]
         paths = scanDirs.map {
             ScanPath(path: $0, status: .queued, projectCount: 0, cached: false)
@@ -37,7 +37,9 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
     }
 
     public func startScan() {
-        isScanning = true; scanComplete = false; newProjectsFound = 0
+        isScanning = true
+        scanComplete = false
+        newProjectsFound = 0
         Task { await runScan() }
     }
 
@@ -51,9 +53,14 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
 
     public func forceRescan() {
         for i in paths.indices {
-            paths[i].status = .queued; paths[i].projectCount = 0; paths[i].cached = false
+            paths[i].status = .queued
+            paths[i].projectCount = 0
+            paths[i].cached = false
         }
-        totalProjects = 0; isScanning = true; scanComplete = false; newProjectsFound = 0
+        totalProjects = 0
+        isScanning = true
+        scanComplete = false
+        newProjectsFound = 0
         Task { await runScanAll() }
     }
 
@@ -75,11 +82,15 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
             found += projects.count
             discoveredProjects.append(contentsOf: projects)
         }
-        newProjectsFound = found; isScanning = false; scanComplete = true
+        newProjectsFound = found
+        isScanning = false
+        scanComplete = true
     }
 
     private func runScanAll() async {
-        totalProjects = 0; var found = 0; discoveredProjects = []
+        totalProjects = 0
+        var found = 0
+        discoveredProjects = []
         for i in paths.indices {
             paths[i].status = .scanning
             let projects = scanDirectory(paths[i].path)
@@ -89,13 +100,15 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
             found += projects.count
             discoveredProjects.append(contentsOf: projects)
         }
-        newProjectsFound = found; isScanning = false; scanComplete = true
+        newProjectsFound = found
+        isScanning = false
+        scanComplete = true
     }
 
     private let stackNames: [String: String] = [
         "package.json": "Node.js", "composer.json": "PHP", "Cargo.toml": "Rust",
         "go.mod": "Go", "build.zig": "Zig", "Gemfile": "Ruby",
-        "requirements.txt": "Python", "pyproject.toml": "Python"
+        "requirements.txt": "Python", "pyproject.toml": "Python",
     ]
 
     private func scanDirectory(_ path: String) -> [Project] {
@@ -106,7 +119,8 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
             let full = "\(path)/\(item)"
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: full, isDirectory: &isDir),
-                  isDir.boolValue, !item.hasPrefix(".") else { continue }
+                isDir.boolValue, !item.hasPrefix(".")
+            else { continue }
             var stack: [String] = []
             for marker in markers {
                 if fm.fileExists(atPath: "\(full)/\(marker)") {
@@ -123,8 +137,10 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
     /// Real dependency count (Node package.json), else empty — never a bogus stack count.
     private static func depsSummary(_ dir: String) -> String {
         if let data = try? Data(contentsOf: URL(fileURLWithPath: "\(dir)/package.json")),
-           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            let total = ((obj["dependencies"] as? [String: Any])?.count ?? 0)
+            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        {
+            let total =
+                ((obj["dependencies"] as? [String: Any])?.count ?? 0)
                 + ((obj["devDependencies"] as? [String: Any])?.count ?? 0)
             if total > 0 { return "\(total) deps" }
         }

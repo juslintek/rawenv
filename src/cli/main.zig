@@ -100,8 +100,12 @@ fn run(init: std.process.Init) !u8 {
     var force_mode = false;
     // Pre-scan for --json flag
     for (args[1..]) |a| {
-        if (std.mem.eql(u8, a, "--json")) { json_mode = true; }
-        if (std.mem.eql(u8, a, "--force") or std.mem.eql(u8, a, "-f")) { force_mode = true; }
+        if (std.mem.eql(u8, a, "--json")) {
+            json_mode = true;
+        }
+        if (std.mem.eql(u8, a, "--force") or std.mem.eql(u8, a, "-f")) {
+            force_mode = true;
+        }
     }
     while (i < args.len) : (i += 1) {
         const arg = args[i];
@@ -432,24 +436,39 @@ fn handleDeployGenerate(allocator: std.mem.Allocator, stdout: anytype, json_mode
         try stdout.writeAll("{\"terraform\":\"");
         // Escape newlines for JSON
         for (main_tf) |c| {
-            if (c == '\n') { try stdout.writeAll("\\n"); }
-            else if (c == '"') { try stdout.writeAll("\\\""); }
-            else if (c == '\\') { try stdout.writeAll("\\\\"); }
-            else { try stdout.writeAll(&[_]u8{c}); }
+            if (c == '\n') {
+                try stdout.writeAll("\\n");
+            } else if (c == '"') {
+                try stdout.writeAll("\\\"");
+            } else if (c == '\\') {
+                try stdout.writeAll("\\\\");
+            } else {
+                try stdout.writeAll(&[_]u8{c});
+            }
         }
         try stdout.writeAll("\",\"ansible\":\"");
         for (playbook) |c| {
-            if (c == '\n') { try stdout.writeAll("\\n"); }
-            else if (c == '"') { try stdout.writeAll("\\\""); }
-            else if (c == '\\') { try stdout.writeAll("\\\\"); }
-            else { try stdout.writeAll(&[_]u8{c}); }
+            if (c == '\n') {
+                try stdout.writeAll("\\n");
+            } else if (c == '"') {
+                try stdout.writeAll("\\\"");
+            } else if (c == '\\') {
+                try stdout.writeAll("\\\\");
+            } else {
+                try stdout.writeAll(&[_]u8{c});
+            }
         }
         try stdout.writeAll("\",\"containerfile\":\"");
         for (containerfile) |c| {
-            if (c == '\n') { try stdout.writeAll("\\n"); }
-            else if (c == '"') { try stdout.writeAll("\\\""); }
-            else if (c == '\\') { try stdout.writeAll("\\\\"); }
-            else { try stdout.writeAll(&[_]u8{c}); }
+            if (c == '\n') {
+                try stdout.writeAll("\\n");
+            } else if (c == '"') {
+                try stdout.writeAll("\\\"");
+            } else if (c == '\\') {
+                try stdout.writeAll("\\\\");
+            } else {
+                try stdout.writeAll(&[_]u8{c});
+            }
         }
         try stdout.writeAll("\"}\n");
     }

@@ -1,6 +1,7 @@
-import Testing
-import SwiftUI
 import AppKit
+import SwiftUI
+import Testing
+
 @testable import RawenvLib
 
 @MainActor
@@ -17,7 +18,9 @@ private func makeState() -> AppState {
     UserDefaults.standard.set(true, forKey: "rawenv.installed")
     UserDefaults.standard.set(true, forKey: "rawenv.setupComplete")
     let state = AppState(repository: TestDataRepository(), aiProvider: TestAIProvider())
-    state.activeProject = Project(name: "utilio", path: "~/Projects/utilio", stack: ["Node.js", "Redis", "PostgreSQL", "Meilisearch"], deps: "14 deps")
+    state.activeProject = Project(
+        name: "utilio", path: "~/Projects/utilio", stack: ["Node.js", "Redis", "PostgreSQL", "Meilisearch"],
+        deps: "14 deps")
     state.managedProjects = [state.activeProject!]
     return state
 }
@@ -97,12 +100,14 @@ private func makeState() -> AppState {
         engine.paths = [
             .init(path: "~/Done/", status: .done, projectCount: 3, cached: true),
             .init(path: "~/Scanning/", status: .scanning, projectCount: 0, cached: false),
-            .init(path: "~/Queued/", status: .queued, projectCount: 0, cached: false)
+            .init(path: "~/Queued/", status: .queued, projectCount: 0, cached: false),
         ]
         engine.scanComplete = false
         engine.isScanning = true
         await vm.load()
-        render(ProjectsView(viewModel: vm, engine: engine, initialPage: .discovery).environmentObject(state).environmentObject(tm))
+        render(
+            ProjectsView(viewModel: vm, engine: engine, initialPage: .discovery).environmentObject(state)
+                .environmentObject(tm))
     }
 
     @Test @MainActor func discoveryComplete() async {
@@ -114,7 +119,9 @@ private func makeState() -> AppState {
         engine.isScanning = false
         engine.newProjectsFound = 5
         await vm.load()
-        render(ProjectsView(viewModel: vm, engine: engine, initialPage: .discovery).environmentObject(state).environmentObject(tm))
+        render(
+            ProjectsView(viewModel: vm, engine: engine, initialPage: .discovery).environmentObject(state)
+                .environmentObject(tm))
     }
 
     @Test @MainActor func listPage() async {
@@ -123,7 +130,9 @@ private func makeState() -> AppState {
         let vm = ProjectsViewModel(repository: TestDataRepository())
         let engine = ScannerEngine()
         await vm.load()
-        render(ProjectsView(viewModel: vm, engine: engine, initialPage: .list).environmentObject(state).environmentObject(tm))
+        render(
+            ProjectsView(viewModel: vm, engine: engine, initialPage: .list).environmentObject(state).environmentObject(
+                tm))
     }
 
     @Test @MainActor func setupPage() async {
@@ -132,7 +141,9 @@ private func makeState() -> AppState {
         let vm = ProjectsViewModel(repository: TestDataRepository())
         let engine = ScannerEngine()
         await vm.load()
-        render(ProjectsView(viewModel: vm, engine: engine, initialPage: .setup).environmentObject(state).environmentObject(tm))
+        render(
+            ProjectsView(viewModel: vm, engine: engine, initialPage: .setup).environmentObject(state).environmentObject(
+                tm))
     }
 
     @Test @MainActor func discoveryNotComplete() async {
@@ -143,7 +154,9 @@ private func makeState() -> AppState {
         engine.scanComplete = false
         engine.isScanning = false
         await vm.load()
-        render(ProjectsView(viewModel: vm, engine: engine, initialPage: .discovery).environmentObject(state).environmentObject(tm))
+        render(
+            ProjectsView(viewModel: vm, engine: engine, initialPage: .discovery).environmentObject(state)
+                .environmentObject(tm))
     }
 
     @Test @MainActor func installSheetInProgress() async {
@@ -154,7 +167,10 @@ private func makeState() -> AppState {
         let installVM = InstallFlowVM()
         await vm.load()
         installVM.startInstall(name: "Node.js", action: "install")
-        render(ProjectsView(viewModel: vm, engine: engine, initialPage: .setup, installVM: installVM).environmentObject(state).environmentObject(tm))
+        render(
+            ProjectsView(viewModel: vm, engine: engine, initialPage: .setup, installVM: installVM).environmentObject(
+                state
+            ).environmentObject(tm))
     }
 
     @Test @MainActor func installSheetError() async {
@@ -166,7 +182,10 @@ private func makeState() -> AppState {
         await vm.load()
         installVM.startInstall(name: "SQL Server", action: "install")
         try? await Task.sleep(nanoseconds: 2_000_000_000)
-        render(ProjectsView(viewModel: vm, engine: engine, initialPage: .setup, installVM: installVM).environmentObject(state).environmentObject(tm))
+        render(
+            ProjectsView(viewModel: vm, engine: engine, initialPage: .setup, installVM: installVM).environmentObject(
+                state
+            ).environmentObject(tm))
     }
 
     @Test @MainActor func installSheetPortError() async {
@@ -179,7 +198,10 @@ private func makeState() -> AppState {
         installVM.startInstall(name: "SQL Server", action: "install")
         try? await Task.sleep(nanoseconds: 2_000_000_000)
         installVM.requestPortChange()
-        render(ProjectsView(viewModel: vm, engine: engine, initialPage: .setup, installVM: installVM).environmentObject(state).environmentObject(tm))
+        render(
+            ProjectsView(viewModel: vm, engine: engine, initialPage: .setup, installVM: installVM).environmentObject(
+                state
+            ).environmentObject(tm))
     }
 
     @Test @MainActor func installSheetComplete() async {
@@ -191,7 +213,10 @@ private func makeState() -> AppState {
         await vm.load()
         installVM.startInstall(name: "Node.js", action: "install")
         try? await Task.sleep(nanoseconds: 3_000_000_000)
-        render(ProjectsView(viewModel: vm, engine: engine, initialPage: .setup, installVM: installVM).environmentObject(state).environmentObject(tm))
+        render(
+            ProjectsView(viewModel: vm, engine: engine, initialPage: .setup, installVM: installVM).environmentObject(
+                state
+            ).environmentObject(tm))
     }
 }
 

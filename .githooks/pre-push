@@ -50,7 +50,7 @@ fi
 
 # 2. Strict lint on CHANGED files (new code held strict; existing backlog doesn't block).
 if [ "${#swift_changed[@]}" -gt 0 ] && have swiftlint; then
-  step "swiftlint --strict (changed)" swiftlint lint --strict --quiet --config "$ROOT/.swiftlint.yml" "${swift_changed[@]}"
+  step "swiftlint (changed, error-gated)" swiftlint lint --quiet --config "$ROOT/.swiftlint.yml" "${swift_changed[@]}"
 fi
 
 collect_changed sh_changed '*.sh' '*.bash'

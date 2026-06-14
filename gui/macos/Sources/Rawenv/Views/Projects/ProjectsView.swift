@@ -1,5 +1,5 @@
-import SwiftUI
 import AppKit
+import SwiftUI
 
 struct ProjectsView: View {
     @EnvironmentObject var appState: AppState
@@ -12,7 +12,10 @@ struct ProjectsView: View {
 
     enum ProjectPage { case discovery, list, setup }
 
-    init(viewModel: ProjectsViewModel, engine: ScannerEngine, initialPage: ProjectPage = .discovery, installVM: InstallFlowVM = InstallFlowVM(), setupVM: ProjectSetupVM = ProjectSetupVM()) {
+    init(
+        viewModel: ProjectsViewModel, engine: ScannerEngine, initialPage: ProjectPage = .discovery,
+        installVM: InstallFlowVM = InstallFlowVM(), setupVM: ProjectSetupVM = ProjectSetupVM()
+    ) {
         _viewModel = StateObject(wrappedValue: viewModel)
         self.engine = engine
         _page = State(initialValue: initialPage)
@@ -29,7 +32,10 @@ struct ProjectsView: View {
             }
         }
         .background(Color.bgPrimary)
-        .task { await viewModel.load(); engine.startScan() }
+        .task {
+            await viewModel.load()
+            engine.startScan()
+        }
         .accessibilityIdentifier("projects_view")
         .sheet(isPresented: $installVM.isShowing) {
             installSheetView
@@ -91,9 +97,11 @@ struct ProjectsView: View {
                     .foregroundStyle(Color.success)
                 stepsListView
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Path: ~/.rawenv/store/\(installVM.target.lowercased().replacingOccurrences(of: " ", with: "-"))/")
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(Color.textMuted)
+                    Text(
+                        "Path: ~/.rawenv/store/\(installVM.target.lowercased().replacingOccurrences(of: " ", with: "-"))/"
+                    )
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(Color.textMuted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Button("Done") { installVM.dismiss() }
@@ -150,9 +158,11 @@ struct ProjectsView: View {
             Text("🔍 Scanning for projects...")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(Color.textPrimary)
-            Text("rawenv scans common locations for source code. Cached results are reused — only new paths are scanned.")
-                .font(.system(size: 13))
-                .foregroundStyle(Color.textMuted)
+            Text(
+                "rawenv scans common locations for source code. Cached results are reused — only new paths are scanned."
+            )
+            .font(.system(size: 13))
+            .foregroundStyle(Color.textMuted)
 
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(engine.paths) { p in
@@ -165,8 +175,8 @@ struct ProjectsView: View {
                         Group {
                             if p.status == .done {
                                 Text("(\(p.projectCount) projects)")
-                                    .foregroundStyle(Color.textMuted) +
-                                Text(p.cached ? " · cached" : "")
+                                    .foregroundStyle(Color.textMuted)
+                                    + Text(p.cached ? " · cached" : "")
                                     .foregroundStyle(Color.success)
                             } else if p.status == .scanning {
                                 Text("scanning...")
@@ -309,8 +319,9 @@ struct ProjectsView: View {
                     guidance: filterText.isEmpty
                         ? "No projects found yet. Run a scan, add a custom path, or run rawenv init inside a project to get started."
                         : "No discovered projects match “\(filterText)”. Clear the filter or scan more locations.",
-                    idPrefix: "projects")
-                    .frame(minHeight: 200)
+                    idPrefix: "projects"
+                )
+                .frame(minHeight: 200)
             } else {
                 VStack(spacing: 1) {
                     ForEach(filteredProjects) { project in
@@ -336,8 +347,8 @@ struct ProjectsView: View {
     private var filteredProjects: [Project] {
         if filterText.isEmpty { return engine.discoveredProjects }
         return engine.discoveredProjects.filter {
-            $0.name.localizedCaseInsensitiveContains(filterText) ||
-            $0.stack.joined(separator: " ").localizedCaseInsensitiveContains(filterText)
+            $0.name.localizedCaseInsensitiveContains(filterText)
+                || $0.stack.joined(separator: " ").localizedCaseInsensitiveContains(filterText)
         }
     }
 
@@ -392,17 +403,22 @@ struct ProjectsView: View {
     private var projectSetupView: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("⚙️ Environment Setup — \(setupVM.projectName.isEmpty ? (appState.activeProject?.name ?? "project") : setupVM.projectName)")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(Color.textPrimary)
+                Text(
+                    "⚙️ Environment Setup — \(setupVM.projectName.isEmpty ? (appState.activeProject?.name ?? "project") : setupVM.projectName)"
+                )
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(Color.textPrimary)
                 Text(setupVM.projectPath.isEmpty ? (appState.activeProject?.path ?? "") : setupVM.projectPath)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(Color.textMuted)
             }
 
             if setupVM.isDetecting {
-                HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Detecting services…").setupDetailMuted() }
-                    .accessibilityIdentifier("setup_detecting")
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Detecting services…").setupDetailMuted()
+                }
+                .accessibilityIdentifier("setup_detecting")
             }
 
             if !setupVM.runtimes.isEmpty {
@@ -415,10 +431,13 @@ struct ProjectsView: View {
                                 .foregroundStyle(Color.textPrimary)
                             Spacer()
                             if rt.name.lowercased().contains("node") {
-                                Picker("", selection: Binding(
-                                    get: { setupVM.nodeVersion },
-                                    set: { setupVM.setNodeVersion($0) }
-                                )) {
+                                Picker(
+                                    "",
+                                    selection: Binding(
+                                        get: { setupVM.nodeVersion },
+                                        set: { setupVM.setNodeVersion($0) }
+                                    )
+                                ) {
                                     ForEach(setupVM.nodeVersionChoices, id: \.self) { v in
                                         Text(v).tag(v)
                                     }
@@ -447,12 +466,14 @@ struct ProjectsView: View {
                     ForEach(setupVM.services) { svc in
                         setupCard(
                             icon: svc.icon, name: svc.name,
-                            badge: setupVM.installed.contains(svc.name) ? "✓ Installed" : (setupVM.installing.contains(svc.name) ? "Installing…" : "Install"),
+                            badge: setupVM.installed.contains(svc.name)
+                                ? "✓ Installed" : (setupVM.installing.contains(svc.name) ? "Installing…" : "Install"),
                             badgeColor: setupVM.installed.contains(svc.name) ? .success : .accent
                         ) {
                             Text("\(svc.name) \(svc.version) · port \(svc.port)").setupDetail()
                             if setupVM.installed.contains(svc.name) {
-                                Text("✓ Installed & activated").font(.system(size: 11, weight: .medium)).foregroundStyle(Color.success)
+                                Text("✓ Installed & activated").font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(Color.success)
                             } else if setupVM.installing.contains(svc.name) {
                                 ProgressView().controlSize(.small)
                             } else {
@@ -475,12 +496,17 @@ struct ProjectsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Summary").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.textPrimary)
-                    Text("\(setupVM.installed.count)/\(setupVM.services.count) services installed").font(.system(size: 12)).foregroundStyle(Color.textMuted)
+                    Text("\(setupVM.installed.count)/\(setupVM.services.count) services installed").font(
+                        .system(size: 12)
+                    ).foregroundStyle(Color.textMuted)
                 }
                 Spacer()
                 accentButton("Set Up Environment", id: "setup_generate_btn") {
                     if let project = appState.activeProject { appState.addManagedProject(project) }
-                    Task { await setupVM.setUpAll(); appState.markSetupComplete() }
+                    Task {
+                        await setupVM.setUpAll()
+                        appState.markSetupComplete()
+                    }
                 }
             }
             .padding(16)
@@ -498,7 +524,9 @@ struct ProjectsView: View {
             .tracking(0.5)
     }
 
-    private func setupCard<Content: View>(icon: String, name: String, badge: String, badgeColor: Color, @ViewBuilder content: () -> Content) -> some View {
+    private func setupCard<Content: View>(
+        icon: String, name: String, badge: String, badgeColor: Color, @ViewBuilder content: () -> Content
+    ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("\(icon) \(name)")

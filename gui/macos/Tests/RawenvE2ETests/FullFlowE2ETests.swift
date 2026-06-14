@@ -1,5 +1,6 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import RawenvLib
 
 private let testDir = "/tmp/rawenv-test-projects"
@@ -31,22 +32,30 @@ private func readFile(_ path: String) -> String {
         // Clean slate
         try? FileManager.default.removeItem(atPath: testDir)
 
-        createFile("\(testDir)/node-project/package.json",
-                   content: #"{"name":"test-node","engines":{"node":">=22"}}"#)
-        createFile("\(testDir)/php-project/composer.json",
-                   content: #"{"require":{"php":"^8.4"}}"#)
-        createFile("\(testDir)/rust-project/Cargo.toml",
-                   content: "[package]\nname = \"test-rust\"\nversion = \"0.1.0\"")
-        createFile("\(testDir)/go-project/go.mod",
-                   content: "module test-go\n\ngo 1.22")
-        createFile("\(testDir)/python-req-project/requirements.txt",
-                   content: "flask==3.0\nredis==5.0")
-        createFile("\(testDir)/python-pyproject/pyproject.toml",
-                   content: "[project]\nname = \"test-py\"")
-        createFile("\(testDir)/ruby-project/Gemfile",
-                   content: "source \"https://rubygems.org\"\ngem \"rails\"")
-        createFile("\(testDir)/zig-project/build.zig",
-                   content: "const std = @import(\"std\");")
+        createFile(
+            "\(testDir)/node-project/package.json",
+            content: #"{"name":"test-node","engines":{"node":">=22"}}"#)
+        createFile(
+            "\(testDir)/php-project/composer.json",
+            content: #"{"require":{"php":"^8.4"}}"#)
+        createFile(
+            "\(testDir)/rust-project/Cargo.toml",
+            content: "[package]\nname = \"test-rust\"\nversion = \"0.1.0\"")
+        createFile(
+            "\(testDir)/go-project/go.mod",
+            content: "module test-go\n\ngo 1.22")
+        createFile(
+            "\(testDir)/python-req-project/requirements.txt",
+            content: "flask==3.0\nredis==5.0")
+        createFile(
+            "\(testDir)/python-pyproject/pyproject.toml",
+            content: "[project]\nname = \"test-py\"")
+        createFile(
+            "\(testDir)/ruby-project/Gemfile",
+            content: "source \"https://rubygems.org\"\ngem \"rails\"")
+        createFile(
+            "\(testDir)/zig-project/build.zig",
+            content: "const std = @import(\"std\");")
 
         #expect(fileExists("\(testDir)/node-project/package.json"))
         #expect(fileExists("\(testDir)/php-project/composer.json"))
@@ -211,8 +220,9 @@ private func readFile(_ path: String) -> String {
 
     @Test func step12_serviceManagement() async throws {
         // Add .env with DB/Redis to node project so services are detected
-        createFile("\(testDir)/node-project/.env",
-                   content: "DATABASE_URL=postgres://user:pass@localhost:5432/mydb\nREDIS_URL=redis://localhost:6379\n")
+        createFile(
+            "\(testDir)/node-project/.env",
+            content: "DATABASE_URL=postgres://user:pass@localhost:5432/mydb\nREDIS_URL=redis://localhost:6379\n")
 
         // Re-init to pick up services
         let dir = "\(testDir)/node-project"
@@ -225,16 +235,17 @@ private func readFile(_ path: String) -> String {
 
         // Parse services JSON
         if let data = output.data(using: .utf8),
-           let services = try? JSONDecoder().decode([[String: AnyDecodable]].self, from: data) {
+            let services = try? JSONDecoder().decode([[String: AnyDecodable]].self, from: data)
+        {
             #expect(!services.isEmpty)
         }
 
         // Test start/stop — they'll fail without actual binaries but should not crash
         let startOutput = try await cli.run(["services", "start", "postgresql"], cwd: dir)
-        _ = startOutput // Just verify no crash
+        _ = startOutput  // Just verify no crash
 
         let stopOutput = try await cli.run(["services", "stop", "postgresql"], cwd: dir)
-        _ = stopOutput // Just verify no crash
+        _ = stopOutput  // Just verify no crash
     }
 
     // MARK: Step 13 — Connections detection
@@ -266,7 +277,8 @@ private func readFile(_ path: String) -> String {
         #expect(!output.isEmpty)
 
         if let data = output.data(using: .utf8),
-           let config = try? JSONDecoder().decode(DeployConfig.self, from: data) {
+            let config = try? JSONDecoder().decode(DeployConfig.self, from: data)
+        {
             #expect(!config.terraform.isEmpty)
             #expect(config.terraform.contains("hcloud") || config.terraform.contains("rawenv"))
             #expect(!config.ansible.isEmpty)
@@ -289,6 +301,14 @@ private struct AnyDecodable: Decodable {
     let value: Any
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        if let s = try? container.decode(String.self) { value = s } else if let i = try? container.decode(Int.self) { value = i } else if let b = try? container.decode(Bool.self) { value = b } else { value = "" }
+        if let s = try? container.decode(String.self) {
+            value = s
+        } else if let i = try? container.decode(Int.self) {
+            value = i
+        } else if let b = try? container.decode(Bool.self) {
+            value = b
+        } else {
+            value = ""
+        }
     }
 }

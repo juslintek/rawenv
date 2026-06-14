@@ -38,7 +38,9 @@ public final class CLIRuntimeManager: RuntimeManaging, @unchecked Sendable {
 
     public init(cli: RawenvCLI = RawenvCLI(), storeRoot: URL? = nil) {
         self.cli = cli
-        self.storeRoot = storeRoot ?? FileManager.default.homeDirectoryForCurrentUser
+        self.storeRoot =
+            storeRoot
+            ?? FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".rawenv/store", isDirectory: true)
         self.known = [
             ("node", "22"),
@@ -46,7 +48,7 @@ public final class CLIRuntimeManager: RuntimeManaging, @unchecked Sendable {
             ("python", "3.13"),
             ("ruby", "3.4"),
             ("go", "1.23"),
-            ("bun", "1")
+            ("bun", "1"),
         ]
     }
 

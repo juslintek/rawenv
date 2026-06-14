@@ -135,7 +135,8 @@ fn runStackLifecycle(c: StackCase, port: u16) !void {
     // 4. Config generation with a per-case unique port; confirm it round-trips.
     {
         var buf: [512]u8 = undefined;
-        const toml = try std.fmt.bufPrint(&buf,
+        const toml = try std.fmt.bufPrint(
+            &buf,
             "[project]\nname = \"e2e-{s}\"\n\n[runtimes]\n{s} = \"latest\"\n\n[services.{s}]\nversion = \"{s}\"\nport = {d}\n\n[detect]\nauto = true\n",
             .{ c.stack, c.stack, c.service, c.service_version, port },
         );

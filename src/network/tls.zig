@@ -188,9 +188,9 @@ fn runSelfSigned(
     defer allocator.free(san);
 
     const argv = [_][*:0]const u8{
-        "openssl", "req",      "-x509",  "-newkey", "rsa:2048", "-nodes",
-        "-keyout", key_z,      "-out",   cert_z,    "-days",    "825",
-        "-subj",   subj,       "-addext", san,
+        "openssl", "req", "-x509",   "-newkey", "rsa:2048", "-nodes",
+        "-keyout", key_z, "-out",    cert_z,    "-days",    "825",
+        "-subj",   subj,  "-addext", san,
     };
     const code = exec.run(&argv) catch return error.OpenSslFailed;
     if (code != 0) return error.OpenSslFailed;

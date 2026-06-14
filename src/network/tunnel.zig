@@ -116,9 +116,9 @@ pub const TunnelManager = struct {
                 self.allocator.free(t.public_url);
                 if (t.process) |*p| {
                     if (p.id) |pid| {
-                    if (comptime @import("builtin").os.tag != .windows)
-                        std.posix.kill(pid, .TERM) catch {};
-                }
+                        if (comptime @import("builtin").os.tag != .windows)
+                            std.posix.kill(pid, .TERM) catch {};
+                    }
                 }
             } else {
                 i += 1;

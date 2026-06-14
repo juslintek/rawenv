@@ -1,6 +1,7 @@
-import Testing
 import Foundation
 import Network
+import Testing
+
 @testable import RawenvLib
 
 /// Data-driven tests that actually start services, verify they respond, and clean up.
@@ -12,25 +13,25 @@ private let testDataDir = "/tmp/rawenv-service-validation"
 
 struct ServiceTestCase: CustomStringConvertible {
     let name: String
-    let binary: String          // path to check if installed
-    let startCmd: String        // command to start (with {port} and {datadir} placeholders)
-    let stopCmd: String         // command to stop
-    let initCmd: String?        // optional init command
+    let binary: String  // path to check if installed
+    let startCmd: String  // command to start (with {port} and {datadir} placeholders)
+    let stopCmd: String  // command to stop
+    let initCmd: String?  // optional init command
     let port: UInt16
     let healthCheck: HealthCheck
     let writeTest: WriteTest?
     var description: String { name }
 
     enum HealthCheck {
-        case tcp                            // just connect to port
-        case command(String)                // run command, expect exit 0
-        case httpGet(String, String)        // (path, expectedSubstring)
+        case tcp  // just connect to port
+        case command(String)  // run command, expect exit 0
+        case httpGet(String, String)  // (path, expectedSubstring)
     }
 
     struct WriteTest {
-        let writeCmd: String    // command to write data
-        let readCmd: String     // command to read data back
-        let expected: String    // expected substring in read output
+        let writeCmd: String  // command to write data
+        let readCmd: String  // command to read data back
+        let expected: String  // expected substring in read output
     }
 }
 
@@ -38,7 +39,8 @@ private let serviceTests: [ServiceTestCase] = [
     ServiceTestCase(
         name: "Redis",
         binary: "/opt/homebrew/bin/redis-server",
-        startCmd: "redis-server --port {port} --daemonize yes --dir {datadir} --save \"\" --appendonly no --loglevel warning",
+        startCmd:
+            "redis-server --port {port} --daemonize yes --dir {datadir} --save \"\" --appendonly no --loglevel warning",
         stopCmd: "redis-cli -p {port} shutdown nosave",
         initCmd: nil,
         port: 16379,
@@ -52,7 +54,8 @@ private let serviceTests: [ServiceTestCase] = [
     ServiceTestCase(
         name: "Redis-Cluster-Mode",
         binary: "/opt/homebrew/bin/redis-server",
-        startCmd: "redis-server --port {port} --daemonize yes --dir {datadir} --save \"\" --appendonly yes --loglevel warning",
+        startCmd:
+            "redis-server --port {port} --daemonize yes --dir {datadir} --save \"\" --appendonly yes --loglevel warning",
         stopCmd: "redis-cli -p {port} shutdown nosave",
         initCmd: nil,
         port: 16380,
@@ -72,7 +75,8 @@ private let serviceTests: [ServiceTestCase] = [
         port: 15432,
         healthCheck: .command("pg_isready -h 127.0.0.1 -p {port}"),
         writeTest: .init(
-            writeCmd: "psql -h 127.0.0.1 -p {port} -d postgres -c \"CREATE TABLE IF NOT EXISTS test(id serial, val text); INSERT INTO test(val) VALUES('rawenv-works');\"",
+            writeCmd:
+                "psql -h 127.0.0.1 -p {port} -d postgres -c \"CREATE TABLE IF NOT EXISTS test(id serial, val text); INSERT INTO test(val) VALUES('rawenv-works');\"",
             readCmd: "psql -h 127.0.0.1 -p {port} -d postgres -t -c \"SELECT val FROM test LIMIT 1;\"",
             expected: "rawenv-works"
         )
@@ -90,7 +94,8 @@ private let serviceTests: [ServiceTestCase] = [
     ServiceTestCase(
         name: "Meilisearch",
         binary: "/opt/homebrew/bin/meilisearch",
-        startCmd: "meilisearch --http-addr 127.0.0.1:{port} --db-path {datadir}/meili.db --env development --no-analytics >{datadir}/meili.log 2>&1 </dev/null &",
+        startCmd:
+            "meilisearch --http-addr 127.0.0.1:{port} --db-path {datadir}/meili.db --env development --no-analytics >{datadir}/meili.log 2>&1 </dev/null &",
         stopCmd: "pkill -f 'meilisearch.*{port}' || true",
         initCmd: nil,
         port: 17700,
@@ -106,7 +111,7 @@ private let serviceTests: [ServiceTestCase] = [
         port: 14222,
         healthCheck: .tcp,
         writeTest: nil
-    )
+    ),
 ]
 
 // MARK: - Combo Test Definitions (multiple services together)
@@ -120,7 +125,7 @@ struct ComboTestCase: CustomStringConvertible {
 private let comboTests: [ComboTestCase] = [
     ComboTestCase(name: "Node-Stack", services: ["Redis", "PostgreSQL"]),
     ComboTestCase(name: "Cache-Layer", services: ["Redis", "Redis-Cluster-Mode", "Memcached"]),
-    ComboTestCase(name: "Full-Backend", services: ["Redis", "PostgreSQL", "Meilisearch"])
+    ComboTestCase(name: "Full-Backend", services: ["Redis", "PostgreSQL", "Meilisearch"]),
 ]
 
 // MARK: - Recipe Project Test Definitions
@@ -139,7 +144,7 @@ private let recipeProjectTests: [RecipeProjectTest] = [
     RecipeProjectTest(templateName: "Gin (Go)", expectedServices: ["postgresql", "redis"]),
     RecipeProjectTest(templateName: "Ruby on Rails", expectedServices: ["postgresql", "redis"]),
     RecipeProjectTest(templateName: "Django", expectedServices: ["postgresql", "redis"]),
-    RecipeProjectTest(templateName: "Actix Web (Rust)", expectedServices: ["postgresql", "redis"])
+    RecipeProjectTest(templateName: "Actix Web (Rust)", expectedServices: ["postgresql", "redis"]),
 ]
 
 // MARK: - Tests
@@ -189,7 +194,9 @@ private let recipeProjectTests: [RecipeProjectTest] = [
 
             let readCmd = substitute(wt.readCmd, port: tc.port, datadir: datadir)
             let readResult = shell(readCmd)
-            #expect(readResult.output.contains(wt.expected), "\(tc.name) read expected '\(wt.expected)' but got: \(readResult.output)")
+            #expect(
+                readResult.output.contains(wt.expected),
+                "\(tc.name) read expected '\(wt.expected)' but got: \(readResult.output)")
         }
 
         // Stop
@@ -276,10 +283,12 @@ private let recipeProjectTests: [RecipeProjectTest] = [
     @MainActor func recipeProjectSetup(_ rpt: RecipeProjectTest) async throws {
         let creator = ProjectCreator(cli: cli)
         guard let template = creator.templates.first(where: { $0.name == rpt.templateName }) else {
-            Issue.record("Template \(rpt.templateName) not found"); return
+            Issue.record("Template \(rpt.templateName) not found")
+            return
         }
 
-        let projectDir = "\(testDataDir)/recipe-\(rpt.templateName.lowercased().replacingOccurrences(of: " ", with: "-"))"
+        let projectDir =
+            "\(testDataDir)/recipe-\(rpt.templateName.lowercased().replacingOccurrences(of: " ", with: "-"))"
         try? FileManager.default.removeItem(atPath: projectDir)
 
         // Create project from template
@@ -292,7 +301,9 @@ private let recipeProjectTests: [RecipeProjectTest] = [
         // Verify files created
         #expect(FileManager.default.fileExists(atPath: projPath))
         for (filename, _) in template.files {
-            #expect(FileManager.default.fileExists(atPath: "\(projPath)/\(filename)"), "Missing \(filename) in \(rpt.templateName)")
+            #expect(
+                FileManager.default.fileExists(atPath: "\(projPath)/\(filename)"),
+                "Missing \(filename) in \(rpt.templateName)")
         }
 
         // Run rawenv init
@@ -301,7 +312,11 @@ private let recipeProjectTests: [RecipeProjectTest] = [
         #expect(FileManager.default.fileExists(atPath: "\(projPath)/rawenv.toml"))
 
         // Verify services detected
-        struct S: Decodable { let name: String; let port: Int; let status: String }
+        struct S: Decodable {
+            let name: String
+            let port: Int
+            let status: String
+        }
         let services: [S] = (try? await cli.runJSON(["services", "ls"], as: [S].self, cwd: projPath)) ?? []
         let detectedNames = services.map(\.name)
 
@@ -309,12 +324,16 @@ private let recipeProjectTests: [RecipeProjectTest] = [
         let matched = rpt.expectedServices.filter { expected in
             detectedNames.contains { $0.contains(expected) || expected.contains($0) }
         }
-        #expect(!matched.isEmpty || !services.isEmpty, "\(rpt.templateName): no services detected. Expected \(rpt.expectedServices), got \(detectedNames)")
+        #expect(
+            !matched.isEmpty || !services.isEmpty,
+            "\(rpt.templateName): no services detected. Expected \(rpt.expectedServices), got \(detectedNames)")
 
         // Verify recipe library has recipes for all needed services
         let lib = RecipeLibrary()
         for svcName in template.services {
-            let recipe = lib.service(named: svcName) ?? lib.recipes.first { $0.id == svcName || $0.name.lowercased().hasPrefix(svcName) }
+            let recipe =
+                lib.service(named: svcName)
+                ?? lib.recipes.first { $0.id == svcName || $0.name.lowercased().hasPrefix(svcName) }
             #expect(recipe != nil, "\(rpt.templateName) needs \(svcName) but no recipe found")
             if let r = recipe {
                 #expect(!r.versions.isEmpty)
@@ -345,7 +364,7 @@ private let recipeProjectTests: [RecipeProjectTest] = [
 
     private func substitute(_ cmd: String, port: UInt16, datadir: String) -> String {
         cmd.replacingOccurrences(of: "{port}", with: "\(port)")
-           .replacingOccurrences(of: "{datadir}", with: datadir)
+            .replacingOccurrences(of: "{datadir}", with: datadir)
     }
 
     private func shell(_ cmd: String) -> (status: Int32, output: String) {

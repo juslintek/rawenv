@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 
 @MainActor
 public final class InstallerEngine: ObservableObject, @unchecked Sendable {
@@ -44,7 +44,7 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
         "Downloading rawenv binary…",
         "Installing to ~/.rawenv/bin/…",
         "Verifying binary…",
-        "Adding to PATH…"
+        "Adding to PATH…",
     ]
 
     private let installURL: String
@@ -58,18 +58,20 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
     /// observable. Overridable for tests.
     private let stepDelayNanos: UInt64
 
-    public init(binDirectory: String? = nil,
-                rcFile: String? = nil,
-                sourceBinary: String? = nil,
-                downloadURL: String? = nil,
-                stepDelayNanos: UInt64 = 200_000_000) {
+    public init(
+        binDirectory: String? = nil,
+        rcFile: String? = nil,
+        sourceBinary: String? = nil,
+        downloadURL: String? = nil,
+        stepDelayNanos: UInt64 = 200_000_000
+    ) {
         let home = NSHomeDirectory()
         self.binDir = binDirectory ?? "\(home)/.rawenv/bin"
         self.binPath = "\(self.binDir)/rawenv"
         self.rcFile = rcFile ?? "\(home)/.zshrc"
         self.sourceBinary = sourceBinary
-        self.installURL = downloadURL ??
-            "https://github.com/juslintek/rawenv/releases/latest/download/rawenv-darwin-arm64"
+        self.installURL =
+            downloadURL ?? "https://github.com/juslintek/rawenv/releases/latest/download/rawenv-darwin-arm64"
         self.stepDelayNanos = stepDelayNanos
     }
 
@@ -164,7 +166,8 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
             if let http = response as? HTTPURLResponse,
-               !(200...299).contains(http.statusCode) {
+                !(200...299).contains(http.statusCode)
+            {
                 throw InstallError.downloadFailed(http.statusCode)
             }
             do {
@@ -238,7 +241,10 @@ public final class InstallerEngine: ObservableObject, @unchecked Sendable {
     private func addToPath(_ dir: String) {
         let line = "\nexport PATH=\"\(dir):$PATH\" # rawenv\n"
         if let content = try? String(contentsOfFile: rcFile, encoding: .utf8),
-           content.contains("rawenv") { return }
+            content.contains("rawenv")
+        {
+            return
+        }
         if let handle = FileHandle(forWritingAtPath: rcFile) {
             handle.seekToEndOfFile()
             handle.write(line.data(using: .utf8)!)

@@ -58,7 +58,8 @@ public final class RecipeLibrary: ObservableObject {
         recipes.filter { $0.category == category }
     }
 
-    public func installCommand(for recipe: ServiceRecipe, version: String? = nil, platform: String = "macos") -> String {
+    public func installCommand(for recipe: ServiceRecipe, version: String? = nil, platform: String = "macos") -> String
+    {
         let ver = version ?? recipe.default_version
         let cmd = recipe.install[platform] ?? recipe.install["macos"] ?? ""
         return cmd.replacingOccurrences(of: "{version}", with: ver)
@@ -79,19 +80,23 @@ public final class RecipeLibrary: ObservableObject {
     }
 
     private func loadRecipes() {
-        let catalogFiles = ["databases.json", "caches-queues-search.json", "runtimes-monitoring-misc.json", "frameworks.json", "cms-ecommerce.json", "selfhosted.json", "forums-erp-crm.json"]
+        let catalogFiles = [
+            "databases.json", "caches-queues-search.json", "runtimes-monitoring-misc.json", "frameworks.json",
+            "cms-ecommerce.json", "selfhosted.json", "forums-erp-crm.json",
+        ]
         let searchPaths = [
             Bundle.main.resourcePath,
             "\(FileManager.default.currentDirectoryPath)/shared/recipes",
             "\(FileManager.default.currentDirectoryPath)/../../shared/recipes",
             "/Volumes/Projects/rawenv/shared/recipes",
-            "\(NSHomeDirectory())/.rawenv/recipes"
+            "\(NSHomeDirectory())/.rawenv/recipes",
         ].compactMap { $0 }
 
         // Load index for categories
         for base in searchPaths {
             if let data = try? Data(contentsOf: URL(fileURLWithPath: "\(base)/index.json")),
-               let index = try? JSONDecoder().decode(RecipeIndex.self, from: data) {
+                let index = try? JSONDecoder().decode(RecipeIndex.self, from: data)
+            {
                 categories = index.categories
                 break
             }
@@ -102,7 +107,8 @@ public final class RecipeLibrary: ObservableObject {
             for base in searchPaths {
                 let path = "\(base)/\(file)"
                 guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
-                      let catalog = try? JSONDecoder().decode(RecipeCatalog.self, from: data) else { continue }
+                    let catalog = try? JSONDecoder().decode(RecipeCatalog.self, from: data)
+                else { continue }
                 recipes.append(contentsOf: catalog.services.values)
                 break
             }

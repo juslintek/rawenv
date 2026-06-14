@@ -2,753 +2,753 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 pub fn build(b: *std.Build) void {
-   const target = b.standardTargetOptions(.{});
-   const optimize = b.standardOptimizeOption(.{});
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
 
-   // Version string, injectable from the release pipeline via `-Dversion=1.2.3`.
-   // Falls back to the build.zig.zon version when not provided.
-   const cli_version = b.option([]const u8, "version", "Override the rawenv version string") orelse "0.2.0";
-   const version_options = b.addOptions();
-   version_options.addOption([]const u8, "version", cli_version);
+    // Version string, injectable from the release pipeline via `-Dversion=1.2.3`.
+    // Falls back to the build.zig.zon version when not provided.
+    const cli_version = b.option([]const u8, "version", "Override the rawenv version string") orelse "0.2.0";
+    const version_options = b.addOptions();
+    version_options.addOption([]const u8, "version", cli_version);
 
-   const config_mod = b.createModule(.{
-       .root_source_file = b.path("src/core/config.zig"),
-       .target = target,
-       .optimize = optimize,
-   });
-   config_mod.link_libc = true;
+    const config_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/config.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    config_mod.link_libc = true;
 
-   const compose_mod = b.createModule(.{
-       .root_source_file = b.path("src/core/compose.zig"),
-       .target = target,
-       .optimize = optimize,
-   });
-   compose_mod.link_libc = true;
+    const compose_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/compose.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    compose_mod.link_libc = true;
 
-   const detector_mod = b.createModule(.{
-       .root_source_file = b.path("src/core/detector.zig"),
-       .target = target,
-       .optimize = optimize,
-   });
-   detector_mod.link_libc = true;
+    const detector_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/detector.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    detector_mod.link_libc = true;
 
-   const resolver_mod = b.createModule(.{
-       .root_source_file = b.path("src/core/resolver.zig"),
-       .target = target,
-       .optimize = optimize,
-   });
+    const resolver_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/resolver.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
 
-   const exec_mod = b.createModule(.{
-       .root_source_file = b.path("src/core/exec.zig"),
-       .target = target,
-       .optimize = optimize,
-   });
-   exec_mod.link_libc = true;
+    const exec_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/exec.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exec_mod.link_libc = true;
 
-   const store_mod = b.createModule(.{
-       .root_source_file = b.path("src/core/store.zig"),
-       .target = target,
-       .optimize = optimize,
-       .imports = &.{
-           .{ .name = "resolver", .module = resolver_mod },
-           .{ .name = "exec", .module = exec_mod },
-       },
-   });
-   store_mod.link_libc = true;
+    const store_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/store.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "resolver", .module = resolver_mod },
+            .{ .name = "exec", .module = exec_mod },
+        },
+    });
+    store_mod.link_libc = true;
 
-   const service_mod = b.createModule(.{
-       .root_source_file = b.path("src/core/service.zig"),
-       .target = target,
-       .optimize = optimize,
-       .imports = &.{
-           .{ .name = "config", .module = config_mod },
-           .{ .name = "resolver", .module = resolver_mod },
-       },
-   });
-   service_mod.link_libc = true;
+    const service_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/service.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "config", .module = config_mod },
+            .{ .name = "resolver", .module = resolver_mod },
+        },
+    });
+    service_mod.link_libc = true;
 
-   const shell_mod = b.createModule(.{
-       .root_source_file = b.path("src/core/shell.zig"),
-       .target = target,
-       .optimize = optimize,
-       .imports = &.{
-           .{ .name = "config", .module = config_mod },
-           .{ .name = "service", .module = service_mod },
-           .{ .name = "exec", .module = exec_mod },
-       },
-   });
-   shell_mod.link_libc = true;
+    const shell_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/shell.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "config", .module = config_mod },
+            .{ .name = "service", .module = service_mod },
+            .{ .name = "exec", .module = exec_mod },
+        },
+    });
+    shell_mod.link_libc = true;
 
-   const tui_mod = b.createModule(.{
-       .root_source_file = b.path("src/tui/main.zig"),
-       .target = target,
-       .optimize = optimize,
-       .imports = &.{
-           .{ .name = "exec", .module = exec_mod },
-       },
-   });
-   tui_mod.link_libc = true;
+    const tui_mod = b.createModule(.{
+        .root_source_file = b.path("src/tui/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "exec", .module = exec_mod },
+        },
+    });
+    tui_mod.link_libc = true;
 
-   const cell_mod = b.createModule(.{
-       .root_source_file = b.path("src/cells/cell.zig"),
-       .target = target,
-       .optimize = optimize,
-       .imports = &.{
-           .{ .name = "exec", .module = exec_mod },
-       },
-   });
+    const cell_mod = b.createModule(.{
+        .root_source_file = b.path("src/cells/cell.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "exec", .module = exec_mod },
+        },
+    });
 
-   // Network modules
-   const dns_mod = b.createModule(.{
-       .root_source_file = b.path("src/network/dns.zig"),
-       .target = target,
-       .optimize = optimize,
-       .imports = &.{
-           .{ .name = "exec", .module = exec_mod },
-       },
-   });
-   const proxy_mod = b.createModule(.{
-       .root_source_file = b.path("src/network/proxy.zig"),
-       .target = target,
-       .optimize = optimize,
-       .imports = &.{
-           .{ .name = "exec", .module = exec_mod },
-       },
-   });
-   const tls_mod = b.createModule(.{
-       .root_source_file = b.path("src/network/tls.zig"),
-       .target = target,
-       .optimize = optimize,
-       .imports = &.{
-           .{ .name = "exec", .module = exec_mod },
-       },
-   });
-   tls_mod.link_libc = true;
-   const tunnel_mod = b.createModule(.{
-       .root_source_file = b.path("src/network/tunnel.zig"),
-       .target = target,
-       .optimize = optimize,
-   });
-   const connections_mod = b.createModule(.{
-       .root_source_file = b.path("src/network/connections.zig"),
-       .target = target,
-       .optimize = optimize,
-   });
+    // Network modules
+    const dns_mod = b.createModule(.{
+        .root_source_file = b.path("src/network/dns.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "exec", .module = exec_mod },
+        },
+    });
+    const proxy_mod = b.createModule(.{
+        .root_source_file = b.path("src/network/proxy.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "exec", .module = exec_mod },
+        },
+    });
+    const tls_mod = b.createModule(.{
+        .root_source_file = b.path("src/network/tls.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "exec", .module = exec_mod },
+        },
+    });
+    tls_mod.link_libc = true;
+    const tunnel_mod = b.createModule(.{
+        .root_source_file = b.path("src/network/tunnel.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const connections_mod = b.createModule(.{
+        .root_source_file = b.path("src/network/connections.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
 
-   // GUI module
-   const gui_mod = b.createModule(.{
-       .root_source_file = b.path("src/gui/main.zig"),
-       .target = target,
-       .optimize = optimize,
-   });
+    // GUI module
+    const gui_mod = b.createModule(.{
+        .root_source_file = b.path("src/gui/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
 
-   // Compile raylib from source (opt-in: -Dgui=true)
-   const enable_gui = b.option(bool, "gui", "Compile raylib from source for GUI window") orelse false;
-   const has_raylib = enable_gui;
-   if (has_raylib) {
-       const raylib_src = b.path("lib/raylib");
+    // Compile raylib from source (opt-in: -Dgui=true)
+    const enable_gui = b.option(bool, "gui", "Compile raylib from source for GUI window") orelse false;
+    const has_raylib = enable_gui;
+    if (has_raylib) {
+        const raylib_src = b.path("lib/raylib");
 
-       gui_mod.addIncludePath(raylib_src);
-       gui_mod.addIncludePath(b.path("lib/raylib/external/glfw/include"));
-       gui_mod.link_libc = true;
+        gui_mod.addIncludePath(raylib_src);
+        gui_mod.addIncludePath(b.path("lib/raylib/external/glfw/include"));
+        gui_mod.link_libc = true;
 
-       const c_flags: []const []const u8 = &.{
-           "-std=gnu99",
-           "-D_GNU_SOURCE",
-           "-DGL_SILENCE_DEPRECATION=199309L",
-           "-DPLATFORM_DESKTOP",
-           "-DPLATFORM_DESKTOP_GLFW",
-           "-fno-sanitize=undefined",
-       };
+        const c_flags: []const []const u8 = &.{
+            "-std=gnu99",
+            "-D_GNU_SOURCE",
+            "-DGL_SILENCE_DEPRECATION=199309L",
+            "-DPLATFORM_DESKTOP",
+            "-DPLATFORM_DESKTOP_GLFW",
+            "-fno-sanitize=undefined",
+        };
 
-       // Core raylib sources (pure C)
-       gui_mod.addCSourceFiles(.{
-           .root = raylib_src,
-           .files = &.{ "rcore.c", "rshapes.c", "rtextures.c", "rtext.c", "rmodels.c", "utils.c", "raudio.c" },
-           .flags = c_flags,
-       });
+        // Core raylib sources (pure C)
+        gui_mod.addCSourceFiles(.{
+            .root = raylib_src,
+            .files = &.{ "rcore.c", "rshapes.c", "rtextures.c", "rtext.c", "rmodels.c", "utils.c", "raudio.c" },
+            .flags = c_flags,
+        });
 
-       // rglfw.c includes ObjC (.m) files on macOS — needs ObjC compilation
-       if (target.result.os.tag == .macos) {
-           gui_mod.addCSourceFiles(.{
-               .root = raylib_src,
-               .files = &.{"rglfw.c"},
-               .flags = &.{
-                   "-D_GNU_SOURCE",           "-DGL_SILENCE_DEPRECATION=199309L",
-                   "-DPLATFORM_DESKTOP",      "-DPLATFORM_DESKTOP_GLFW",
-                   "-fno-sanitize=undefined", "-ObjC",
-               },
-           });
-           gui_mod.linkFramework("OpenGL", .{});
-           gui_mod.linkFramework("Cocoa", .{});
-           gui_mod.linkFramework("IOKit", .{});
-           gui_mod.linkFramework("CoreAudio", .{});
-           gui_mod.linkFramework("CoreVideo", .{});
-       } else if (target.result.os.tag == .linux) {
-           gui_mod.addCSourceFiles(.{
-               .root = raylib_src,
-               .files = &.{"rglfw.c"},
-               .flags = c_flags,
-           });
-           gui_mod.linkSystemLibrary("GL", .{});
-           gui_mod.linkSystemLibrary("X11", .{});
-       } else {
-           gui_mod.addCSourceFiles(.{
-               .root = raylib_src,
-               .files = &.{"rglfw.c"},
-               .flags = c_flags,
-           });
-       }
-   }
+        // rglfw.c includes ObjC (.m) files on macOS — needs ObjC compilation
+        if (target.result.os.tag == .macos) {
+            gui_mod.addCSourceFiles(.{
+                .root = raylib_src,
+                .files = &.{"rglfw.c"},
+                .flags = &.{
+                    "-D_GNU_SOURCE",           "-DGL_SILENCE_DEPRECATION=199309L",
+                    "-DPLATFORM_DESKTOP",      "-DPLATFORM_DESKTOP_GLFW",
+                    "-fno-sanitize=undefined", "-ObjC",
+                },
+            });
+            gui_mod.linkFramework("OpenGL", .{});
+            gui_mod.linkFramework("Cocoa", .{});
+            gui_mod.linkFramework("IOKit", .{});
+            gui_mod.linkFramework("CoreAudio", .{});
+            gui_mod.linkFramework("CoreVideo", .{});
+        } else if (target.result.os.tag == .linux) {
+            gui_mod.addCSourceFiles(.{
+                .root = raylib_src,
+                .files = &.{"rglfw.c"},
+                .flags = c_flags,
+            });
+            gui_mod.linkSystemLibrary("GL", .{});
+            gui_mod.linkSystemLibrary("X11", .{});
+        } else {
+            gui_mod.addCSourceFiles(.{
+                .root = raylib_src,
+                .files = &.{"rglfw.c"},
+                .flags = c_flags,
+            });
+        }
+    }
 
-   const gui_options = b.addOptions();
-   gui_options.addOption(bool, "has_raylib", has_raylib);
-   gui_mod.addOptions("build_options", gui_options);
+    const gui_options = b.addOptions();
+    gui_options.addOption(bool, "has_raylib", has_raylib);
+    gui_mod.addOptions("build_options", gui_options);
 
-   // Deploy sub-modules need config
-   const terraform_mod = b.createModule(.{
-       .root_source_file = b.path("src/deploy/terraform.zig"),
-       .target = target,
-       .optimize = optimize,
-       .imports = &.{.{ .name = "config", .module = config_mod }},
-   });
-   const ansible_mod = b.createModule(.{
-       .root_source_file = b.path("src/deploy/ansible.zig"),
-       .target = target,
-       .optimize = optimize,
-       .imports = &.{.{ .name = "config", .module = config_mod }},
-   });
-   const image_mod = b.createModule(.{
-       .root_source_file = b.path("src/deploy/image.zig"),
-       .target = target,
-       .optimize = optimize,
-       .imports = &.{.{ .name = "config", .module = config_mod }},
-   });
-   const orchestrator_mod = b.createModule(.{
-       .root_source_file = b.path("src/deploy/orchestrator.zig"),
-       .target = target,
-       .optimize = optimize,
-   });
+    // Deploy sub-modules need config
+    const terraform_mod = b.createModule(.{
+        .root_source_file = b.path("src/deploy/terraform.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "config", .module = config_mod }},
+    });
+    const ansible_mod = b.createModule(.{
+        .root_source_file = b.path("src/deploy/ansible.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "config", .module = config_mod }},
+    });
+    const image_mod = b.createModule(.{
+        .root_source_file = b.path("src/deploy/image.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "config", .module = config_mod }},
+    });
+    const orchestrator_mod = b.createModule(.{
+        .root_source_file = b.path("src/deploy/orchestrator.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
 
-   // Deploy main module
-   const deploy_mod = b.createModule(.{
-       .root_source_file = b.path("src/deploy/main.zig"),
-       .target = target,
-       .optimize = optimize,
-       .imports = &.{
-           .{ .name = "terraform.zig", .module = terraform_mod },
-           .{ .name = "ansible.zig", .module = ansible_mod },
-           .{ .name = "image.zig", .module = image_mod },
-           .{ .name = "orchestrator.zig", .module = orchestrator_mod },
-       },
-   });
+    // Deploy main module
+    const deploy_mod = b.createModule(.{
+        .root_source_file = b.path("src/deploy/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "terraform.zig", .module = terraform_mod },
+            .{ .name = "ansible.zig", .module = ansible_mod },
+            .{ .name = "image.zig", .module = image_mod },
+            .{ .name = "orchestrator.zig", .module = orchestrator_mod },
+        },
+    });
 
-   // AI module
-   const ai_mod = b.createModule(.{
-       .root_source_file = b.path("src/ai/main.zig"),
-       .target = target,
-       .optimize = optimize,
-   });
-   ai_mod.link_libc = true;
+    // AI module
+    const ai_mod = b.createModule(.{
+        .root_source_file = b.path("src/ai/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    ai_mod.link_libc = true;
 
-   // Discover module
-   const discover_mod = b.createModule(.{
-       .root_source_file = b.path("src/core/discover.zig"),
-       .target = target,
-       .optimize = optimize,
-   });
-   discover_mod.link_libc = true;
+    // Discover module
+    const discover_mod = b.createModule(.{
+        .root_source_file = b.path("src/core/discover.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    discover_mod.link_libc = true;
 
-   // Platform: macOS module (links objc runtime on macOS targets)
-   const macos_mod = b.createModule(.{
-       .root_source_file = b.path("src/platform/macos.zig"),
-       .target = target,
-       .optimize = optimize,
-   });
-   macos_mod.link_libc = true;
-   if (target.result.os.tag == .macos) {
-       macos_mod.linkSystemLibrary("objc", .{});
-   }
+    // Platform: macOS module (links objc runtime on macOS targets)
+    const macos_mod = b.createModule(.{
+        .root_source_file = b.path("src/platform/macos.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    macos_mod.link_libc = true;
+    if (target.result.os.tag == .macos) {
+        macos_mod.linkSystemLibrary("objc", .{});
+    }
 
-   // Main executable
-   const exe_mod = b.createModule(.{
-       .root_source_file = b.path("src/cli/main.zig"),
-       .target = target,
-       .optimize = optimize,
-       .imports = &.{
-           .{ .name = "config", .module = config_mod },
-           .{ .name = "detector", .module = detector_mod },
-           .{ .name = "resolver", .module = resolver_mod },
-           .{ .name = "store", .module = store_mod },
-           .{ .name = "service", .module = service_mod },
-           .{ .name = "shell", .module = shell_mod },
-           .{ .name = "tui", .module = tui_mod },
-           .{ .name = "gui", .module = gui_mod },
-           .{ .name = "deploy", .module = deploy_mod },
-           .{ .name = "ai", .module = ai_mod },
-           .{ .name = "dns", .module = dns_mod },
-           .{ .name = "proxy", .module = proxy_mod },
-           .{ .name = "tls", .module = tls_mod },
-           .{ .name = "tunnel", .module = tunnel_mod },
-           .{ .name = "connections", .module = connections_mod },
-           .{ .name = "cell", .module = cell_mod },
-           .{ .name = "discover", .module = discover_mod },
-           .{ .name = "macos", .module = macos_mod },
-           .{ .name = "compose", .module = compose_mod },
-       },
-   });
-   exe_mod.link_libc = true;
-   exe_mod.addOptions("build_info", version_options);
-   const exe = b.addExecutable(.{ .name = "rawenv", .root_module = exe_mod });
-   b.installArtifact(exe);
+    // Main executable
+    const exe_mod = b.createModule(.{
+        .root_source_file = b.path("src/cli/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "config", .module = config_mod },
+            .{ .name = "detector", .module = detector_mod },
+            .{ .name = "resolver", .module = resolver_mod },
+            .{ .name = "store", .module = store_mod },
+            .{ .name = "service", .module = service_mod },
+            .{ .name = "shell", .module = shell_mod },
+            .{ .name = "tui", .module = tui_mod },
+            .{ .name = "gui", .module = gui_mod },
+            .{ .name = "deploy", .module = deploy_mod },
+            .{ .name = "ai", .module = ai_mod },
+            .{ .name = "dns", .module = dns_mod },
+            .{ .name = "proxy", .module = proxy_mod },
+            .{ .name = "tls", .module = tls_mod },
+            .{ .name = "tunnel", .module = tunnel_mod },
+            .{ .name = "connections", .module = connections_mod },
+            .{ .name = "cell", .module = cell_mod },
+            .{ .name = "discover", .module = discover_mod },
+            .{ .name = "macos", .module = macos_mod },
+            .{ .name = "compose", .module = compose_mod },
+        },
+    });
+    exe_mod.link_libc = true;
+    exe_mod.addOptions("build_info", version_options);
+    const exe = b.addExecutable(.{ .name = "rawenv", .root_module = exe_mod });
+    b.installArtifact(exe);
 
-   // Run step
-   const run_cmd = b.addRunArtifact(exe);
-   run_cmd.step.dependOn(b.getInstallStep());
-   if (b.args) |args| run_cmd.addArgs(args);
-   const run_step = b.step("run", "Run rawenv");
-   run_step.dependOn(&run_cmd.step);
+    // Run step
+    const run_cmd = b.addRunArtifact(exe);
+    run_cmd.step.dependOn(b.getInstallStep());
+    if (b.args) |args| run_cmd.addArgs(args);
+    const run_step = b.step("run", "Run rawenv");
+    run_step.dependOn(&run_cmd.step);
 
-   // Unit tests
-   const config_tests = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/config_test.zig"),
-           .target = target,
-           .optimize = optimize,
-           .imports = &.{.{ .name = "config", .module = config_mod }},
-       }),
-   });
-   config_tests.root_module.link_libc = true;
+    // Unit tests
+    const config_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/config_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "config", .module = config_mod }},
+        }),
+    });
+    config_tests.root_module.link_libc = true;
 
-   const main_tests = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("src/cli/main.zig"),
-           .target = target,
-           .optimize = optimize,
-           .imports = &.{
-               .{ .name = "config", .module = config_mod },
-               .{ .name = "detector", .module = detector_mod },
-               .{ .name = "resolver", .module = resolver_mod },
-               .{ .name = "store", .module = store_mod },
-               .{ .name = "service", .module = service_mod },
-               .{ .name = "shell", .module = shell_mod },
-               .{ .name = "tui", .module = tui_mod },
-               .{ .name = "gui", .module = gui_mod },
-               .{ .name = "deploy", .module = deploy_mod },
-               .{ .name = "ai", .module = ai_mod },
-               .{ .name = "dns", .module = dns_mod },
-               .{ .name = "proxy", .module = proxy_mod },
-               .{ .name = "tls", .module = tls_mod },
-               .{ .name = "tunnel", .module = tunnel_mod },
-               .{ .name = "connections", .module = connections_mod },
-               .{ .name = "cell", .module = cell_mod },
-               .{ .name = "discover", .module = discover_mod },
-               .{ .name = "macos", .module = macos_mod },
-               .{ .name = "compose", .module = compose_mod },
-           },
-       }),
-   });
-   main_tests.root_module.addOptions("build_info", version_options);
+    const main_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/cli/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "config", .module = config_mod },
+                .{ .name = "detector", .module = detector_mod },
+                .{ .name = "resolver", .module = resolver_mod },
+                .{ .name = "store", .module = store_mod },
+                .{ .name = "service", .module = service_mod },
+                .{ .name = "shell", .module = shell_mod },
+                .{ .name = "tui", .module = tui_mod },
+                .{ .name = "gui", .module = gui_mod },
+                .{ .name = "deploy", .module = deploy_mod },
+                .{ .name = "ai", .module = ai_mod },
+                .{ .name = "dns", .module = dns_mod },
+                .{ .name = "proxy", .module = proxy_mod },
+                .{ .name = "tls", .module = tls_mod },
+                .{ .name = "tunnel", .module = tunnel_mod },
+                .{ .name = "connections", .module = connections_mod },
+                .{ .name = "cell", .module = cell_mod },
+                .{ .name = "discover", .module = discover_mod },
+                .{ .name = "macos", .module = macos_mod },
+                .{ .name = "compose", .module = compose_mod },
+            },
+        }),
+    });
+    main_tests.root_module.addOptions("build_info", version_options);
 
-   const tui_tests = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("src/tui/app.zig"),
-           .target = target,
-           .optimize = optimize,
-           .imports = &.{.{ .name = "exec", .module = exec_mod }},
-       }),
-   });
-   tui_tests.root_module.link_libc = true;
+    const tui_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/tui/app.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "exec", .module = exec_mod }},
+        }),
+    });
+    tui_tests.root_module.link_libc = true;
 
-   const snapshot_tests = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/tui_test.zig"),
-           .target = target,
-           .optimize = optimize,
-           .imports = &.{.{ .name = "tui", .module = tui_mod }},
-       }),
-   });
-   snapshot_tests.root_module.link_libc = true;
+    const snapshot_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/tui_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "tui", .module = tui_mod }},
+        }),
+    });
+    snapshot_tests.root_module.link_libc = true;
 
-   const test_step = b.step("test", "Run all tests");
-   test_step.dependOn(&b.addRunArtifact(config_tests).step);
-   test_step.dependOn(&b.addRunArtifact(main_tests).step);
-   test_step.dependOn(&b.addRunArtifact(tui_tests).step);
-   test_step.dependOn(&b.addRunArtifact(snapshot_tests).step);
+    const test_step = b.step("test", "Run all tests");
+    test_step.dependOn(&b.addRunArtifact(config_tests).step);
+    test_step.dependOn(&b.addRunArtifact(main_tests).step);
+    test_step.dependOn(&b.addRunArtifact(tui_tests).step);
+    test_step.dependOn(&b.addRunArtifact(snapshot_tests).step);
 
-   const compose_tests = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/compose_test.zig"),
-           .target = target,
-           .optimize = optimize,
-           .imports = &.{
-               .{ .name = "compose", .module = compose_mod },
-               .{ .name = "config", .module = config_mod },
-           },
-       }),
-   });
-   compose_tests.root_module.link_libc = true;
-   test_step.dependOn(&b.addRunArtifact(compose_tests).step);
+    const compose_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/compose_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "compose", .module = compose_mod },
+                .{ .name = "config", .module = config_mod },
+            },
+        }),
+    });
+    compose_tests.root_module.link_libc = true;
+    test_step.dependOn(&b.addRunArtifact(compose_tests).step);
 
-   const cells_tests = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/cells_test.zig"),
-           .target = target,
-           .optimize = optimize,
-           .imports = &.{
-               .{ .name = "cell", .module = cell_mod },
-               .{ .name = "exec", .module = exec_mod },
-           },
-       }),
-   });
-   cells_tests.root_module.link_libc = true;
-   test_step.dependOn(&b.addRunArtifact(cells_tests).step);
+    const cells_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/cells_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "cell", .module = cell_mod },
+                .{ .name = "exec", .module = exec_mod },
+            },
+        }),
+    });
+    cells_tests.root_module.link_libc = true;
+    test_step.dependOn(&b.addRunArtifact(cells_tests).step);
 
-   const network_tests = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/network_test.zig"),
-           .target = target,
-           .optimize = optimize,
-           .imports = &.{
-               .{ .name = "dns", .module = dns_mod },
-               .{ .name = "proxy", .module = proxy_mod },
-               .{ .name = "tls", .module = tls_mod },
-               .{ .name = "tunnel", .module = tunnel_mod },
-               .{ .name = "connections", .module = connections_mod },
-           },
-       }),
-   });
-   test_step.dependOn(&b.addRunArtifact(network_tests).step);
+    const network_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/network_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "dns", .module = dns_mod },
+                .{ .name = "proxy", .module = proxy_mod },
+                .{ .name = "tls", .module = tls_mod },
+                .{ .name = "tunnel", .module = tunnel_mod },
+                .{ .name = "connections", .module = connections_mod },
+            },
+        }),
+    });
+    test_step.dependOn(&b.addRunArtifact(network_tests).step);
 
-   // Deploy tests
-   const deploy_tests = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/deploy_test.zig"),
-           .target = target,
-           .optimize = optimize,
-           .imports = &.{
-               .{ .name = "config", .module = config_mod },
-               .{ .name = "terraform", .module = terraform_mod },
-               .{ .name = "ansible", .module = ansible_mod },
-               .{ .name = "image", .module = image_mod },
-               .{ .name = "orchestrator", .module = orchestrator_mod },
-           },
-       }),
-   });
-   test_step.dependOn(&b.addRunArtifact(deploy_tests).step);
+    // Deploy tests
+    const deploy_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/deploy_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "config", .module = config_mod },
+                .{ .name = "terraform", .module = terraform_mod },
+                .{ .name = "ansible", .module = ansible_mod },
+                .{ .name = "image", .module = image_mod },
+                .{ .name = "orchestrator", .module = orchestrator_mod },
+            },
+        }),
+    });
+    test_step.dependOn(&b.addRunArtifact(deploy_tests).step);
 
-   // GUI tests
-   const gui_tests = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/gui_test.zig"),
-           .target = target,
-           .optimize = optimize,
-           .imports = &.{.{ .name = "gui", .module = gui_mod }},
-       }),
-   });
-   gui_tests.root_module.link_libc = true;
-   test_step.dependOn(&b.addRunArtifact(gui_tests).step);
+    // GUI tests
+    const gui_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/gui_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "gui", .module = gui_mod }},
+        }),
+    });
+    gui_tests.root_module.link_libc = true;
+    test_step.dependOn(&b.addRunArtifact(gui_tests).step);
 
-   // AI tests
-   const ai_tests = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/ai_test.zig"),
-           .target = target,
-           .optimize = optimize,
-           .imports = &.{.{ .name = "ai", .module = ai_mod }},
-       }),
-   });
-   ai_tests.root_module.link_libc = true;
-   test_step.dependOn(&b.addRunArtifact(ai_tests).step);
+    // AI tests
+    const ai_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/ai_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "ai", .module = ai_mod }},
+        }),
+    });
+    ai_tests.root_module.link_libc = true;
+    test_step.dependOn(&b.addRunArtifact(ai_tests).step);
 
-   // Detector tests
-   const detector_tests = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/detector_test.zig"),
-           .target = target,
-           .optimize = optimize,
-           .imports = &.{
-               .{ .name = "detector", .module = detector_mod },
-               .{ .name = "config", .module = config_mod },
-               .{ .name = "resolver", .module = resolver_mod },
-           },
-       }),
-   });
-   detector_tests.root_module.link_libc = true;
-   test_step.dependOn(&b.addRunArtifact(detector_tests).step);
+    // Detector tests
+    const detector_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/detector_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "detector", .module = detector_mod },
+                .{ .name = "config", .module = config_mod },
+                .{ .name = "resolver", .module = resolver_mod },
+            },
+        }),
+    });
+    detector_tests.root_module.link_libc = true;
+    test_step.dependOn(&b.addRunArtifact(detector_tests).step);
 
-   // Store/resolver tests
-   const store_tests = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/store_test.zig"),
-           .target = target,
-           .optimize = optimize,
-           .imports = &.{
-               .{ .name = "resolver", .module = resolver_mod },
-               .{ .name = "store", .module = store_mod },
-           },
-       }),
-   });
-   store_tests.root_module.link_libc = true;
-   test_step.dependOn(&b.addRunArtifact(store_tests).step);
+    // Store/resolver tests
+    const store_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/store_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "resolver", .module = resolver_mod },
+                .{ .name = "store", .module = store_mod },
+            },
+        }),
+    });
+    store_tests.root_module.link_libc = true;
+    test_step.dependOn(&b.addRunArtifact(store_tests).step);
 
-   // Service/shell tests
-   const service_tests = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/service_test.zig"),
-           .target = target,
-           .optimize = optimize,
-           .imports = &.{
-               .{ .name = "config", .module = config_mod },
-               .{ .name = "service", .module = service_mod },
-               .{ .name = "shell", .module = shell_mod },
-           },
-       }),
-   });
-   test_step.dependOn(&b.addRunArtifact(service_tests).step);
+    // Service/shell tests
+    const service_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/service_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "config", .module = config_mod },
+                .{ .name = "service", .module = service_mod },
+                .{ .name = "shell", .module = shell_mod },
+            },
+        }),
+    });
+    test_step.dependOn(&b.addRunArtifact(service_tests).step);
 
-   // macOS installer: built separately via `bash packaging/installer/build.sh` (SwiftUI app)
+    // macOS installer: built separately via `bash packaging/installer/build.sh` (SwiftUI app)
 
-   // Integration tests (spawn the built binary)
-   const integration_init = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/init_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_init.root_module.link_libc = true;
-   const run_init_test = b.addRunArtifact(integration_init);
-   run_init_test.step.dependOn(&exe.step);
+    // Integration tests (spawn the built binary)
+    const integration_init = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/init_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_init.root_module.link_libc = true;
+    const run_init_test = b.addRunArtifact(integration_init);
+    run_init_test.step.dependOn(&exe.step);
 
-   const integration_help = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/help_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_help.root_module.link_libc = true;
-   const run_help_test = b.addRunArtifact(integration_help);
-   run_help_test.step.dependOn(&exe.step);
+    const integration_help = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/help_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_help.root_module.link_libc = true;
+    const run_help_test = b.addRunArtifact(integration_help);
+    run_help_test.step.dependOn(&exe.step);
 
-   const integration_services = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/services_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_services.root_module.link_libc = true;
-   const run_services_test = b.addRunArtifact(integration_services);
-   run_services_test.step.dependOn(&exe.step);
+    const integration_services = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/services_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_services.root_module.link_libc = true;
+    const run_services_test = b.addRunArtifact(integration_services);
+    run_services_test.step.dependOn(&exe.step);
 
-   const integration_step = b.step("test-integration", "Run CLI integration tests");
-   integration_step.dependOn(&run_init_test.step);
-   integration_step.dependOn(&run_help_test.step);
-   integration_step.dependOn(&run_services_test.step);
+    const integration_step = b.step("test-integration", "Run CLI integration tests");
+    integration_step.dependOn(&run_init_test.step);
+    integration_step.dependOn(&run_help_test.step);
+    integration_step.dependOn(&run_services_test.step);
 
-   const integration_detect = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/detect_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_detect.root_module.link_libc = true;
-   const run_detect_test = b.addRunArtifact(integration_detect);
-   run_detect_test.step.dependOn(&exe.step);
-   integration_step.dependOn(&run_detect_test.step);
+    const integration_detect = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/detect_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_detect.root_module.link_libc = true;
+    const run_detect_test = b.addRunArtifact(integration_detect);
+    run_detect_test.step.dependOn(&exe.step);
+    integration_step.dependOn(&run_detect_test.step);
 
-   // Detector coverage E2E (E2E-103): one fixture + test per supported manifest
-   // type (package.json, composer.json, pyproject.toml, Cargo.toml, go.mod,
-   // Gemfile, docker-compose.yml, .env, .env.example) driven through
-   // `rawenv detect --json`.
-   const integration_detect_coverage = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/detect_coverage_e2e_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_detect_coverage.root_module.link_libc = true;
-   const run_detect_coverage_test = b.addRunArtifact(integration_detect_coverage);
-   run_detect_coverage_test.step.dependOn(b.getInstallStep());
-   run_detect_coverage_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
-   integration_step.dependOn(&run_detect_coverage_test.step);
+    // Detector coverage E2E (E2E-103): one fixture + test per supported manifest
+    // type (package.json, composer.json, pyproject.toml, Cargo.toml, go.mod,
+    // Gemfile, docker-compose.yml, .env, .env.example) driven through
+    // `rawenv detect --json`.
+    const integration_detect_coverage = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/detect_coverage_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_detect_coverage.root_module.link_libc = true;
+    const run_detect_coverage_test = b.addRunArtifact(integration_detect_coverage);
+    run_detect_coverage_test.step.dependOn(b.getInstallStep());
+    run_detect_coverage_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_detect_coverage_test.step);
 
-   const integration_add = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/add_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_add.root_module.link_libc = true;
-   const run_add_test = b.addRunArtifact(integration_add);
-   run_add_test.step.dependOn(&exe.step);
-   integration_step.dependOn(&run_add_test.step);
+    const integration_add = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/add_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_add.root_module.link_libc = true;
+    const run_add_test = b.addRunArtifact(integration_add);
+    run_add_test.step.dependOn(&exe.step);
+    integration_step.dependOn(&run_add_test.step);
 
-   const integration_status = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/status_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_status.root_module.link_libc = true;
-   const run_status_test = b.addRunArtifact(integration_status);
-   run_status_test.step.dependOn(b.getInstallStep());
-   run_status_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
-   integration_step.dependOn(&run_status_test.step);
+    const integration_status = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/status_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_status.root_module.link_libc = true;
+    const run_status_test = b.addRunArtifact(integration_status);
+    run_status_test.step.dependOn(b.getInstallStep());
+    run_status_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_status_test.step);
 
-   // Per-stack full lifecycle E2E (node, php, python, rust, go, ruby).
-   const integration_e2e = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/e2e_lifecycle_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_e2e.root_module.link_libc = true;
-   const run_e2e_test = b.addRunArtifact(integration_e2e);
-   // Build + install the binary, then point the test at the freshly-built artifact.
-   run_e2e_test.step.dependOn(b.getInstallStep());
-   run_e2e_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
-   integration_step.dependOn(&run_e2e_test.step);
+    // Per-stack full lifecycle E2E (node, php, python, rust, go, ruby).
+    const integration_e2e = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/e2e_lifecycle_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_e2e.root_module.link_libc = true;
+    const run_e2e_test = b.addRunArtifact(integration_e2e);
+    // Build + install the binary, then point the test at the freshly-built artifact.
+    run_e2e_test.step.dependOn(b.getInstallStep());
+    run_e2e_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_e2e_test.step);
 
-   // Network features E2E (connections, dns, proxy, tunnel, deploy generate).
-   const integration_network = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/network_e2e_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_network.root_module.link_libc = true;
-   const run_network_test = b.addRunArtifact(integration_network);
-   run_network_test.step.dependOn(b.getInstallStep());
-   run_network_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
-   integration_step.dependOn(&run_network_test.step);
+    // Network features E2E (connections, dns, proxy, tunnel, deploy generate).
+    const integration_network = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/network_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_network.root_module.link_libc = true;
+    const run_network_test = b.addRunArtifact(integration_network);
+    run_network_test.step.dependOn(b.getInstallStep());
+    run_network_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_network_test.step);
 
-   // DNS/proxy/TLS setup + teardown E2E (E2E-110): `up` generates the
-   // Caddyfile + self-signed TLS cert, `down` keeps them for re-use, and
-   // `destroy --force` removes the Caddyfile + cert dir with no stale files.
-   const integration_dns_proxy_tls = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/dns_proxy_tls_e2e_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_dns_proxy_tls.root_module.link_libc = true;
-   const run_dns_proxy_tls_test = b.addRunArtifact(integration_dns_proxy_tls);
-   run_dns_proxy_tls_test.step.dependOn(b.getInstallStep());
-   run_dns_proxy_tls_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
-   integration_step.dependOn(&run_dns_proxy_tls_test.step);
+    // DNS/proxy/TLS setup + teardown E2E (E2E-110): `up` generates the
+    // Caddyfile + self-signed TLS cert, `down` keeps them for re-use, and
+    // `destroy --force` removes the Caddyfile + cert dir with no stale files.
+    const integration_dns_proxy_tls = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/dns_proxy_tls_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_dns_proxy_tls.root_module.link_libc = true;
+    const run_dns_proxy_tls_test = b.addRunArtifact(integration_dns_proxy_tls);
+    run_dns_proxy_tls_test.step.dependOn(b.getInstallStep());
+    run_dns_proxy_tls_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_dns_proxy_tls_test.step);
 
-   // Service combinations + multi-instance + port-conflict E2E.
-   const integration_combos = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/e2e_combos_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_combos.root_module.link_libc = true;
-   const run_combos_test = b.addRunArtifact(integration_combos);
-   run_combos_test.step.dependOn(b.getInstallStep());
-   run_combos_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
-   integration_step.dependOn(&run_combos_test.step);
+    // Service combinations + multi-instance + port-conflict E2E.
+    const integration_combos = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/e2e_combos_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_combos.root_module.link_libc = true;
+    const run_combos_test = b.addRunArtifact(integration_combos);
+    run_combos_test.step.dependOn(b.getInstallStep());
+    run_combos_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_combos_test.step);
 
-   // Per-service install→start→verify→stop→cleanup lifecycle E2E (E2E-107):
-   // node, redis, meilisearch, postgres, bun, php, mariadb, python — each
-   // exercised individually with no-side-effect teardown invariants.
-   const integration_svc_lifecycle = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/service_lifecycle_e2e_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_svc_lifecycle.root_module.link_libc = true;
-   const run_svc_lifecycle_test = b.addRunArtifact(integration_svc_lifecycle);
-   run_svc_lifecycle_test.step.dependOn(b.getInstallStep());
-   run_svc_lifecycle_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
-   integration_step.dependOn(&run_svc_lifecycle_test.step);
+    // Per-service install→start→verify→stop→cleanup lifecycle E2E (E2E-107):
+    // node, redis, meilisearch, postgres, bun, php, mariadb, python — each
+    // exercised individually with no-side-effect teardown invariants.
+    const integration_svc_lifecycle = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/service_lifecycle_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_svc_lifecycle.root_module.link_libc = true;
+    const run_svc_lifecycle_test = b.addRunArtifact(integration_svc_lifecycle);
+    run_svc_lifecycle_test.step.dependOn(b.getInstallStep());
+    run_svc_lifecycle_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_svc_lifecycle_test.step);
 
-   // Multi-project isolation E2E (two postgres projects don't share data;
-   // each destroys independently; shared store binaries are never removed).
-   const integration_isolation = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/multi_project_isolation_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_isolation.root_module.link_libc = true;
-   const run_isolation_test = b.addRunArtifact(integration_isolation);
-   run_isolation_test.step.dependOn(b.getInstallStep());
-   run_isolation_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
-   integration_step.dependOn(&run_isolation_test.step);
+    // Multi-project isolation E2E (two postgres projects don't share data;
+    // each destroys independently; shared store binaries are never removed).
+    const integration_isolation = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/multi_project_isolation_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_isolation.root_module.link_libc = true;
+    const run_isolation_test = b.addRunArtifact(integration_isolation);
+    run_isolation_test.step.dependOn(b.getInstallStep());
+    run_isolation_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_isolation_test.step);
 
-   // Service migration E2E (docker-compose import → services ls --json).
-   const integration_migration = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/migration_e2e_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_migration.root_module.link_libc = true;
-   const run_migration_test = b.addRunArtifact(integration_migration);
-   run_migration_test.step.dependOn(b.getInstallStep());
-   run_migration_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
-   integration_step.dependOn(&run_migration_test.step);
+    // Service migration E2E (docker-compose import → services ls --json).
+    const integration_migration = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/migration_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_migration.root_module.link_libc = true;
+    const run_migration_test = b.addRunArtifact(integration_migration);
+    run_migration_test.step.dependOn(b.getInstallStep());
+    run_migration_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_migration_test.step);
 
-   // Compose import E2E (real-world fixtures: Sail quoted images, azure-sql-edge
-   // → mssql, depends_on → connections, port-mapping host ports).
-   const integration_compose_import = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/compose_import_e2e_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_compose_import.root_module.link_libc = true;
-   const run_compose_import_test = b.addRunArtifact(integration_compose_import);
-   run_compose_import_test.step.dependOn(b.getInstallStep());
-   run_compose_import_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
-   integration_step.dependOn(&run_compose_import_test.step);
+    // Compose import E2E (real-world fixtures: Sail quoted images, azure-sql-edge
+    // → mssql, depends_on → connections, port-mapping host ports).
+    const integration_compose_import = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/compose_import_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_compose_import.root_module.link_libc = true;
+    const run_compose_import_test = b.addRunArtifact(integration_compose_import);
+    run_compose_import_test.step.dependOn(b.getInstallStep());
+    run_compose_import_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_compose_import_test.step);
 
-   // Deploy generate E2E (writes terraform/ansible/Containerfile + clean re-run).
-   const integration_deploy = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/deploy_e2e_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_deploy.root_module.link_libc = true;
-   const run_deploy_test = b.addRunArtifact(integration_deploy);
-   run_deploy_test.step.dependOn(b.getInstallStep());
-   run_deploy_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
-   integration_step.dependOn(&run_deploy_test.step);
+    // Deploy generate E2E (writes terraform/ansible/Containerfile + clean re-run).
+    const integration_deploy = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/deploy_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_deploy.root_module.link_libc = true;
+    const run_deploy_test = b.addRunArtifact(integration_deploy);
+    run_deploy_test.step.dependOn(b.getInstallStep());
+    run_deploy_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_deploy_test.step);
 
-   // Error handling + edge cases E2E (unknown package/version, missing/corrupt
-   // config, invalid args — all exit cleanly with user-friendly messages).
-   const integration_errors = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/errors_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_errors.root_module.link_libc = true;
-   const run_errors_test = b.addRunArtifact(integration_errors);
-   run_errors_test.step.dependOn(b.getInstallStep());
-   run_errors_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
-   integration_step.dependOn(&run_errors_test.step);
+    // Error handling + edge cases E2E (unknown package/version, missing/corrupt
+    // config, invalid args — all exit cleanly with user-friendly messages).
+    const integration_errors = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/errors_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_errors.root_module.link_libc = true;
+    const run_errors_test = b.addRunArtifact(integration_errors);
+    run_errors_test.step.dependOn(b.getInstallStep());
+    run_errors_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_errors_test.step);
 
     // Add download + install-path E2E (E2E-100): `rawenv add node@22` and
     // `rawenv add meilisearch@1.12` against an isolated $HOME — verifies the
@@ -785,227 +785,227 @@ pub fn build(b: *std.Build) void {
     run_full_lifecycle_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
     integration_step.dependOn(&run_full_lifecycle_test.step);
 
-   // Uninstall E2E (E2E-109): `rawenv uninstall --force` wipes ~/.rawenv,
-   // bin symlinks, data dirs, and rawenv-prefixed launchd/systemd units —
-   // leaving unrelated units intact and no rawenv process running.
-   const integration_uninstall = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/uninstall_e2e_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_uninstall.root_module.link_libc = true;
-   const run_uninstall_test = b.addRunArtifact(integration_uninstall);
-   run_uninstall_test.step.dependOn(b.getInstallStep());
-   run_uninstall_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
-   integration_step.dependOn(&run_uninstall_test.step);
+    // Uninstall E2E (E2E-109): `rawenv uninstall --force` wipes ~/.rawenv,
+    // bin symlinks, data dirs, and rawenv-prefixed launchd/systemd units —
+    // leaving unrelated units intact and no rawenv process running.
+    const integration_uninstall = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/uninstall_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_uninstall.root_module.link_libc = true;
+    const run_uninstall_test = b.addRunArtifact(integration_uninstall);
+    run_uninstall_test.step.dependOn(b.getInstallStep());
+    run_uninstall_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_uninstall_test.step);
 
-   // Shell environment isolation + cleanup E2E (E2E-111): `rawenv shell`
-   // prepends ~/.rawenv/bin to PATH, exports auto-generated connection strings
-   // (DATABASE_URL/REDIS_URL), leaves the parent PATH untouched, and spawns no
-   // lingering background process — all verified against an isolated $HOME.
-   const integration_shell = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/shell_isolation_e2e_test.zig"),
-           .target = target,
-           .optimize = optimize,
-       }),
-   });
-   integration_shell.root_module.link_libc = true;
-   const run_shell_test = b.addRunArtifact(integration_shell);
-   run_shell_test.step.dependOn(b.getInstallStep());
-   run_shell_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
-   integration_step.dependOn(&run_shell_test.step);
+    // Shell environment isolation + cleanup E2E (E2E-111): `rawenv shell`
+    // prepends ~/.rawenv/bin to PATH, exports auto-generated connection strings
+    // (DATABASE_URL/REDIS_URL), leaves the parent PATH untouched, and spawns no
+    // lingering background process — all verified against an isolated $HOME.
+    const integration_shell = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/shell_isolation_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    integration_shell.root_module.link_libc = true;
+    const run_shell_test = b.addRunArtifact(integration_shell);
+    run_shell_test.step.dependOn(b.getInstallStep());
+    run_shell_test.setEnvironmentVariable("RAWENV_BIN", b.getInstallPath(.bin, "rawenv"));
+    integration_step.dependOn(&run_shell_test.step);
 
-   // Resolver catalog coverage E2E (E2E-104): every advertised package/version
-   // resolves to a non-empty https URL with a valid, non-placeholder sha256,
-   // and (network-gated) every distinct URL answers a HEAD request with a
-   // reachable status (200/302). Imports the resolver module directly rather
-   // than spawning the binary, so it needs no install step / RAWENV_BIN.
-   const integration_resolver_coverage = b.addTest(.{
-       .root_module = b.createModule(.{
-           .root_source_file = b.path("tests/integration/resolver_coverage_e2e_test.zig"),
-           .target = target,
-           .optimize = optimize,
-           .imports = &.{.{ .name = "resolver", .module = resolver_mod }},
-       }),
-   });
-   integration_resolver_coverage.root_module.link_libc = true;
-   const run_resolver_coverage_test = b.addRunArtifact(integration_resolver_coverage);
-   integration_step.dependOn(&run_resolver_coverage_test.step);
+    // Resolver catalog coverage E2E (E2E-104): every advertised package/version
+    // resolves to a non-empty https URL with a valid, non-placeholder sha256,
+    // and (network-gated) every distinct URL answers a HEAD request with a
+    // reachable status (200/302). Imports the resolver module directly rather
+    // than spawning the binary, so it needs no install step / RAWENV_BIN.
+    const integration_resolver_coverage = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/resolver_coverage_e2e_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "resolver", .module = resolver_mod }},
+        }),
+    });
+    integration_resolver_coverage.root_module.link_libc = true;
+    const run_resolver_coverage_test = b.addRunArtifact(integration_resolver_coverage);
+    integration_step.dependOn(&run_resolver_coverage_test.step);
 
-   // Cross-compilation targets
-   const cross_targets: []const struct { []const u8, std.Target.Cpu.Arch, std.Target.Os.Tag } = &.{
-       .{ "aarch64-macos", .aarch64, .macos },
-       .{ "x86_64-macos", .x86_64, .macos },
-       .{ "x86_64-linux", .x86_64, .linux },
-       .{ "aarch64-linux", .aarch64, .linux },
-       .{ "x86_64-windows", .x86_64, .windows },
-   };
+    // Cross-compilation targets
+    const cross_targets: []const struct { []const u8, std.Target.Cpu.Arch, std.Target.Os.Tag } = &.{
+        .{ "aarch64-macos", .aarch64, .macos },
+        .{ "x86_64-macos", .x86_64, .macos },
+        .{ "x86_64-linux", .x86_64, .linux },
+        .{ "aarch64-linux", .aarch64, .linux },
+        .{ "x86_64-windows", .x86_64, .windows },
+    };
 
-   for (cross_targets) |ct| {
-       const cross_target = b.resolveTargetQuery(.{ .cpu_arch = ct[1], .os_tag = ct[2] });
-       const cross_config = b.createModule(.{
-           .root_source_file = b.path("src/core/config.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-       });
-       const cross_detector = b.createModule(.{
-           .root_source_file = b.path("src/core/detector.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-       });
-       const cross_resolver = b.createModule(.{
-           .root_source_file = b.path("src/core/resolver.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-       });
-       const cross_store = b.createModule(.{
-           .root_source_file = b.path("src/core/store.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-           .imports = &.{.{ .name = "resolver", .module = cross_resolver }},
-       });
-       const cross_service = b.createModule(.{
-           .root_source_file = b.path("src/core/service.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-           .imports = &.{
-               .{ .name = "config", .module = cross_config },
-               .{ .name = "resolver", .module = cross_resolver },
-           },
-       });
-       const cross_shell = b.createModule(.{
-           .root_source_file = b.path("src/core/shell.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-           .imports = &.{
-               .{ .name = "config", .module = cross_config },
-               .{ .name = "service", .module = cross_service },
-           },
-       });
-       const cross_tui = b.createModule(.{
-           .root_source_file = b.path("src/tui/main.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-       });
-       const cross_gui = b.createModule(.{
-           .root_source_file = b.path("src/gui/main.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-       });
-       const cross_gui_options = b.addOptions();
-       cross_gui_options.addOption(bool, "has_raylib", false);
-       cross_gui.addOptions("build_options", cross_gui_options);
-       const cross_terraform = b.createModule(.{
-           .root_source_file = b.path("src/deploy/terraform.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-           .imports = &.{.{ .name = "config", .module = cross_config }},
-       });
-       const cross_ansible = b.createModule(.{
-           .root_source_file = b.path("src/deploy/ansible.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-           .imports = &.{.{ .name = "config", .module = cross_config }},
-       });
-       const cross_image = b.createModule(.{
-           .root_source_file = b.path("src/deploy/image.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-           .imports = &.{.{ .name = "config", .module = cross_config }},
-       });
-       const cross_orchestrator = b.createModule(.{
-           .root_source_file = b.path("src/deploy/orchestrator.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-       });
-       const cross_deploy = b.createModule(.{
-           .root_source_file = b.path("src/deploy/main.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-           .imports = &.{
-               .{ .name = "terraform.zig", .module = cross_terraform },
-               .{ .name = "ansible.zig", .module = cross_ansible },
-               .{ .name = "image.zig", .module = cross_image },
-               .{ .name = "orchestrator.zig", .module = cross_orchestrator },
-           },
-       });
-       const cross_ai = b.createModule(.{
-           .root_source_file = b.path("src/ai/main.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-       });
-       const cross_dns = b.createModule(.{
-           .root_source_file = b.path("src/network/dns.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-       });
-       const cross_proxy = b.createModule(.{
-           .root_source_file = b.path("src/network/proxy.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-       });
-       const cross_tunnel = b.createModule(.{
-           .root_source_file = b.path("src/network/tunnel.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-       });
-       const cross_connections = b.createModule(.{
-           .root_source_file = b.path("src/network/connections.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-       });
-       const cross_cell = b.createModule(.{
-           .root_source_file = b.path("src/cells/cell.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-       });
-       const cross_discover = b.createModule(.{
-           .root_source_file = b.path("src/core/discover.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-       });
-       const cross_macos = b.createModule(.{
-           .root_source_file = b.path("src/platform/macos.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-       });
-       if (ct[2] == .macos) {
-           cross_macos.linkSystemLibrary("objc", .{});
-       }
-       const cross_mod = b.createModule(.{
-           .root_source_file = b.path("src/cli/main.zig"),
-           .target = cross_target,
-           .optimize = .ReleaseSafe,
-           .imports = &.{
-               .{ .name = "config", .module = cross_config },
-               .{ .name = "detector", .module = cross_detector },
-               .{ .name = "resolver", .module = cross_resolver },
-               .{ .name = "store", .module = cross_store },
-               .{ .name = "service", .module = cross_service },
-               .{ .name = "shell", .module = cross_shell },
-               .{ .name = "tui", .module = cross_tui },
-               .{ .name = "gui", .module = cross_gui },
-               .{ .name = "deploy", .module = cross_deploy },
-               .{ .name = "ai", .module = cross_ai },
-               .{ .name = "dns", .module = cross_dns },
-               .{ .name = "proxy", .module = cross_proxy },
-               .{ .name = "tunnel", .module = cross_tunnel },
-               .{ .name = "connections", .module = cross_connections },
-               .{ .name = "cell", .module = cross_cell },
-               .{ .name = "discover", .module = cross_discover },
-               .{ .name = "macos", .module = cross_macos },
-           },
-       });
-       cross_mod.link_libc = true;
-       cross_mod.addOptions("build_info", version_options);
-       const cross_exe = b.addExecutable(.{ .name = "rawenv", .root_module = cross_mod });
-       const install = b.addInstallArtifact(cross_exe, .{
-           .dest_dir = .{ .override = .{ .custom = ct[0] } },
-       });
-       const step = b.step(ct[0], b.fmt("Build for {s}", .{ct[0]}));
-       step.dependOn(&install.step);
-   }
+    for (cross_targets) |ct| {
+        const cross_target = b.resolveTargetQuery(.{ .cpu_arch = ct[1], .os_tag = ct[2] });
+        const cross_config = b.createModule(.{
+            .root_source_file = b.path("src/core/config.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_detector = b.createModule(.{
+            .root_source_file = b.path("src/core/detector.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_resolver = b.createModule(.{
+            .root_source_file = b.path("src/core/resolver.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_store = b.createModule(.{
+            .root_source_file = b.path("src/core/store.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+            .imports = &.{.{ .name = "resolver", .module = cross_resolver }},
+        });
+        const cross_service = b.createModule(.{
+            .root_source_file = b.path("src/core/service.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+            .imports = &.{
+                .{ .name = "config", .module = cross_config },
+                .{ .name = "resolver", .module = cross_resolver },
+            },
+        });
+        const cross_shell = b.createModule(.{
+            .root_source_file = b.path("src/core/shell.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+            .imports = &.{
+                .{ .name = "config", .module = cross_config },
+                .{ .name = "service", .module = cross_service },
+            },
+        });
+        const cross_tui = b.createModule(.{
+            .root_source_file = b.path("src/tui/main.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_gui = b.createModule(.{
+            .root_source_file = b.path("src/gui/main.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_gui_options = b.addOptions();
+        cross_gui_options.addOption(bool, "has_raylib", false);
+        cross_gui.addOptions("build_options", cross_gui_options);
+        const cross_terraform = b.createModule(.{
+            .root_source_file = b.path("src/deploy/terraform.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+            .imports = &.{.{ .name = "config", .module = cross_config }},
+        });
+        const cross_ansible = b.createModule(.{
+            .root_source_file = b.path("src/deploy/ansible.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+            .imports = &.{.{ .name = "config", .module = cross_config }},
+        });
+        const cross_image = b.createModule(.{
+            .root_source_file = b.path("src/deploy/image.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+            .imports = &.{.{ .name = "config", .module = cross_config }},
+        });
+        const cross_orchestrator = b.createModule(.{
+            .root_source_file = b.path("src/deploy/orchestrator.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_deploy = b.createModule(.{
+            .root_source_file = b.path("src/deploy/main.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+            .imports = &.{
+                .{ .name = "terraform.zig", .module = cross_terraform },
+                .{ .name = "ansible.zig", .module = cross_ansible },
+                .{ .name = "image.zig", .module = cross_image },
+                .{ .name = "orchestrator.zig", .module = cross_orchestrator },
+            },
+        });
+        const cross_ai = b.createModule(.{
+            .root_source_file = b.path("src/ai/main.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_dns = b.createModule(.{
+            .root_source_file = b.path("src/network/dns.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_proxy = b.createModule(.{
+            .root_source_file = b.path("src/network/proxy.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_tunnel = b.createModule(.{
+            .root_source_file = b.path("src/network/tunnel.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_connections = b.createModule(.{
+            .root_source_file = b.path("src/network/connections.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_cell = b.createModule(.{
+            .root_source_file = b.path("src/cells/cell.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_discover = b.createModule(.{
+            .root_source_file = b.path("src/core/discover.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        const cross_macos = b.createModule(.{
+            .root_source_file = b.path("src/platform/macos.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+        });
+        if (ct[2] == .macos) {
+            cross_macos.linkSystemLibrary("objc", .{});
+        }
+        const cross_mod = b.createModule(.{
+            .root_source_file = b.path("src/cli/main.zig"),
+            .target = cross_target,
+            .optimize = .ReleaseSafe,
+            .imports = &.{
+                .{ .name = "config", .module = cross_config },
+                .{ .name = "detector", .module = cross_detector },
+                .{ .name = "resolver", .module = cross_resolver },
+                .{ .name = "store", .module = cross_store },
+                .{ .name = "service", .module = cross_service },
+                .{ .name = "shell", .module = cross_shell },
+                .{ .name = "tui", .module = cross_tui },
+                .{ .name = "gui", .module = cross_gui },
+                .{ .name = "deploy", .module = cross_deploy },
+                .{ .name = "ai", .module = cross_ai },
+                .{ .name = "dns", .module = cross_dns },
+                .{ .name = "proxy", .module = cross_proxy },
+                .{ .name = "tunnel", .module = cross_tunnel },
+                .{ .name = "connections", .module = cross_connections },
+                .{ .name = "cell", .module = cross_cell },
+                .{ .name = "discover", .module = cross_discover },
+                .{ .name = "macos", .module = cross_macos },
+            },
+        });
+        cross_mod.link_libc = true;
+        cross_mod.addOptions("build_info", version_options);
+        const cross_exe = b.addExecutable(.{ .name = "rawenv", .root_module = cross_mod });
+        const install = b.addInstallArtifact(cross_exe, .{
+            .dest_dir = .{ .override = .{ .custom = ct[0] } },
+        });
+        const step = b.step(ct[0], b.fmt("Build for {s}", .{ct[0]}));
+        step.dependOn(&install.step);
+    }
 }

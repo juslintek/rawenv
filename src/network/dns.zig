@@ -134,7 +134,7 @@ pub fn setupDNSEx(allocator: std.mem.Allocator, cfg: DnsConfig, interactive: boo
 /// Safely apply hosts entries by wrapping them in markers.
 fn applyHostsEntries(allocator: std.mem.Allocator, project: []const u8, new_entries: []const u8, interactive: bool) !void {
     const exec = @import("exec");
-    
+
     // Read current hosts
     var buf: [64 * 1024]u8 = undefined;
     const argv_cat = [_][*:0]const u8{ "cat", hosts_path };
@@ -242,10 +242,10 @@ fn writeFilePrivileged(allocator: std.mem.Allocator, path: []const u8, content: 
     const exec = @import("exec");
     const path_z = try allocator.dupeZ(u8, path);
     defer allocator.free(path_z);
-    
+
     // Use sudo tee to write to privileged file
     // Since run doesn't support stdin piping yet, we'll use run_shell_command from outside
-    // or implement a simple pipe in exec.zig. 
+    // or implement a simple pipe in exec.zig.
     // For now, let's use a temporary file and sudo mv.
     const tmp_path = "/tmp/rawenv-hosts.tmp";
     const fd = try std.posix.openat(std.posix.AT.FDCWD, tmp_path, .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644);

@@ -1,6 +1,6 @@
-import SwiftUI
-import Combine
 import AppKit
+import Combine
+import SwiftUI
 
 public enum ThemeMode: String, CaseIterable {
     case system, light, dark
@@ -9,10 +9,10 @@ public enum ThemeMode: String, CaseIterable {
 @MainActor
 public final class ThemeManager: ObservableObject {
     @Published public var colorScheme: ColorScheme?
-    @Published public var accentColor: Color = Color(red: 99/255, green: 102/255, blue: 241/255)
-    @Published public var successColor: Color = Color(red: 52/255, green: 211/255, blue: 153/255)
-    @Published public var errorColor: Color = Color(red: 248/255, green: 113/255, blue: 113/255)
-    @Published public var warningColor: Color = Color(red: 251/255, green: 191/255, blue: 36/255)
+    @Published public var accentColor: Color = Color(red: 99 / 255, green: 102 / 255, blue: 241 / 255)
+    @Published public var successColor: Color = Color(red: 52 / 255, green: 211 / 255, blue: 153 / 255)
+    @Published public var errorColor: Color = Color(red: 248 / 255, green: 113 / 255, blue: 113 / 255)
+    @Published public var warningColor: Color = Color(red: 251 / 255, green: 191 / 255, blue: 36 / 255)
     @Published public var borderRadius: Double = 8
     @Published public var fontSize: Double = 13
     @Published public var sidebarWidth: Double = 240
@@ -37,10 +37,10 @@ public final class ThemeManager: ObservableObject {
 
     public func reset() {
         setMode(.system)
-        accentColor = Color(red: 99/255, green: 102/255, blue: 241/255)
-        successColor = Color(red: 52/255, green: 211/255, blue: 153/255)
-        errorColor = Color(red: 248/255, green: 113/255, blue: 113/255)
-        warningColor = Color(red: 251/255, green: 191/255, blue: 36/255)
+        accentColor = Color(red: 99 / 255, green: 102 / 255, blue: 241 / 255)
+        successColor = Color(red: 52 / 255, green: 211 / 255, blue: 153 / 255)
+        errorColor = Color(red: 248 / 255, green: 113 / 255, blue: 113 / 255)
+        warningColor = Color(red: 251 / 255, green: 191 / 255, blue: 36 / 255)
         borderRadius = 8
         fontSize = 13
         sidebarWidth = 240
@@ -110,7 +110,10 @@ public final class ThemeManager: ObservableObject {
 
 extension Color {
     var components: [Double] {
-        var r: CGFloat = 0; var g: CGFloat = 0; var b: CGFloat = 0; var a: CGFloat = 0
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var b: CGFloat = 0
+        var a: CGFloat = 0
         NSColor(self).usingColorSpace(.sRGB)?.getRed(&r, green: &g, blue: &b, alpha: &a)
         return [Double(r), Double(g), Double(b)]
     }

@@ -1,6 +1,7 @@
-import Testing
-import SwiftUI
 import AppKit
+import SwiftUI
+import Testing
+
 @testable import RawenvLib
 
 // Helper to force SwiftUI body evaluation
@@ -16,7 +17,8 @@ private func makeAppState() -> AppState {
     UserDefaults.standard.set(true, forKey: "rawenv.installed")
     UserDefaults.standard.set(true, forKey: "rawenv.setupComplete")
     let state = AppState(repository: TestDataRepository(), aiProvider: TestAIProvider())
-    state.activeProject = Project(name: "utilio", path: "~/Projects/utilio", stack: ["Node.js", "Redis", "PostgreSQL"], deps: "5 deps")
+    state.activeProject = Project(
+        name: "utilio", path: "~/Projects/utilio", stack: ["Node.js", "Redis", "PostgreSQL"], deps: "5 deps")
     state.managedProjects = [state.activeProject!]
     return state
 }
@@ -141,7 +143,7 @@ private func makeAppState() -> AppState {
         let tm = ThemeManager()
         let vm = TunnelVM(tunnels: [
             TunnelInfo(port: "3000", provider: "bore", relay: "bore.pub", url: "bore.pub:34567"),
-            TunnelInfo(port: "8080", provider: "cloudflared", relay: "cloudflared.io", url: "cloudflared.io/abc123")
+            TunnelInfo(port: "8080", provider: "cloudflared", relay: "cloudflared.io", url: "cloudflared.io/abc123"),
         ])
         render(TunnelView(viewModel: vm).environmentObject(tm))
     }
@@ -181,14 +183,14 @@ private func makeAppState() -> AppState {
 
     @Test @MainActor func stepName() async {
         let vm = InstallerViewModel(repository: TestDataRepository())
-        #expect(vm.stepName == "welcome") // no config loaded
+        #expect(vm.stepName == "welcome")  // no config loaded
         await vm.load()
-        _ = vm.stepName // with config
+        _ = vm.stepName  // with config
     }
 
     @Test @MainActor func navigateToProjects() {
         let vm = InstallerViewModel(repository: TestDataRepository())
-        vm.navigateToProjects() // just verify no crash
+        vm.navigateToProjects()  // just verify no crash
     }
 }
 

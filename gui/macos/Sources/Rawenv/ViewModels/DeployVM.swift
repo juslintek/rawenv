@@ -1,6 +1,6 @@
-import Foundation
-import Combine
 import AppKit
+import Combine
+import Foundation
 
 /// Single source of truth for the Deploy screen's tabs. Drives both the
 /// `DeployViewModel` and the `DeployView` (replacing the old duplicate
@@ -90,7 +90,7 @@ public final class DeployViewModel: ObservableObject {
             let files: [(path: String, contents: String)] = [
                 ("\(dir)/terraform/main.tf", config.terraform),
                 ("\(dir)/ansible/playbook.yml", config.ansible),
-                ("\(dir)/Containerfile", config.containerfile)
+                ("\(dir)/Containerfile", config.containerfile),
             ]
             var written: [String] = []
             for file in files {

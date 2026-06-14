@@ -698,7 +698,6 @@ test "up with no services yields a zero-failure outcome" {
     try testing.expectEqual(@as(usize, 0), outcome.skipped);
 }
 
-
 test "isProjectApp: explicit app flag wins" {
     const config = @import("config");
     const entry = config.Config.Entry{ .key = "app", .value = "1", .service_type = "app", .app = true };

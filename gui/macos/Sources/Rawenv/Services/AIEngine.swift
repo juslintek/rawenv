@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 
 @MainActor
 public final class AIEngine: ObservableObject, @unchecked Sendable {
@@ -36,7 +36,8 @@ public final class AIEngine: ObservableObject, @unchecked Sendable {
     private func callProviders(prompt: String) async -> String {
         for provider in providers {
             if let response = await callProvider(
-                url: provider.url, key: provider.key, prompt: prompt) {
+                url: provider.url, key: provider.key, prompt: prompt)
+            {
                 return response
             }
         }
@@ -54,16 +55,17 @@ public final class AIEngine: ObservableObject, @unchecked Sendable {
         let body: [String: Any] = [
             "model": key != nil ? "llama-3.3-70b-versatile" : "llama3.2",
             "messages": [["role": "user", "content": prompt]],
-            "max_tokens": 1024
+            "max_tokens": 1024,
         ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         guard let (data, response) = try? await URLSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse, http.statusCode == 200,
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = json["choices"] as? [[String: Any]],
-              let message = choices.first?["message"] as? [String: Any],
-              let content = message["content"] as? String else { return nil }
+            let http = response as? HTTPURLResponse, http.statusCode == 200,
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let choices = json["choices"] as? [[String: Any]],
+            let message = choices.first?["message"] as? [String: Any],
+            let content = message["content"] as? String
+        else { return nil }
         return content
     }
 }

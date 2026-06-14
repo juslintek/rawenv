@@ -30,7 +30,9 @@ public final class ProjectCreator: ObservableObject {
     }
 
     public func create(template: FrameworkTemplate, name: String, parentDir: String) async {
-        isCreating = true; error = nil; createdPath = nil
+        isCreating = true
+        error = nil
+        createdPath = nil
         let projectDir = "\(parentDir)/\(name)"
         let fm = FileManager.default
 
@@ -38,7 +40,8 @@ public final class ProjectCreator: ObservableObject {
             try fm.createDirectory(atPath: projectDir, withIntermediateDirectories: true)
 
             for (filename, content) in template.files {
-                let rendered = content
+                let rendered =
+                    content
                     .replacingOccurrences(of: "{project_name}", with: name)
                     .replacingOccurrences(of: "{project_name_camel}", with: name.capitalized)
                 let filePath = "\(projectDir)/\(filename)"
@@ -66,12 +69,13 @@ public final class ProjectCreator: ObservableObject {
         let searchPaths = [
             "\(FileManager.default.currentDirectoryPath)/shared/recipes",
             "/Volumes/Projects/rawenv/shared/recipes",
-            "\(NSHomeDirectory())/.rawenv/recipes"
+            "\(NSHomeDirectory())/.rawenv/recipes",
         ]
         for base in searchPaths {
             let path = "\(base)/templates.json"
             guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
-                  let catalog = try? JSONDecoder().decode(TemplateCatalog.self, from: data) else { continue }
+                let catalog = try? JSONDecoder().decode(TemplateCatalog.self, from: data)
+            else { continue }
             templates = Array(catalog.templates.values).sorted { $0.name < $1.name }
             return
         }

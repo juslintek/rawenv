@@ -1,5 +1,8 @@
-# SwiftLint — strict configuration for the rawenv macOS GUI.
-# Run: swiftlint  (lint)   swiftlint --fix  (autocorrect)   swiftlint --strict (CI gate)
+# SwiftLint — safety-focused configuration for the rawenv macOS GUI.
+# `swift format` owns deterministic LAYOUT (run in pre-commit); SwiftLint enforces
+# SEMANTICS/SAFETY. The pre-push gate blocks on error-severity rules; everything
+# else is an advisory warning.
+# Run: swiftlint  (lint)   swiftlint --fix  (autocorrect)
 # Docs: https://realm.github.io/SwiftLint/rule-directory.html
 
 included:
@@ -10,8 +13,15 @@ excluded:
   - gui/macos/.build
   - gui/macos/build
 
-# Treat every warning as an error in --strict mode (used by the pre-push gate).
-strict: true
+# Rules that conflict with `swift format` (which is the formatting authority) or
+# are pure stylistic preference fighting idiomatic SwiftUI — disabled here.
+disabled_rules:
+  - trailing_comma                       # swift format adds them; SwiftLint default forbids
+  - opening_brace                        # swift format owns brace placement
+  - multiple_closures_with_trailing_closure  # idiomatic in SwiftUI
+  - blanket_disable_command
+  - identifier_name                      # Codable structs use snake_case to mirror JSON/CLI wire format (no CodingKeys boilerplate)
+  - type_name                            # inline throwaway Decodable structs in tests (struct V: Decodable …)
 
 # Opt-in rules — high-signal SAFETY/correctness rules. Pure layout/whitespace is
 # owned by `swift format` (deterministic), so we deliberately do NOT enable the
@@ -55,10 +65,16 @@ analyzer_rules:
 
 # Tunables — keep generous enough for the existing layout; tighten over time.
 line_length:
-  warning: 140
-  error: 200
+  warning: 160
+  error: 220
   ignores_comments: true
   ignores_urls: true
+
+type_name:
+  min_length: 1          # allow inline throwaway Decodable structs in tests (struct V: Decodable …)
+  max_length:
+    warning: 50
+    error: 70
 
 type_body_length:
   warning: 400

@@ -49,7 +49,11 @@ public struct MenuBarView: View {
                         Spacer()
                         // Custom toggle pill
                         Button(action: {
-                            if isOn { appState.serviceManager.stopService(name: service.name) } else { appState.serviceManager.startService(name: service.name) }
+                            if isOn {
+                                appState.serviceManager.stopService(name: service.name)
+                            } else {
+                                appState.serviceManager.startService(name: service.name)
+                            }
                         }) {
                             RoundedRectangle(cornerRadius: 10)
                                 .fill(isOn ? Color.green : Color.gray.opacity(0.3))
@@ -80,23 +84,31 @@ public struct MenuBarView: View {
             // Actions
             VStack(spacing: 8) {
                 HStack(spacing: 8) {
-                    actionButton("▶ Start All", filled: true,
-                                 id: "menubar_start_all") {
+                    actionButton(
+                        "▶ Start All", filled: true,
+                        id: "menubar_start_all"
+                    ) {
                         appState.serviceManager.startAll()
                     }
-                    actionButton("Dashboard", filled: false,
-                                 id: "menubar_open_dashboard") {
+                    actionButton(
+                        "Dashboard", filled: false,
+                        id: "menubar_open_dashboard"
+                    ) {
                         appState.navigate(to: .dashboard)
                         actions.openMainWindow()
                     }
                 }
                 HStack(spacing: 8) {
-                    actionButton("Open GUI", filled: false,
-                                 id: "menubar_open_gui") {
+                    actionButton(
+                        "Open GUI", filled: false,
+                        id: "menubar_open_gui"
+                    ) {
                         actions.openMainWindow()
                     }
-                    actionButton("Open TUI", filled: false,
-                                 id: "menubar_open_tui") {
+                    actionButton(
+                        "Open TUI", filled: false,
+                        id: "menubar_open_tui"
+                    ) {
                         actions.openTUI()
                     }
                 }
@@ -118,8 +130,10 @@ public struct MenuBarView: View {
 
     // MARK: - Subviews
 
-    private func actionButton(_ title: String, filled: Bool, id: String,
-                              action: @escaping () -> Void) -> some View {
+    private func actionButton(
+        _ title: String, filled: Bool, id: String,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 11, weight: .medium))

@@ -1,6 +1,7 @@
-import Testing
-import Foundation
 import AppKit
+import Foundation
+import Testing
+
 @testable import RawenvLib
 
 // Full E2E tests — no mocks, all real implementations.
@@ -20,7 +21,7 @@ private func pollUntilInstallFlow(timeoutMs: Int = 20_000, _ condition: @MainAct
 private func binaryPath() -> String {
     let candidates = [
         "/Volumes/Projects/rawenv/zig-out/bin/rawenv",
-        "\(FileManager.default.currentDirectoryPath)/../../zig-out/bin/rawenv"
+        "\(FileManager.default.currentDirectoryPath)/../../zig-out/bin/rawenv",
     ]
     for c in candidates where FileManager.default.isExecutableFile(atPath: c) { return c }
     return "rawenv"
@@ -40,7 +41,12 @@ private let projectDir = "/Volumes/Projects/rawenv"
     }
 
     @Test func servicesLsJSON() async throws {
-        struct S: Decodable { let name: String; let version: String; let status: String; let port: Int }
+        struct S: Decodable {
+            let name: String
+            let version: String
+            let status: String
+            let port: Int
+        }
         let services: [S] = try await cli.runJSON(["services", "ls"], as: [S].self, cwd: projectDir)
         #expect(!services.isEmpty)
         for s in services {
@@ -51,7 +57,11 @@ private let projectDir = "/Volumes/Projects/rawenv"
     }
 
     @Test func discoverJSON() async throws {
-        struct P: Decodable { let path: String; let stack: String; let has_rawenv: Bool }
+        struct P: Decodable {
+            let path: String
+            let stack: String
+            let has_rawenv: Bool
+        }
         let projects: [P] = try await cli.runJSON(["discover"], as: [P].self)
         // May be empty depending on machine, just verify no crash
         for p in projects {
@@ -61,7 +71,10 @@ private let projectDir = "/Volumes/Projects/rawenv"
     }
 
     @Test func connectionsJSON() async throws {
-        struct C: Decodable { let from: String; let to: String }
+        struct C: Decodable {
+            let from: String
+            let to: String
+        }
         let _: [C] = try await cli.runJSON(["connections"], as: [C].self, cwd: projectDir)
     }
 
@@ -127,7 +140,8 @@ private let projectDir = "/Volumes/Projects/rawenv"
 
     @Test func fetchDeployConfig() async {
         // May fail if `deploy generate` errors — valid; fall back to empty.
-        let config = (try? await store.fetchDeployConfig())
+        let config =
+            (try? await store.fetchDeployConfig())
             ?? DeployConfig(terraform: "", ansible: "", containerfile: "")
         _ = config.terraform
     }
@@ -141,7 +155,7 @@ private let projectDir = "/Volumes/Projects/rawenv"
 
     @Test func fetchAIMessages() async throws {
         let msgs = try await store.fetchAIMessages()
-        #expect(msgs.isEmpty) // Real store starts with no history
+        #expect(msgs.isEmpty)  // Real store starts with no history
     }
 }
 
@@ -149,14 +163,16 @@ private let projectDir = "/Volumes/Projects/rawenv"
 
 @Suite struct E2E_ServiceManager {
     @Test @MainActor func loadsServicesFromCLI() async {
-        let mgr = ServiceManager(repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
+        let mgr = ServiceManager(
+            repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
         try? await Task.sleep(nanoseconds: 1_000_000_000)
         // Services may or may not load depending on CLI availability
         _ = mgr.services
     }
 
     @Test @MainActor func startStopService() async {
-        let mgr = ServiceManager(repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
+        let mgr = ServiceManager(
+            repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
         try? await Task.sleep(nanoseconds: 500_000_000)
         guard let name = mgr.services.first?.name else { return }
         // These call launchctl — may not actually change status without plists installed
@@ -168,7 +184,8 @@ private let projectDir = "/Volumes/Projects/rawenv"
     }
 
     @Test @MainActor func restartService() async {
-        let mgr = ServiceManager(repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
+        let mgr = ServiceManager(
+            repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
         try? await Task.sleep(nanoseconds: 500_000_000)
         guard let name = mgr.services.first?.name else { return }
         mgr.restartService(name: name)
@@ -176,7 +193,8 @@ private let projectDir = "/Volumes/Projects/rawenv"
     }
 
     @Test @MainActor func startAllStopAll() async {
-        let mgr = ServiceManager(repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
+        let mgr = ServiceManager(
+            repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
         try? await Task.sleep(nanoseconds: 500_000_000)
         mgr.startAll()
         try? await Task.sleep(nanoseconds: 300_000_000)
@@ -471,7 +489,8 @@ private let projectDir = "/Volumes/Projects/rawenv"
 
 @Suite struct E2E_ConnectionsVM {
     @Test @MainActor func loadFromRealStore() async {
-        let vm = ConnectionsViewModel(repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
+        let vm = ConnectionsViewModel(
+            repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
         await vm.load()
         // May be empty if no connections in rawenv.toml
         for c in vm.connections {
@@ -481,7 +500,8 @@ private let projectDir = "/Volumes/Projects/rawenv"
     }
 
     @Test @MainActor func setMode() async {
-        let vm = ConnectionsViewModel(repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
+        let vm = ConnectionsViewModel(
+            repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
         await vm.load()
         vm.setMode("proxy", for: "TEST_VAR")
         #expect(vm.connectionModes["TEST_VAR"] == "proxy")
@@ -492,8 +512,11 @@ private let projectDir = "/Volumes/Projects/rawenv"
     }
 
     @Test @MainActor func connectionString() {
-        let vm = ConnectionsViewModel(repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
-        let conn = Connection(envVar: "DB", original: "remote://host", local: "local://host", mode: "local", badge: "L", proxy: "proxy://host", alternative: nil)
+        let vm = ConnectionsViewModel(
+            repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
+        let conn = Connection(
+            envVar: "DB", original: "remote://host", local: "local://host", mode: "local", badge: "L",
+            proxy: "proxy://host", alternative: nil)
         vm.connectionModes["DB"] = "local"
         #expect(vm.connectionString(for: conn) == "local://host")
         vm.connectionModes["DB"] = "remote"
@@ -503,8 +526,10 @@ private let projectDir = "/Volumes/Projects/rawenv"
     }
 
     @Test @MainActor func copyConnectionString() {
-        let vm = ConnectionsViewModel(repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
-        let conn = Connection(envVar: "X", original: "value", local: nil, mode: "remote", badge: "", proxy: nil, alternative: nil)
+        let vm = ConnectionsViewModel(
+            repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
+        let conn = Connection(
+            envVar: "X", original: "value", local: nil, mode: "remote", badge: "", proxy: nil, alternative: nil)
         vm.copyConnectionString(for: conn)
         // Verify clipboard was set
         let clipboard = NSPasteboard.general.string(forType: .string)
@@ -516,14 +541,16 @@ private let projectDir = "/Volumes/Projects/rawenv"
 
 @Suite struct E2E_DeployVM {
     @Test @MainActor func loadConfig() async {
-        let vm = DeployViewModel(repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
+        let vm = DeployViewModel(
+            repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
         await vm.load()
         // config may be empty if deploy generate fails
         _ = vm.config
     }
 
     @Test @MainActor func tabSwitching() async {
-        let vm = DeployViewModel(repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
+        let vm = DeployViewModel(
+            repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
         await vm.load()
         vm.selectedTab = .terraform
         _ = vm.currentContent
@@ -534,7 +561,8 @@ private let projectDir = "/Volumes/Projects/rawenv"
     }
 
     @Test @MainActor func copyCurrentContent() async {
-        let vm = DeployViewModel(repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
+        let vm = DeployViewModel(
+            repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir))
         await vm.load()
         vm.copyCurrentContent()
         // Just verify no crash
@@ -546,7 +574,9 @@ private let projectDir = "/Volumes/Projects/rawenv"
 @Suite struct E2E_AppState {
     @Test @MainActor func realModeHasRealEngines() {
         AppState.useTestDoubles = false
-        let state = AppState(repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir), aiProvider: AIProviderCascade())
+        let state = AppState(
+            repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir),
+            aiProvider: AIProviderCascade())
         #expect(state.realServiceManager != nil)
         #expect(state.realScannerEngine != nil)
         #expect(state.realInstallerEngine != nil)
@@ -555,7 +585,9 @@ private let projectDir = "/Volumes/Projects/rawenv"
     }
 
     @Test @MainActor func navigationWorks() {
-        let state = AppState(repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir), aiProvider: AIProviderCascade())
+        let state = AppState(
+            repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir),
+            aiProvider: AIProviderCascade())
         for dest in Destination.allCases {
             state.navigate(to: dest)
             #expect(state.currentDestination == dest)
@@ -563,17 +595,21 @@ private let projectDir = "/Volumes/Projects/rawenv"
     }
 
     @Test @MainActor func projectManagement() {
-        let state = AppState(repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir), aiProvider: AIProviderCascade())
+        let state = AppState(
+            repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir),
+            aiProvider: AIProviderCascade())
         let p = Project(name: "test", path: "/tmp/test", stack: ["Zig"], deps: "1 dep")
         state.addManagedProject(p)
         #expect(state.managedProjects.contains(where: { $0.name == "test" }))
         #expect(state.activeProject?.name == "test")
-        state.addManagedProject(p) // duplicate
+        state.addManagedProject(p)  // duplicate
         #expect(state.managedProjects.filter({ $0.name == "test" }).count == 1)
     }
 
     @Test @MainActor func installMarkersWork() {
-        let state = AppState(repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir), aiProvider: AIProviderCascade())
+        let state = AppState(
+            repository: DataStore(cli: RawenvCLI(binaryPath: binaryPath()), projectPath: projectDir),
+            aiProvider: AIProviderCascade())
         state.markInstalled()
         #expect(state.isInstalled == true)
         state.markSetupComplete()

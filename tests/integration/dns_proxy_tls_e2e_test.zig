@@ -117,7 +117,7 @@ const toml =
     \\[services.redis]
     \\version = "7"
     \\port = 38002
-;
+    ;
 
 // ============================================================
 // up — Caddyfile + self-signed TLS cert

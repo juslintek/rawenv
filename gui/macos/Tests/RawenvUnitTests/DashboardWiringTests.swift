@@ -1,7 +1,8 @@
-import Testing
-import SwiftUI
 import AppKit
 import Foundation
+import SwiftUI
+import Testing
+
 @testable import RawenvLib
 
 /// Covers the FIX-DASH wiring (DB-1…DB-4): project-level start/stop via the
@@ -14,8 +15,14 @@ import Foundation
 /// scoping can be asserted deterministically.
 private final class PerServiceRepository: DataRepository, @unchecked Sendable {
     func fetchServices() async -> [Service] {
-        [Service(name: "PostgreSQL", port: 5432, version: "16", pid: 1, cpu: "2.1%", mem: "84 MB", uptime: "2h", status: "running", icon: "🐘"),
-         Service(name: "Redis", port: 6379, version: "7.4", pid: nil, cpu: nil, mem: nil, uptime: nil, status: "stopped", icon: "🔴")]
+        [
+            Service(
+                name: "PostgreSQL", port: 5432, version: "16", pid: 1, cpu: "2.1%", mem: "84 MB", uptime: "2h",
+                status: "running", icon: "🐘"),
+            Service(
+                name: "Redis", port: 6379, version: "7.4", pid: nil, cpu: nil, mem: nil, uptime: nil, status: "stopped",
+                icon: "🔴"),
+        ]
     }
     func fetchLogs() async -> [LogEntry] {
         [LogEntry(time: "10:00:00", msg: "global line", level: "info")]
@@ -30,12 +37,23 @@ private final class PerServiceRepository: DataRepository, @unchecked Sendable {
     func fetchProjects() async -> [Project] { [] }
     func fetchSettings() async -> AppSettings {
         AppSettings(
-            general: GeneralSettings(storeLocation: "/x", autoStartServices: false, autoDetectProjects: false, launchAtLogin: false, fileWatcher: false, scanPaths: []),
-            network: NetworkSettings(localDomain: ".test", autoTls: false, proxyPort: 80, tunnelProvider: "bore", relayServer: "bore.pub"),
-            cells: CellsSettings(enableByDefault: false, defaultMemoryLimit: "256MB", defaultCpuLimit: "1", networkIsolation: false),
-            deploy: DeploySettings(provider: "Hetzner", sshKey: "", terraformPath: "", ansiblePath: "", autoGenerate: false, containerRuntime: "podman", registry: ""),
-            ai: AISettings(provider: "groq", providers: ["groq"], apiKey: "", ollamaEndpoint: "", proactiveSuggestions: false, autoApplySafeFixes: false, includeLogsInContext: false, maxContextSize: 4096, autonomyLevels: ["suggest-only"], defaultAutonomy: "suggest-only"),
-            theme: ThemeSettings(mode: "system", accentColor: "#6366f1", successColor: "#34d399", errorColor: "#f87171", warningColor: "#fbbf24", borderRadius: 8, fontSize: 13, sidebarWidth: 240)
+            general: GeneralSettings(
+                storeLocation: "/x", autoStartServices: false, autoDetectProjects: false, launchAtLogin: false,
+                fileWatcher: false, scanPaths: []),
+            network: NetworkSettings(
+                localDomain: ".test", autoTls: false, proxyPort: 80, tunnelProvider: "bore", relayServer: "bore.pub"),
+            cells: CellsSettings(
+                enableByDefault: false, defaultMemoryLimit: "256MB", defaultCpuLimit: "1", networkIsolation: false),
+            deploy: DeploySettings(
+                provider: "Hetzner", sshKey: "", terraformPath: "", ansiblePath: "", autoGenerate: false,
+                containerRuntime: "podman", registry: ""),
+            ai: AISettings(
+                provider: "groq", providers: ["groq"], apiKey: "", ollamaEndpoint: "", proactiveSuggestions: false,
+                autoApplySafeFixes: false, includeLogsInContext: false, maxContextSize: 4096,
+                autonomyLevels: ["suggest-only"], defaultAutonomy: "suggest-only"),
+            theme: ThemeSettings(
+                mode: "system", accentColor: "#6366f1", successColor: "#34d399", errorColor: "#f87171",
+                warningColor: "#fbbf24", borderRadius: 8, fontSize: 13, sidebarWidth: 240)
         )
     }
     func fetchDeployConfig() async -> DeployConfig { DeployConfig(terraform: "", ansible: "", containerfile: "") }
@@ -55,8 +73,12 @@ private struct StubStatsProvider: ProcessStatsProvider {
 @Suite struct DashboardStartStopTests {
     @MainActor private func makeManager() async -> ServiceManager {
         let backend = FakeServiceBackend([
-            Service(name: "PostgreSQL", port: 5432, version: "16", pid: nil, cpu: nil, mem: nil, uptime: nil, status: "stopped", icon: "🐘"),
-            Service(name: "Redis", port: 6379, version: "7.4", pid: 1, cpu: nil, mem: nil, uptime: nil, status: "running", icon: "🔴")
+            Service(
+                name: "PostgreSQL", port: 5432, version: "16", pid: nil, cpu: nil, mem: nil, uptime: nil,
+                status: "stopped", icon: "🐘"),
+            Service(
+                name: "Redis", port: 6379, version: "7.4", pid: 1, cpu: nil, mem: nil, uptime: nil, status: "running",
+                icon: "🔴"),
         ])
         let mgr = ServiceManager(repository: TestDataRepository(), backend: backend)
         await mgr.loadInitial(repository: TestDataRepository())
@@ -103,7 +125,7 @@ private struct StubStatsProvider: ProcessStatsProvider {
         let running = services.first { $0.status == "running" }
         let stopped = services.first { $0.status == "stopped" }
         #expect(running?.cpu != nil)
-        #expect(stopped?.cpu == nil) // UI renders an em dash for nil cpu/mem
+        #expect(stopped?.cpu == nil)  // UI renders an em dash for nil cpu/mem
     }
 }
 
@@ -133,26 +155,26 @@ private struct StubStatsProvider: ProcessStatsProvider {
 @Suite struct ConfigSectionTests {
     @Test func extractsServiceLineFromServicesTable() {
         let toml = """
-        [project]
-        name = "demo"
+            [project]
+            name = "demo"
 
-        [services]
-        postgresql = "16"
-        redis = "7"
-        """
+            [services]
+            postgresql = "16"
+            redis = "7"
+            """
         let section = DataStore.configSection(for: "postgresql", in: toml)
         #expect(section == "[services]\npostgresql = \"16\"")
     }
 
     @Test func extractsDedicatedServiceTable() {
         let toml = """
-        [services.postgresql]
-        port = 5432
-        max_connections = 100
+            [services.postgresql]
+            port = 5432
+            max_connections = 100
 
-        [services.redis]
-        port = 6379
-        """
+            [services.redis]
+            port = 6379
+            """
         let section = DataStore.configSection(for: "postgresql", in: toml)
         #expect(section.contains("[services.postgresql]"))
         #expect(section.contains("port = 5432"))
@@ -162,12 +184,12 @@ private struct StubStatsProvider: ProcessStatsProvider {
 
     @Test func fallsBackToFullDocumentWhenNoMatch() {
         let toml = """
-        [project]
-        name = "demo"
+            [project]
+            name = "demo"
 
-        [services]
-        redis = "7"
-        """
+            [services]
+            redis = "7"
+            """
         let section = DataStore.configSection(for: "postgresql", in: toml)
         #expect(section == toml)
     }

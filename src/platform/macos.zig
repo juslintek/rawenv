@@ -244,9 +244,15 @@ pub fn runMenuBar(allocator: std.mem.Allocator) !void {
         var buf_list: std.ArrayList(u8) = .empty;
         var read_buf: [4096]u8 = undefined;
         while (true) {
-            const rn = std.posix.read(fd, &read_buf) catch { buf_list.deinit(allocator); break :blk @as(?[]const u8, null); };
+            const rn = std.posix.read(fd, &read_buf) catch {
+                buf_list.deinit(allocator);
+                break :blk @as(?[]const u8, null);
+            };
             if (rn == 0) break;
-            buf_list.appendSlice(allocator, read_buf[0..rn]) catch { buf_list.deinit(allocator); break :blk @as(?[]const u8, null); };
+            buf_list.appendSlice(allocator, read_buf[0..rn]) catch {
+                buf_list.deinit(allocator);
+                break :blk @as(?[]const u8, null);
+            };
         }
         break :blk buf_list.toOwnedSlice(allocator) catch null;
     }) |toml| {

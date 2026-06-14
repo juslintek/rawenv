@@ -8,7 +8,10 @@ public struct TunnelInfo: Identifiable, Equatable {
     public let url: String
 
     public init(port: String, provider: String, relay: String, url: String) {
-        self.port = port; self.provider = provider; self.relay = relay; self.url = url
+        self.port = port
+        self.provider = provider
+        self.relay = relay
+        self.url = url
     }
 
     public static func == (lhs: TunnelInfo, rhs: TunnelInfo) -> Bool { lhs.id == rhs.id }
@@ -30,7 +33,12 @@ public final class TunnelVM: ObservableObject {
         }
     }
     @Published public var provider = "bore" {
-        didSet { if oldValue != provider { installPrompt = nil; installError = nil } }
+        didSet {
+            if oldValue != provider {
+                installPrompt = nil
+                installError = nil
+            }
+        }
     }
     @Published public var relayServer = "bore.pub"
     @Published public var tunnels: [TunnelInfo] = []
@@ -43,14 +51,16 @@ public final class TunnelVM: ObservableObject {
     /// Non-nil when the port field holds an out-of-range / non-numeric value.
     @Published public var portError: String?
 
-    public init(tunnels: [TunnelInfo] = [],
-                provider: String = "bore",
-                relayServer: String = "bore.pub",
-                port: String = "3000",
-                toolInstalled: ((String) -> Bool)? = nil,
-                commandRunner: (@Sendable (String) -> String)? = nil,
-                repository: DataRepository? = nil,
-                settingsStore: SettingsPersisting = SettingsStore()) {
+    public init(
+        tunnels: [TunnelInfo] = [],
+        provider: String = "bore",
+        relayServer: String = "bore.pub",
+        port: String = "3000",
+        toolInstalled: ((String) -> Bool)? = nil,
+        commandRunner: (@Sendable (String) -> String)? = nil,
+        repository: DataRepository? = nil,
+        settingsStore: SettingsPersisting = SettingsStore()
+    ) {
         self.tunnels = tunnels
         self.provider = provider
         self.relayServer = relayServer
@@ -153,7 +163,10 @@ public final class TunnelVM: ObservableObject {
         }
     }
 
-    public func dismissInstallPrompt() { installPrompt = nil; installError = nil }
+    public func dismissInstallPrompt() {
+        installPrompt = nil
+        installError = nil
+    }
 
     private func appendTunnel() {
         let randomPort = Int.random(in: 30000...60000)
@@ -181,8 +194,13 @@ public final class TunnelVM: ObservableObject {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: brew)
         proc.arguments = ["install", formula]
-        proc.standardOutput = Pipe(); proc.standardError = Pipe()
-        do { try proc.run(); proc.waitUntilExit(); return proc.terminationStatus == 0 } catch { return false }
+        proc.standardOutput = Pipe()
+        proc.standardError = Pipe()
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+            return proc.terminationStatus == 0
+        } catch { return false }
     }
 
     /// Run `rawenv tunnel <port>` synchronously and return its combined output.

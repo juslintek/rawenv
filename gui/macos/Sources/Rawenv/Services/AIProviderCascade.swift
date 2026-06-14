@@ -30,20 +30,23 @@ public final class AIProviderCascade: AIProvider, @unchecked Sendable {
     public init() {
         // Backward-compatible default: seed the key from the environment so
         // existing setups and CI keep working until Settings supplies one.
-        apiKey = ProcessInfo.processInfo.environment["GROQ_API_KEY"]
+        apiKey =
+            ProcessInfo.processInfo.environment["GROQ_API_KEY"]
             ?? ProcessInfo.processInfo.environment["CEREBRAS_API_KEY"]
     }
 
     // MARK: - Configuration (AI-2)
 
     public func selectProvider(_ name: String) {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         if !trimmed.isEmpty { selected = trimmed }
     }
 
     public func configure(apiKey: String?, ollamaEndpoint: String?) {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         if let apiKey, !apiKey.isEmpty { self.apiKey = apiKey }
         if let ollamaEndpoint, !ollamaEndpoint.isEmpty { self.ollamaEndpoint = ollamaEndpoint }
     }
@@ -109,7 +112,8 @@ public final class AIProviderCascade: AIProvider, @unchecked Sendable {
     public func send(prompt: String) async -> String {
         for provider in plannedProviders() {
             if let response = await callProvider(
-                url: provider.url, key: provider.key, model: provider.model, prompt: prompt) {
+                url: provider.url, key: provider.key, model: provider.model, prompt: prompt)
+            {
                 return response
             }
         }
@@ -127,16 +131,17 @@ public final class AIProviderCascade: AIProvider, @unchecked Sendable {
         let body: [String: Any] = [
             "model": model,
             "messages": [["role": "user", "content": prompt]],
-            "max_tokens": 1024
+            "max_tokens": 1024,
         ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         guard let (data, response) = try? await URLSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse, http.statusCode == 200,
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = json["choices"] as? [[String: Any]],
-              let message = choices.first?["message"] as? [String: Any],
-              let content = message["content"] as? String else { return nil }
+            let http = response as? HTTPURLResponse, http.statusCode == 200,
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let choices = json["choices"] as? [[String: Any]],
+            let message = choices.first?["message"] as? [String: Any],
+            let content = message["content"] as? String
+        else { return nil }
         return content
     }
 }

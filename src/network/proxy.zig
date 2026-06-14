@@ -223,11 +223,11 @@ pub fn generateSelfSignedCert(allocator: std.mem.Allocator, domain: []const u8, 
     defer allocator.free(subj_z);
 
     const argv = [_][*:0]const u8{
-        "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
-        "-keyout", key_path_z, "-out", cert_path_z,
-        "-days",  "365",  "-subj", subj_z,
+        "openssl", "req",      "-x509", "-newkey",   "rsa:2048", "-nodes",
+        "-keyout", key_path_z, "-out",  cert_path_z, "-days",    "365",
+        "-subj",   subj_z,
     };
-    
+
     const exit_code = try exec.run(&argv);
     if (exit_code != 0) return error.OpenSSLFailed;
 

@@ -623,7 +623,6 @@ test "resolve node unsupported major" {
     try std.testing.expectError(ResolveError.UnknownVersion, resolve(std.testing.allocator, "node", "16"));
 }
 
-
 test "resolve bun@1 (github prebuilt binary)" {
     const pkg = try resolve(std.testing.allocator, "bun", "1");
     defer std.testing.allocator.free(pkg.url);

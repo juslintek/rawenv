@@ -1,5 +1,6 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import RawenvLib
 
 // These tests run against the real rawenv binary.
@@ -10,7 +11,7 @@ private func binaryPath() -> String {
     // Try relative to project root
     let candidates = [
         "/Volumes/Projects/rawenv/zig-out/bin/rawenv",
-        "\(FileManager.default.currentDirectoryPath)/../../zig-out/bin/rawenv"
+        "\(FileManager.default.currentDirectoryPath)/../../zig-out/bin/rawenv",
     ]
     for c in candidates where FileManager.default.isExecutableFile(atPath: c) { return c }
     return "rawenv"
@@ -28,21 +29,33 @@ private func binaryPath() -> String {
     }
 
     @Test func servicesLsJSON() async throws {
-        struct S: Decodable { let name: String; let version: String; let status: String; let port: Int }
+        struct S: Decodable {
+            let name: String
+            let version: String
+            let status: String
+            let port: Int
+        }
         let services: [S] = try await cli.runJSON(["services", "ls"], as: [S].self, cwd: "/Volumes/Projects/rawenv")
         #expect(!services.isEmpty)
         #expect(services[0].port > 0)
     }
 
     @Test func discoverJSON() async throws {
-        struct P: Decodable { let path: String; let stack: String; let has_rawenv: Bool }
+        struct P: Decodable {
+            let path: String
+            let stack: String
+            let has_rawenv: Bool
+        }
         let projects: [P] = try await cli.runJSON(["discover"], as: [P].self)
         // May be empty if no projects in default scan dirs, that's OK
         _ = projects
     }
 
     @Test func connectionsJSON() async throws {
-        struct C: Decodable { let from: String; let to: String }
+        struct C: Decodable {
+            let from: String
+            let to: String
+        }
         let conns: [C] = try await cli.runJSON(["connections"], as: [C].self, cwd: "/Volumes/Projects/rawenv")
         // May be empty
         _ = conns
@@ -168,12 +181,13 @@ private func binaryPath() -> String {
 @Suite struct AppStateRealModeTests {
     @Test @MainActor func realFactory() {
         AppState.useTestDoubles = false
-        let state = AppState(repository: RealDataRepository(cli: RawenvCLI(binaryPath: binaryPath())), aiProvider: RealAIProvider())
+        let state = AppState(
+            repository: RealDataRepository(cli: RawenvCLI(binaryPath: binaryPath())), aiProvider: RealAIProvider())
         #expect(state.realServiceManager != nil)
         #expect(state.realScannerEngine != nil)
         #expect(state.realInstallerEngine != nil)
         #expect(state.realDeployEngine != nil)
-        AppState.useTestDoubles = true // reset
+        AppState.useTestDoubles = true  // reset
     }
 
     @Test @MainActor func testModeFactory() {

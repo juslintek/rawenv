@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 
 @MainActor
 public final class DeployEngine: ObservableObject, @unchecked Sendable {
@@ -59,7 +59,7 @@ public final class DeployEngine: ObservableObject, @unchecked Sendable {
             Step(label: "terraform plan", cmd: "terraform", args: ["plan"], requiresConfirmation: false),
             // `apply` is gated: it is only run after the user confirms in the
             // UI, and approval is never granted via a command-line flag.
-            Step(label: "terraform apply", cmd: "terraform", args: ["apply"], requiresConfirmation: true)
+            Step(label: "terraform apply", cmd: "terraform", args: ["apply"], requiresConfirmation: true),
         ]
     }
 
@@ -111,7 +111,8 @@ public final class DeployEngine: ObservableObject, @unchecked Sendable {
     /// project's `rawenv.toml`, regenerate the IaC from the new config, then retry.
     public func changePort() {
         guard let oldPort = Self.parsePort(from: errorMessage) else {
-            logs.append(LogEntry(text: "No port conflict found in the deploy output — nothing to change.", isError: false))
+            logs.append(
+                LogEntry(text: "No port conflict found in the deploy output — nothing to change.", isError: false))
             return
         }
         let newPort = oldPort + 1
@@ -168,9 +169,10 @@ public final class DeployEngine: ObservableObject, @unchecked Sendable {
                 return
             }
 
-            logs.append(LogEntry(
-                text: "$ \(step.cmd) \(step.args.joined(separator: " "))",
-                isError: false))
+            logs.append(
+                LogEntry(
+                    text: "$ \(step.cmd) \(step.args.joined(separator: " "))",
+                    isError: false))
 
             // A confirmed apply approves the plan via stdin rather than a
             // command-line approval flag, so approval always flows through the dialog.
@@ -191,7 +193,7 @@ public final class DeployEngine: ObservableObject, @unchecked Sendable {
             }
             progress = Double(index + 1) / Double(steps.count)
             index += 1
-            stepConfirmed = false // confirmation only authorizes its own step
+            stepConfirmed = false  // confirmation only authorizes its own step
         }
         isRunning = false
     }
@@ -203,7 +205,8 @@ public final class DeployEngine: ObservableObject, @unchecked Sendable {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = [cmd] + args
         process.currentDirectoryURL = URL(fileURLWithPath: projectPath)
-        let outPipe = Pipe(), errPipe = Pipe()
+        let outPipe = Pipe()
+        let errPipe = Pipe()
         process.standardOutput = outPipe
         process.standardError = errPipe
         if let stdin {
@@ -217,13 +220,15 @@ public final class DeployEngine: ObservableObject, @unchecked Sendable {
         do {
             try process.run()
             process.waitUntilExit()
-            let out = String(
-                data: outPipe.fileHandleForReading.readDataToEndOfFile(),
-                encoding: .utf8) ?? ""
-            if process.terminationStatus != 0 {
-                let err = String(
-                    data: errPipe.fileHandleForReading.readDataToEndOfFile(),
+            let out =
+                String(
+                    data: outPipe.fileHandleForReading.readDataToEndOfFile(),
                     encoding: .utf8) ?? ""
+            if process.terminationStatus != 0 {
+                let err =
+                    String(
+                        data: errPipe.fileHandleForReading.readDataToEndOfFile(),
+                        encoding: .utf8) ?? ""
                 return (out, err.isEmpty ? "\(cmd) exited with status \(process.terminationStatus)" : err)
             }
             return (out, nil)
@@ -240,15 +245,16 @@ public final class DeployEngine: ObservableObject, @unchecked Sendable {
         guard !text.isEmpty else { return nil }
         let patterns = [
             #"port[^0-9]{0,4}([0-9]{2,5})"#,
-            #":([0-9]{2,5})\b"#
+            #":([0-9]{2,5})\b"#,
         ]
         for pattern in patterns {
             guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
             let range = NSRange(text.startIndex..., in: text)
             if let match = regex.firstMatch(in: text, options: [], range: range),
-               match.numberOfRanges > 1,
-               let r = Range(match.range(at: 1), in: text),
-               let value = Int(text[r]) {
+                match.numberOfRanges > 1,
+                let r = Range(match.range(at: 1), in: text),
+                let value = Int(text[r])
+            {
                 return value
             }
         }
@@ -262,7 +268,8 @@ public final class DeployEngine: ObservableObject, @unchecked Sendable {
         guard let regex = try? NSRegularExpression(pattern: #"(?<![0-9])\#(oldPort)(?![0-9])"#) else { return false }
         let range = NSRange(contents.startIndex..., in: contents)
         guard regex.firstMatch(in: contents, options: [], range: range) != nil else { return false }
-        let updated = regex.stringByReplacingMatches(in: contents, options: [], range: range, withTemplate: "\(newPort)")
+        let updated = regex.stringByReplacingMatches(
+            in: contents, options: [], range: range, withTemplate: "\(newPort)")
         do {
             try updated.write(toFile: path, atomically: true, encoding: .utf8)
             return true
@@ -289,7 +296,9 @@ public final class DeployEngine: ObservableObject, @unchecked Sendable {
         if lower.contains("permission") || lower.contains("denied") {
             return "Permission denied. Check file/SSH-key permissions for the project, then Retry."
         }
-        if lower.contains("credential") || lower.contains("token") || lower.contains("unauthorized") || lower.contains("auth") {
+        if lower.contains("credential") || lower.contains("token") || lower.contains("unauthorized")
+            || lower.contains("auth")
+        {
             return "Provider credentials look missing or invalid. Set them in Settings → Deploy, then Retry."
         }
         // Fall back to echoing the first concrete line of the real error.
