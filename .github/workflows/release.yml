@@ -113,4 +113,3 @@ jobs:
           git add packaging/homebrew/rawenv.rb
           git commit -m "chore(release): update Homebrew formula for ${GITHUB_REF_NAME}"
           git push origin "${DEFAULT_BRANCH}"
-

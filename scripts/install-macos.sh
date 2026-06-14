@@ -26,9 +26,12 @@ APPLICATIONS_DIR="/Applications"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MACOS_DIR="${REPO_ROOT}/gui/macos"
 
-log()  { printf '\033[0;32m==>\033[0m %s\n' "$*"; }
+log() { printf '\033[0;32m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*"; }
-die()  { printf '\033[0;31m[error]\033[0m %s\n' "$*" >&2; exit 1; }
+die() {
+  printf '\033[0;31m[error]\033[0m %s\n' "$*" >&2
+  exit 1
+}
 
 cd "$REPO_ROOT"
 
@@ -57,13 +60,20 @@ CLI_BIN="${REPO_ROOT}/zig-out/bin/rawenv"
 log "Installing CLI → ${INSTALL_CLI_DIR}/rawenv"
 mkdir -p "$INSTALL_CLI_DIR"
 install -m 0755 "$CLI_BIN" "${INSTALL_CLI_DIR}/rawenv"
-echo "    $("${INSTALL_CLI_DIR}/rawenv" --version) installed"
+
+# Hash check: the installed CLI must be byte-identical to what we just built.
+SRC_SHA="$(shasum -a 256 "$CLI_BIN" | awk '{print $1}')"
+DST_SHA="$(shasum -a 256 "${INSTALL_CLI_DIR}/rawenv" | awk '{print $1}')"
+[ "$SRC_SHA" = "$DST_SHA" ] || die "CLI hash mismatch after install (src ${SRC_SHA:0:12} != dst ${DST_SHA:0:12})"
+echo "    $("${INSTALL_CLI_DIR}/rawenv" --version) installed  (sha256 ${DST_SHA:0:12}… verified)"
 
 # PATH hint
 case ":${PATH}:" in
   *":${INSTALL_CLI_DIR}:"*) ;;
-  *) warn "${INSTALL_CLI_DIR} is not in your PATH. Add to ~/.zshrc:"
-     printf '         export PATH="%s:$PATH"\n' "$INSTALL_CLI_DIR" ;;
+  *)
+    warn "${INSTALL_CLI_DIR} is not in your PATH. Add to ~/.zshrc:"
+    printf '         export PATH="%s:$PATH"\n' "$INSTALL_CLI_DIR"
+    ;;
 esac
 
 # ---------------------------------------------------------------------------
@@ -92,6 +102,14 @@ fi
 log "Installing app → ${APPLICATIONS_DIR}/${APP_NAME}"
 rm -rf "${APPLICATIONS_DIR:?}/${APP_NAME}"
 cp -R "$APP_PATH" "${APPLICATIONS_DIR}/${APP_NAME}"
+
+# Hash check: the installed app's GUI binary + embedded CLI must match the build.
+for rel in "Contents/MacOS/Rawenv" "Contents/Resources/rawenv"; do
+  src_sha="$(shasum -a 256 "${APP_PATH}/${rel}" | awk '{print $1}')"
+  dst_sha="$(shasum -a 256 "${APPLICATIONS_DIR}/${APP_NAME}/${rel}" | awk '{print $1}')"
+  [ "$src_sha" = "$dst_sha" ] || die "app hash mismatch for ${rel} (src ${src_sha:0:12} != dst ${dst_sha:0:12})"
+  echo "    ${rel}  sha256 ${dst_sha:0:12}… verified"
+done
 
 # Strip the quarantine flag so Gatekeeper does not block a locally-built,
 # unsigned/ad-hoc app on first launch.

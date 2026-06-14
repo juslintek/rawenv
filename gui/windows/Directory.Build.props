@@ -1,0 +1,28 @@
+<!-- Strict C# analysis for the rawenv Windows GUI. Applies to every project
+     under gui/windows/ (app, tests, e2e). -->
+<Project>
+  <PropertyGroup>
+    <!-- Roslyn + .NET analyzers at maximum strictness. -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-all</AnalysisLevel>
+    <AnalysisMode>All</AnalysisMode>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
+    <!-- Null-safety + language hygiene. -->
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!-- Generate XML docs so missing-doc analyzers can run; silence the noisy
+         CS1591 (missing doc on public member) so docs are encouraged, not forced. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <!-- Final gate: flip to true on a Windows machine once `dotnet build` reports
+         zero analyzer warnings. Kept false here so the cross-platform `dotnet test
+         Rawenv.Tests` (the only thing CI builds) is never broken by pre-existing
+         warnings on a machine where the full app can't be built. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <CodeAnalysisTreatWarningsAsErrors>false</CodeAnalysisTreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>

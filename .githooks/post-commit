@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# post-commit — on macOS, rebuild and reinstall the latest CLI + Rawenv.app so
+# /Applications always reflects the newest commit.
+#
+# Runs DETACHED in the background with a lock, so:
+#   • the commit returns instantly (no waiting on a ~30s app build), and
+#   • rapid successive commits don't stack multiple builds.
+# Output is logged to .git/rawenv-postcommit.log.
+set -uo pipefail
+
+[ "$(uname -s)" = "Darwin" ] || exit 0   # macOS only
+
+ROOT="$(git rev-parse --show-toplevel)"
+SCRIPT="$ROOT/scripts/install-macos.sh"
+[ -x "$SCRIPT" ] || exit 0
+
+# Opt-out: `git config rawenv.autoinstall false` to disable.
+if [ "$(git config --bool rawenv.autoinstall 2>/dev/null || echo true)" != "true" ]; then
+  exit 0
+fi
+
+LOCK="$ROOT/.git/rawenv-postcommit.lock"
+LOG="$ROOT/.git/rawenv-postcommit.log"
+
+# Already a build running? Skip (the running one will install the newer tree on
+# its next trigger; we never queue up duplicates).
+if [ -e "$LOCK" ] && kill -0 "$(cat "$LOCK" 2>/dev/null)" 2>/dev/null; then
+  exit 0
+fi
+
+(
+  echo "$$" > "$LOCK"
+  trap 'rm -f "$LOCK"' EXIT
+  {
+    echo "=== $(date) — post-commit install for $(git -C "$ROOT" rev-parse --short HEAD) ==="
+    "$SCRIPT"
+    echo "=== done ($(date)) ==="
+  } >"$LOG" 2>&1
+) </dev/null >/dev/null 2>&1 &
+
+disown 2>/dev/null || true
+printf '\033[0;36m[post-commit]\033[0m Rebuilding + reinstalling Rawenv.app in background → .git/rawenv-postcommit.log\n'
+exit 0

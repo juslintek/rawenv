@@ -1,0 +1,89 @@
+# SwiftLint — strict configuration for the rawenv macOS GUI.
+# Run: swiftlint  (lint)   swiftlint --fix  (autocorrect)   swiftlint --strict (CI gate)
+# Docs: https://realm.github.io/SwiftLint/rule-directory.html
+
+included:
+  - gui/macos/Sources
+  - gui/macos/Tests
+
+excluded:
+  - gui/macos/.build
+  - gui/macos/build
+
+# Treat every warning as an error in --strict mode (used by the pre-push gate).
+strict: true
+
+# Opt-in rules — high-signal SAFETY/correctness rules. Pure layout/whitespace is
+# owned by `swift format` (deterministic), so we deliberately do NOT enable the
+# noisy `attributes` / `multiline_*` style rules here.
+opt_in_rules:
+  - array_init
+  - collection_alignment
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - contains_over_first_not_nil
+  - empty_collection_literal
+  - empty_count
+  - empty_string
+  - explicit_init
+  - fallthrough
+  - fatal_error_message
+  - first_where
+  - flatmap_over_map_reduce
+  - identical_operands
+  - joined_default_parameter
+  - last_where
+  - legacy_multiple
+  - lower_acl_than_parent
+  - overridden_super_call
+  - prefer_self_type_over_type_of_self
+  - prefer_zero_over_explicit_init
+  - private_action
+  - private_outlet
+  - prohibited_super_call
+  - reduce_into
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - static_operator
+  - toggle_bool
+  - unavailable_function
+  - unused_import
+  - yoda_condition
+
+analyzer_rules:
+  - unused_import
+
+# Tunables — keep generous enough for the existing layout; tighten over time.
+line_length:
+  warning: 140
+  error: 200
+  ignores_comments: true
+  ignores_urls: true
+
+type_body_length:
+  warning: 400
+  error: 600
+
+file_length:
+  warning: 700
+  error: 1000
+  ignore_comment_only_lines: true
+
+function_body_length:
+  warning: 80
+  error: 140
+
+cyclomatic_complexity:
+  warning: 15
+  error: 25
+
+identifier_name:
+  min_length: 1          # allow short SwiftUI idioms (e.g. vm, id)
+  max_length: 60
+  excluded: [id, vm, ai, x, y, p, e, s, l, c]
+
+nesting:
+  type_level: 3
+
+force_cast: error
+force_try: error

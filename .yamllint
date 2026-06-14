@@ -1,0 +1,36 @@
+# yamllint — strict config. Run: yamllint .
+extends: default
+
+yaml-files:
+  - "*.yaml"
+  - "*.yml"
+
+ignore: |
+  .build/
+  zig-out/
+  .zig-cache/
+  node_modules/
+  gui/macos/build/
+  tests/integration/fixtures/
+
+rules:
+  line-length:
+    max: 160
+    level: warning
+  document-start: disable        # GitHub Actions workflows omit the leading ---
+  truthy:
+    allowed-values: ["true", "false", "on"]   # 'on:' is valid in GH Actions
+    check-keys: true
+  comments:
+    min-spaces-from-content: 1
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+  braces:
+    max-spaces-inside: 1
+  brackets:
+    max-spaces-inside: 1
+  trailing-spaces: enable
+  new-line-at-end-of-file: enable
+  empty-lines:
+    max: 2
