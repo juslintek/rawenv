@@ -17,7 +17,12 @@ jobs:
       - uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
+      # rawenv's resolver, store, and service manager are darwin/linux-only by
+      # design (launchd/systemd, POSIX paths/HOME). Windows is a cross-compile
+      # target, so the full test suite runs only on macOS and Linux; every
+      # platform still compiles the binary (the Build step below) as a check.
       - name: Run tests
+        if: matrix.os != 'windows-latest'
         run: zig build test
-      - name: Build
+      - name: Build (compile check on all platforms)
         run: zig build -Doptimize=ReleaseSafe

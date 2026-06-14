@@ -42,6 +42,7 @@ test "isInstalled returns false for missing package" {
 }
 
 test "getStorePath returns correct path format" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const path = try store.getStorePath(std.testing.allocator, "node", "22.15.0");
     defer std.testing.allocator.free(path);
     try std.testing.expect(std.mem.endsWith(u8, path, ".rawenv/store/node-22.15.0"));
@@ -62,6 +63,7 @@ test "listInstalled on empty store" {
 }
 
 test "resolve node@22 returns correct URL" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const pkg = try resolver.resolve(std.testing.allocator, "node", "22");
     defer std.testing.allocator.free(pkg.url);
     try std.testing.expectEqualStrings("node", pkg.name);
@@ -71,6 +73,7 @@ test "resolve node@22 returns correct URL" {
 }
 
 test "resolve node 18/20/22/23 LTS+current to real URLs" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const cases = [_]struct { req: []const u8, full: []const u8 }{
         .{ .req = "18", .full = "18.20.8" },
         .{ .req = "20", .full = "20.20.2" },
@@ -94,6 +97,7 @@ test "resolve node unsupported major errors" {
 }
 
 test "resolve postgresql@18" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const pkg = try resolver.resolve(std.testing.allocator, "postgresql", "18");
     defer std.testing.allocator.free(pkg.url);
     try std.testing.expectEqualStrings("postgresql", pkg.name);
@@ -102,6 +106,7 @@ test "resolve postgresql@18" {
 }
 
 test "resolve redis@7" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const pkg = try resolver.resolve(std.testing.allocator, "redis", "7");
     defer std.testing.allocator.free(pkg.url);
     try std.testing.expectEqualStrings("redis", pkg.name);
@@ -157,6 +162,7 @@ test "downloadPackage fetches a file:// URL (exercises PATH-resolved curl)" {
 }
 
 test "sha256 known data" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
     const io = std.testing.io;
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
