@@ -5,7 +5,7 @@ import Testing
 
 private let testDir = "/tmp/rawenv-test-projects"
 private let cli = RawenvCLI(
-    binaryPath: (ProcessInfo.processInfo.environment["RAWENV_BINARY"] ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"))
+    binaryPath: resolvedRawenvBinary())
 
 // MARK: - Helpers
 

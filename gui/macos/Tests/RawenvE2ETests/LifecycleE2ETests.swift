@@ -9,7 +9,7 @@ import Testing
 
 private let testRoot = "/tmp/rawenv-lifecycle-test"
 private let cli = RawenvCLI(
-    binaryPath: (ProcessInfo.processInfo.environment["RAWENV_BINARY"] ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"))
+    binaryPath: resolvedRawenvBinary())
 
 /// Poll a condition on the main actor until it holds or a generous timeout
 /// elapses — keeps InstallFlowVM walkthrough tests robust under parallel load.

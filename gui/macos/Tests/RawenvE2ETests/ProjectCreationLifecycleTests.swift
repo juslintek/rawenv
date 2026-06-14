@@ -8,7 +8,7 @@ import Testing
 
 private let testRoot = "/tmp/rawenv-template-lifecycle"
 private let cli = RawenvCLI(
-    binaryPath: (ProcessInfo.processInfo.environment["RAWENV_BINARY"] ?? "/Volumes/Projects/rawenv/zig-out/bin/rawenv"))
+    binaryPath: resolvedRawenvBinary())
 
 @Suite(.serialized) struct ProjectCreationLifecycleTests {
 

@@ -20,7 +20,7 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - uses: mlugg/setup-zig@v2
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
         with:
           version: 0.16.0
       # The GUI integration/E2E tests shell out to the rawenv CLI and use the
