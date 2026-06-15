@@ -48,8 +48,8 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
         guard let names = try? fm.contentsOfDirectory(atPath: mountRoot) else { return [] }
         return names.sorted().compactMap { name -> String? in
             let path = mountRoot + "/" + name
-            // Skip the boot-volume alias (a symlink to "/") and the root filesystem.
-            if (try? fm.destinationOfSymbolicLink(atPath: path)) != nil { return nil }
+            // Skip the boot-volume alias (a symlink to "/"); real symlinked volumes are kept.
+            if let dest = try? fm.destinationOfSymbolicLink(atPath: path), dest == "/" { return nil }
             let url = URL(fileURLWithPath: path)
             if let vals = try? url.resourceValues(forKeys: [.volumeIsRootFileSystemKey]),
                 vals.volumeIsRootFileSystem == true
