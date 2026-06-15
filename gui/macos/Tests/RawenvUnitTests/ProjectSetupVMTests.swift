@@ -73,3 +73,37 @@ import Testing
         #expect(vm.runtimes.first?.version == "22")
     }
 }
+
+extension ProjectSetupVMTests {
+    @Test func resolveStackRootFindsNestedComposeDir() throws {
+        // A project whose compose lives in a subdir (e.g. gratis -> gratis-suite)
+        // resolves to that subdir so the full stack is detected.
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("rawenv-stack-\(UUID().uuidString)")
+        let suite = root.appendingPathComponent("app-suite")
+        try fm.createDirectory(at: suite, withIntermediateDirectories: true)
+        try Data("services: {}\n".utf8).write(to: suite.appendingPathComponent("docker-compose.yml"))
+        defer { try? fm.removeItem(at: root) }
+
+        #expect(ProjectSetupVM.resolveStackRoot(root.path) == suite.path)
+    }
+
+    @Test func resolveStackRootPrefersRootWhenItHasCompose() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("rawenv-stack-\(UUID().uuidString)")
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data("services: {}\n".utf8).write(to: root.appendingPathComponent("docker-compose.yml"))
+        defer { try? fm.removeItem(at: root) }
+
+        #expect(ProjectSetupVM.resolveStackRoot(root.path) == root.path)
+    }
+
+    @Test func resolveStackRootReturnsPathWhenNoComposeAnywhere() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("rawenv-stack-\(UUID().uuidString)")
+        try fm.createDirectory(at: root.appendingPathComponent("src"), withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        #expect(ProjectSetupVM.resolveStackRoot(root.path) == root.path)
+    }
+}

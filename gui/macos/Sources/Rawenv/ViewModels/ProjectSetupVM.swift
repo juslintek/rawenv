@@ -57,8 +57,12 @@ public final class ProjectSetupVM: ObservableObject {
     /// then materialize the isolated config (`rawenv init`) so later steps (up/connections/
     /// dns/deploy) have a rawenv.toml to work with.
     public func detect(project: Project) async {
+        // Resolve the real stack directory: many projects keep their compose/.env
+        // in a subdirectory (e.g. gratis/ -> gratis-suite/). Detect there so the
+        // full stack (db, cache) is found, not just the root manifest.
+        let stackPath = Self.resolveStackRoot(project.path)
         projectName = project.name
-        projectPath = project.path
+        projectPath = stackPath
         services = []
         runtimes = []
         nodeVersion = ""
@@ -66,7 +70,7 @@ public final class ProjectSetupVM: ObservableObject {
         error = nil
         isDetecting = true
         defer { isDetecting = false }
-        if let detected = try? await cli.runJSON(["detect"], as: DetectJSON.self, cwd: project.path) {
+        if let detected = try? await cli.runJSON(["detect"], as: DetectJSON.self, cwd: stackPath) {
             services = detected.services.map {
                 Service(
                     name: $0.name, port: $0.port, version: $0.version, pid: nil, cpu: nil, mem: nil, uptime: nil,
@@ -77,7 +81,7 @@ public final class ProjectSetupVM: ObservableObject {
                 nodeVersion = node.version
             }
         }
-        _ = try? await cli.run(["init"], cwd: project.path)
+        _ = try? await cli.run(["init"], cwd: stackPath)
         for s in services where Self.toolInstalled(s.name) { installed.insert(s.name) }
     }
 
@@ -188,6 +192,29 @@ public final class ProjectSetupVM: ObservableObject {
             lines.append(newLine)
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// Resolve the directory that actually defines the stack. If `path` has no
+    /// compose file but an immediate subdirectory does (e.g. a "*-suite"/"docker"
+    /// dir), use that subdirectory — so a project whose services live one level
+    /// down is still fully detected. Returns `path` unchanged otherwise.
+    nonisolated static func resolveStackRoot(_ path: String) -> String {
+        let fm = FileManager.default
+        func hasCompose(_ dir: String) -> Bool {
+            ["docker-compose.yml", "docker-compose.yaml", "compose.yml"].contains {
+                fm.fileExists(atPath: "\(dir)/\($0)")
+            }
+        }
+        if hasCompose(path) { return path }
+        let skip: Set<String> = ["node_modules", "vendor", "dist", "build", ".git"]
+        guard let entries = try? fm.contentsOfDirectory(atPath: path) else { return path }
+        for name in entries.sorted() where !name.hasPrefix(".") && !skip.contains(name) {
+            let sub = "\(path)/\(name)"
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: sub, isDirectory: &isDir), isDir.boolValue else { continue }
+            if hasCompose(sub) { return sub }
+        }
+        return path
     }
 
     nonisolated static func toolInstalled(_ name: String) -> Bool {
