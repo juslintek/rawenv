@@ -292,7 +292,11 @@ import Testing
 
         let engine = ScannerEngine()
         engine.addCustomPath(path: root.path)
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        var waited = 0
+        while !engine.scanComplete, waited < 50 {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            waited += 1
+        }
         #expect(engine.discoveredProjects.contains { $0.name == "demo-app" })
     }
 
