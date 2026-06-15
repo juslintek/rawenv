@@ -3,7 +3,11 @@ const testing = std.testing;
 const io = testing.io;
 
 fn rawenvBin() []const u8 {
-    return if (std.c.getenv("RAWENV_BIN")) |s| std.mem.sliceTo(s, 0) else "zig-out/bin/rawenv";
+    if (std.c.getenv("RAWENV_BIN")) |s| {
+        const v = std.mem.sliceTo(s, 0);
+        if (v.len > 0) return v;
+    }
+    return "zig-out/bin/rawenv";
 }
 
 test "rawenv services ls shows header or empty" {
