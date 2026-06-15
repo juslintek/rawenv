@@ -47,12 +47,14 @@ pub fn detect(allocator: std.mem.Allocator, dir: std.Io.Dir) !DetectionResult {
         }
     }
 
+    var is_wordpress = false;
     if (readFile(allocator, dir, "composer.json")) |data| {
         defer allocator.free(data);
         try runtimes.append(allocator, .{
             .key = "php",
             .value = parsePhpVersion(allocator, data) orelse "8.4",
         });
+        is_wordpress = composerIndicatesWordpress(data);
     }
 
     // Prefer .env, but fall back to .env.example when it's absent. Most
@@ -91,6 +93,14 @@ pub fn detect(allocator: std.mem.Allocator, dir: std.Io.Dir) !DetectionResult {
     if (readFile(allocator, dir, "docker-compose.yml")) |data| {
         defer allocator.free(data);
         parseDockerComposeServices(allocator, data, &services) catch {};
+    }
+
+    // WordPress requires a database but rarely declares it where a root-manifest
+    // parser sees it (no Laravel-style .env, compose often lives elsewhere). When
+    // WordPress is detected, infer its canonical stack: PHP (added above) + a
+    // MySQL-compatible database — unless one was already detected.
+    if (is_wordpress and !hasDatabaseService(&services)) {
+        try services.append(allocator, .{ .key = "mysql", .value = "8" });
     }
 
     return .{
@@ -587,6 +597,30 @@ fn imageBasename(image: []const u8) []const u8 {
 fn hasService(services: *const std.ArrayList(DetectionResult.Entry), key: []const u8) bool {
     for (services.items) |entry| {
         if (std.mem.eql(u8, entry.key, key)) return true;
+    }
+    return false;
+}
+
+/// True when composer.json carries a WordPress fingerprint (a WP coding-standard
+/// or core package in require/require-dev, or a WP composer `type`). String
+/// search keeps it robust to an empty `require` block (common in WP suites).
+fn composerIndicatesWordpress(data: []const u8) bool {
+    const markers = [_][]const u8{
+        "wp-coding-standards/", "phpcompatibility-wp",    "roots/wordpress",
+        "johnpbloch/wordpress", "wpackagist-",            "\"wordpress-plugin\"",
+        "\"wordpress-theme\"",  "\"wordpress-muplugin\"",
+    };
+    for (markers) |m| {
+        if (std.mem.indexOf(u8, data, m) != null) return true;
+    }
+    return false;
+}
+
+/// True when any SQL/NoSQL database service is already present.
+fn hasDatabaseService(services: *const std.ArrayList(DetectionResult.Entry)) bool {
+    const dbs = [_][]const u8{ "mysql", "mariadb", "postgresql", "mssql", "mongodb" };
+    for (dbs) |db| {
+        if (hasService(services, db)) return true;
     }
     return false;
 }

@@ -832,3 +832,46 @@ test "malformed composer.json graceful handling" {
     try testing.expectEqualStrings("php", result.runtimes[0].key);
     try testing.expectEqualStrings("8.4", result.runtimes[0].value);
 }
+
+test "detect WordPress composer infers php + mysql database" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "composer.json");
+    // Isolate from any stray service-bearing files left by other tests.
+    cleanFile(dir, ".env");
+    cleanFile(dir, ".env.example");
+    cleanFile(dir, "docker-compose.yml");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "composer.json",
+        .data = "{\"name\":\"acme/site\",\"require-dev\":{\"wp-coding-standards/wpcs\":\"^3.1\"}}",
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("php", result.runtimes[0].key);
+    try testing.expectEqual(1, result.services.len);
+    try testing.expectEqualStrings("mysql", result.services[0].key);
+}
+
+test "detect non-WordPress composer adds no implicit database" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+    cleanFile(dir, ".env.example");
+    cleanFile(dir, "docker-compose.yml");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "composer.json",
+        .data = "{\"name\":\"acme/api\",\"require\":{\"laravel/framework\":\"^11\"}}",
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqualStrings("php", result.runtimes[0].key);
+    try testing.expectEqual(0, result.services.len);
+}
