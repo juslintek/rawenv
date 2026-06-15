@@ -233,9 +233,14 @@ private let cli = RawenvCLI(
     @Test @MainActor func step07_serviceManagerSeesNewService() async {
         let store = DataStore(cli: cli, projectPath: "\(testRoot)/existing-app")
         let mgr = ServiceManager(repository: store)
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
-        let names = mgr.services.map(\.name)
-        #expect(names.contains("meilisearch"))
+        // Poll for the async, CLI-backed load instead of a fixed sleep (avoids a
+        // race that fails under full-suite load).
+        var waited = 0
+        while !mgr.services.contains(where: { $0.name == "meilisearch" }), waited < 50 {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            waited += 1
+        }
+        #expect(mgr.services.contains { $0.name == "meilisearch" })
     }
 
     @Test @MainActor func step07_startStopNewService() async {
