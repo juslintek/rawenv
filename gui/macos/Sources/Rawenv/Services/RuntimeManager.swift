@@ -22,8 +22,29 @@ public struct RuntimeInfo: Identifiable, Equatable, Sendable {
 /// tests.
 public protocol RuntimeManaging: Sendable {
     func list() async -> [RuntimeInfo]
-    func install(_ name: String, version: String) async throws
+    /// Install `name@version`, returning the CLI's combined output (the log).
+    func install(_ name: String, version: String) async throws -> String
     func remove(_ name: String, version: String) async throws
+}
+
+extension RuntimeManaging {
+    /// Installable versions offered in the UI picker for a runtime.
+    public func versions(for name: String) -> [String] { RuntimeCatalog.versions(for: name) }
+}
+
+/// The versions rawenv offers to install per runtime (newest first).
+public enum RuntimeCatalog {
+    public static func versions(for name: String) -> [String] {
+        switch name.lowercased() {
+        case "node": return ["22", "20", "18", "16"]
+        case "php": return ["8.4", "8.3", "8.2", "8.1"]
+        case "python": return ["3.13", "3.12", "3.11", "3.10"]
+        case "ruby": return ["3.4", "3.3", "3.2"]
+        case "go": return ["1.23", "1.22", "1.21"]
+        case "bun": return ["1"]
+        default: return []
+        }
+    }
 }
 
 /// Production runtime manager: lists installed runtimes by inspecting the
@@ -69,8 +90,13 @@ public final class CLIRuntimeManager: RuntimeManaging, @unchecked Sendable {
         }
     }
 
-    public func install(_ name: String, version: String) async throws {
-        _ = try await cli.run(["add", "\(name)@\(version)"])
+    public func install(_ name: String, version: String) async throws -> String {
+        let result = try await cli.runStatus(["add", "\(name)@\(version)"])
+        if result.status != 0 {
+            throw RuntimeInstallError(
+                message: "rawenv add \(name)@\(version) failed (exit \(result.status))", log: result.output)
+        }
+        return result.output
     }
 
     public func remove(_ name: String, version: String) async throws {
@@ -79,4 +105,10 @@ public final class CLIRuntimeManager: RuntimeManaging, @unchecked Sendable {
             try FileManager.default.removeItem(at: storeRoot.appendingPathComponent(entry))
         }
     }
+}
+
+/// Install failure carrying the CLI log so the UI can show what went wrong.
+public struct RuntimeInstallError: Error {
+    public let message: String
+    public let log: String
 }

@@ -26,6 +26,16 @@ public final class SettingsViewModel: ObservableObject {
     @Published public var services: [Service] = []
     /// Runtimes with their installed state (Settings → Runtimes).
     @Published public var runtimes: [RuntimeInfo] = []
+    /// Names of runtimes currently installing (drives per-row progress).
+    @Published public var installingRuntimes: Set<String> = []
+    /// Version selected in the picker per runtime (defaults to the newest).
+    @Published public var selectedRuntimeVersion: [String: String] = [:]
+    /// Live install log lines, shown in a popup during/after an install.
+    @Published public var installLog: [String] = []
+    /// Whether the install-log popup is presented.
+    @Published public var showInstallLog: Bool = false
+    /// Last install error (nil when the last install succeeded).
+    @Published public var installError: String?
     /// Deploy provider credentials, keyed by ``CredentialField.key``.
     @Published public var deployCredentials: [String: String] = [:]
     /// Whether each masked deploy credential is currently revealed.
@@ -210,8 +220,39 @@ public final class SettingsViewModel: ObservableObject {
 
     // MARK: - Runtimes
 
+    /// Versions offered in the picker for a runtime (newest first).
+    public func versions(for name: String) -> [String] { runtimeManager.versions(for: name) }
+
+    /// The version chosen in the picker, defaulting to the newest available.
+    public func chosenVersion(for runtime: RuntimeInfo) -> String {
+        selectedRuntimeVersion[runtime.name] ?? versions(for: runtime.name).first ?? runtime.version
+    }
+
+    public func selectVersion(_ version: String, for name: String) {
+        selectedRuntimeVersion[name] = version
+    }
+
+    /// Install the chosen version, streaming the CLI output into a log popup and
+    /// surfacing real success/failure.
     public func installRuntime(_ runtime: RuntimeInfo) async {
-        try? await runtimeManager.install(runtime.name, version: runtime.version)
+        let version = chosenVersion(for: runtime)
+        installingRuntimes.insert(runtime.name)
+        installError = nil
+        installLog = ["$ rawenv add \(runtime.name)@\(version)", "Installing…"]
+        showInstallLog = true
+        defer { installingRuntimes.remove(runtime.name) }
+        do {
+            let output = try await runtimeManager.install(runtime.name, version: version)
+            if !output.isEmpty { installLog.append(output) }
+            installLog.append("✓ Installed \(runtime.name)@\(version)")
+        } catch let err as RuntimeInstallError {
+            if !err.log.isEmpty { installLog.append(err.log) }
+            installLog.append("✗ \(err.message)")
+            installError = err.message
+        } catch {
+            installLog.append("✗ \(error.localizedDescription)")
+            installError = error.localizedDescription
+        }
         runtimes = await runtimeManager.list()
     }
 

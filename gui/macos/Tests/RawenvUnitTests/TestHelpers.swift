@@ -159,7 +159,10 @@ final class TestRuntimeManager: RuntimeManaging, @unchecked Sendable {
                 installed: installed.contains(name))
         }
     }
-    func install(_ name: String, version: String) async throws { installed.insert(name) }
+    func install(_ name: String, version: String) async throws -> String {
+        installed.insert(name)
+        return "added \(name)@\(version)"
+    }
     func remove(_ name: String, version: String) async throws { installed.remove(name) }
 }
 

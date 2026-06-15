@@ -197,7 +197,45 @@ private struct RuntimesSettingsPage: View {
             ForEach(vm.runtimes) { rt in
                 RuntimeRow(runtime: rt, vm: vm)
             }
-        }.accessibilityIdentifier("runtimes_settings")
+        }
+        .accessibilityIdentifier("runtimes_settings")
+        .sheet(isPresented: $vm.showInstallLog) { InstallLogSheet(vm: vm) }
+    }
+}
+
+/// Popup showing live install output + success/failure for a runtime install.
+private struct InstallLogSheet: View {
+    @ObservedObject var vm: SettingsViewModel
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(vm.installError == nil ? "Installing runtime" : "Install failed")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(vm.installError == nil ? Color.textPrimary : Color.error)
+            ScrollView {
+                Text(vm.installLog.joined(separator: "\n"))
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(Color.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+            }
+            .frame(minWidth: 420, minHeight: 220)
+            .padding(8)
+            .background(Color.bgTertiary)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            HStack {
+                if !vm.installLog.contains(where: { $0.hasPrefix("✓") || $0.hasPrefix("✗") }) {
+                    ProgressView().controlSize(.small)
+                    Text("Installing…").font(.system(size: 12)).foregroundStyle(Color.textMuted)
+                }
+                Spacer()
+                Button("Done") { vm.showInstallLog = false }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("install_log_done")
+            }
+        }
+        .padding(20)
+        .frame(width: 520)
+        .accessibilityIdentifier("install_log_sheet")
     }
 }
 
@@ -219,7 +257,23 @@ private struct RuntimeRow: View {
                 Button("Remove") { Task { await vm.removeRuntime(runtime) } }
                     .buttonStyle(.bordered).controlSize(.small)
                     .accessibilityIdentifier("runtime_remove_\(runtime.name)")
+            } else if vm.installingRuntimes.contains(runtime.name) {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Installing…").font(.system(size: 11)).foregroundStyle(Color.textMuted)
+                }
+                .accessibilityIdentifier("runtime_installing_\(runtime.name)")
             } else {
+                Picker(
+                    "",
+                    selection: Binding(
+                        get: { vm.chosenVersion(for: runtime) },
+                        set: { vm.selectVersion($0, for: runtime.name) })
+                ) {
+                    ForEach(vm.versions(for: runtime.name), id: \.self) { Text($0).tag($0) }
+                }
+                .labelsHidden().frame(width: 80)
+                .accessibilityIdentifier("runtime_version_\(runtime.name)")
                 Button("+ Install") { Task { await vm.installRuntime(runtime) } }
                     .buttonStyle(.bordered).controlSize(.small)
                     .accessibilityIdentifier("runtime_install_\(runtime.name)")
