@@ -60,6 +60,10 @@ assert 0 "docker:// ref is skipped" .github/workflows/docker.yml
 mk vm.sh '+++ b/s\n+  ssh_cmd "cd /Volumes/My Shared Files/$MOUNT/gui && swift build"\n'
 assert 0 "macOS VM shared-folder mount is not flagged" vm.sh
 
+# VM share + a real dev path on the SAME line -> still flagged (only the share token is stripped).
+mk vm2.sh '+++ b/s\n+  cp "/Volumes/My Shared Files/$M/x" /Users/bob/secret\n'
+assert 1 "real dev path sharing a VM-share line is still flagged" vm2.sh
+
 # Root-level vendor file -> skipped entirely.
 mk vendor/lib.go '+++ b/v\n+x := "/Users/bob/x"\n'
 assert 0 "root vendor/ is skipped" vendor/lib.go
