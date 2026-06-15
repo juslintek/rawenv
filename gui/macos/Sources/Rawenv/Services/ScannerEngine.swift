@@ -27,38 +27,12 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
 
     public init() {
         let home = NSHomeDirectory()
-        var scanDirs = [
+        let scanDirs = [
             "\(home)/Projects", "\(home)/Developer", "\(home)/Code",
             "\(home)/Desktop", "\(home)/Documents",
         ]
-        // Also scan mounted data volumes — many users keep code on a non-boot disk
-        // (e.g. a "Projects" volume), which the home roots alone would miss.
-        scanDirs += Self.mountedVolumeRoots()
         paths = scanDirs.map {
             ScanPath(path: $0, status: .queued, projectCount: 0, cached: false)
-        }
-    }
-
-    /// Directories mounted under the "/Volumes" mount root, excluding the boot
-    /// volume (its code is already covered by the home roots). Returns [] off macOS
-    /// or when the mount root isn't readable.
-    static func mountedVolumeRoots() -> [String] {
-        let fm = FileManager.default
-        let mountRoot = "/Volumes"
-        guard let names = try? fm.contentsOfDirectory(atPath: mountRoot) else { return [] }
-        return names.sorted().compactMap { name -> String? in
-            let path = mountRoot + "/" + name
-            // Skip the boot-volume alias (a symlink to "/") and the root filesystem.
-            if (try? fm.destinationOfSymbolicLink(atPath: path)) != nil { return nil }
-            let url = URL(fileURLWithPath: path)
-            if let vals = try? url.resourceValues(forKeys: [.volumeIsRootFileSystemKey]),
-                vals.volumeIsRootFileSystem == true
-            {
-                return nil
-            }
-            var isDir: ObjCBool = false
-            guard fm.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else { return nil }
-            return path
         }
     }
 

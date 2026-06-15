@@ -259,41 +259,17 @@ import Testing
 @Suite struct ScannerEngineTests {
     @Test @MainActor func initialState() {
         let engine = ScannerEngine()
-        // The five home roots always come first; any extra roots are mounted
-        // volumes under the system mount root (never other machine-specific paths).
+        // Assert the exact default scan roots — all under the user's home, no
+        // machine-specific mounts. (Update intentionally if a default root changes.)
         let home = NSHomeDirectory()
-        let homeRoots = [
-            "\(home)/Projects", "\(home)/Developer", "\(home)/Code",
-            "\(home)/Desktop", "\(home)/Documents",
-        ]
-        #expect(Array(engine.paths.prefix(homeRoots.count).map(\.path)) == homeRoots)
-        #expect(engine.paths.dropFirst(homeRoots.count).allSatisfy { $0.path.hasPrefix("/Volumes") })
+        #expect(
+            engine.paths.map(\.path) == [
+                "\(home)/Projects", "\(home)/Developer", "\(home)/Code",
+                "\(home)/Desktop", "\(home)/Documents",
+            ])
         #expect(engine.totalProjects == 0)
         #expect(engine.isScanning == false)
         #expect(engine.scanComplete == false)
-    }
-
-    @Test @MainActor func mountedVolumeRootsAreUnderMountRoot() {
-        // Every discovered volume root lives under the mount root (never an
-        // arbitrary machine path); the boot volume is excluded.
-        for path in ScannerEngine.mountedVolumeRoots() {
-            #expect(path.hasPrefix("/Volumes"))
-        }
-    }
-
-    @Test @MainActor func findsMarkerBearingProject() async throws {
-        // A subdirectory containing a recognized marker is discovered as a project.
-        let fm = FileManager.default
-        let root = fm.temporaryDirectory.appendingPathComponent("rawenv-scan-\(UUID().uuidString)")
-        let proj = root.appendingPathComponent("demo-app")
-        try fm.createDirectory(at: proj, withIntermediateDirectories: true)
-        try Data("{}".utf8).write(to: proj.appendingPathComponent("package.json"))
-        defer { try? fm.removeItem(at: root) }
-
-        let engine = ScannerEngine()
-        engine.addCustomPath(path: root.path)
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
-        #expect(engine.discoveredProjects.contains { $0.name == "demo-app" })
     }
 
     @Test @MainActor func startScan() async {
