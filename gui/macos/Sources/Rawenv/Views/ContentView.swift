@@ -15,7 +15,7 @@ public struct ContentView: View {
                 )
             } else if !appState.hasCompletedSetup {
                 ProjectsView(
-                    viewModel: ProjectsViewModel(repository: appState.repository),
+                    viewModel: appState.projectsVM,
                     engine: appState.scannerEngine
                 )
             } else {
