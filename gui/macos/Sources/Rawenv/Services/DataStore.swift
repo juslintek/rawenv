@@ -21,10 +21,16 @@ public final class DataStore: DataRepository, @unchecked Sendable {
             let status: String
             let port: Int
         }
-        // A thrown CLI error propagates so the UI can show an error state with
-        // the real message. A successful run that lists nothing returns an
-        // empty array, which the UI renders as an empty state with guidance.
-        let services: [CLIService] = try await cli.runJSON(["services", "ls"], as: [CLIService].self, cwd: projectPath)
+        // Run raw so we can tell "not set up yet" (no rawenv.toml) apart from a
+        // genuine error: the former is a calm empty state, not a scary failure.
+        let output = try await cli.run(["services", "ls", "--json"], cwd: projectPath)
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.contains("No rawenv.toml") || trimmed.isEmpty {
+            throw EnvironmentNotReadyError()
+        }
+        guard let data = trimmed.data(using: .utf8),
+            let services = try? JSONDecoder().decode([CLIService].self, from: data)
+        else { throw RepositoryError("Could not read the services list.") }
         var result: [Service] = []
         for s in services {
             // Running services get live CPU/memory from the OS; stopped
@@ -284,3 +290,7 @@ public final class DataStore: DataRepository, @unchecked Sendable {
         }
     }
 }
+
+/// The project has no rawenv.toml yet — it isn't an error, the environment just
+/// hasn't been set up. The UI renders this as a calm, actionable empty state.
+public struct EnvironmentNotReadyError: Error {}

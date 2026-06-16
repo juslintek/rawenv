@@ -28,6 +28,10 @@ public final class DashboardViewModel: ObservableObject {
             selectedService = services.first
             await refreshDetail()
             phase = services.isEmpty ? .empty : .loaded
+        } catch is EnvironmentNotReadyError {
+            services = []
+            selectedService = nil
+            phase = .empty  // not set up yet — calm, actionable state (not a failure)
         } catch {
             services = []
             selectedService = nil

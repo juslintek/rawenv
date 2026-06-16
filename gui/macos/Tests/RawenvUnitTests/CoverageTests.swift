@@ -197,10 +197,10 @@ private func makeAppState() -> AppState {
 // MARK: - DataStore fallback coverage
 
 @Suite struct DataStoreCoverageTests {
-    @Test func initLoadsData() async {
+    @Test func initLoadsData() async throws {
         // The default init tries Bundle.module first, then fallback paths
         let repo = TestDataRepository()
-        let services = await repo.fetchServices()
+        let services = try await repo.fetchServices()
         // Should have loaded from somewhere
         #expect(!services.isEmpty)
     }

@@ -403,9 +403,9 @@ import Testing
 }
 
 @Suite struct DataStoreTests {
-    @Test func fetchServices() async {
+    @Test func fetchServices() async throws {
         let repo = TestDataRepository()
-        let services = await repo.fetchServices()
+        let services = try await repo.fetchServices()
         #expect(!services.isEmpty)
     }
 

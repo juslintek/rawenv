@@ -38,3 +38,26 @@ import Testing
         #expect(vm.selectedTab == .logs)
     }
 }
+
+extension DashboardVMTests {
+    private struct GenericRepoError: Error {}
+
+    @Test @MainActor func notSetUpMapsToCalmEmptyState() async {
+        let repo = TestDataRepository()
+        repo.servicesError = EnvironmentNotReadyError()
+        let vm = DashboardViewModel(repository: repo)
+        await vm.load()
+        // A project without rawenv.toml is "not set up", shown as the calm empty
+        // state — never a scary failure.
+        #expect(vm.phase == .empty)
+        #expect(vm.services.isEmpty)
+    }
+
+    @Test @MainActor func genuineErrorStillSurfacesAsFailure() async {
+        let repo = TestDataRepository()
+        repo.servicesError = GenericRepoError()
+        let vm = DashboardViewModel(repository: repo)
+        await vm.load()
+        if case .failed = vm.phase {} else { Issue.record("expected .failed, got \(vm.phase)") }
+    }
+}

@@ -2,7 +2,44 @@ import SwiftUI
 
 struct DashboardView: View {
     @StateObject var viewModel: DashboardViewModel
+    /// Invoked by the "set up environment" CTA in the not-set-up state. Defaults
+    /// to a no-op so the view renders standalone (tests/previews) without wiring.
+    var onSetUp: () -> Void = {}
     @Environment(\.colorScheme) var colorScheme
+
+    /// Calm, actionable state shown when the project has no rawenv.toml yet (or
+    /// no services) — invites the user to set up the environment instead of
+    /// surfacing a raw error.
+    private var notSetUpView: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "wand.and.stars")
+                .font(.system(size: 38))
+                .foregroundStyle(Color.accent)
+            Text("This environment isn't set up yet")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Color.textPrimary)
+            Text(
+                "rawenv hasn't configured this project yet. Detect its stack and install what it needs to get going."
+            )
+            .font(.system(size: 13))
+            .foregroundStyle(Color.textMuted)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 380)
+            Button(action: onSetUp) {
+                Text("Set up environment →")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("dashboard_setup_cta")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityIdentifier("dashboard_not_set_up")
+    }
 
     var body: some View {
         Group {
@@ -10,11 +47,7 @@ struct DashboardView: View {
             case .idle, .loading:
                 LoadingStateView("Loading services…", idPrefix: "dashboard")
             case .empty:
-                EmptyStateView(
-                    icon: "square.stack.3d.up.slash",
-                    title: "No services running",
-                    guidance: "No services configured. Run rawenv init to get started.",
-                    idPrefix: "dashboard")
+                notSetUpView
             case .failed(let message):
                 ErrorStateView(
                     title: "Couldn't load services",

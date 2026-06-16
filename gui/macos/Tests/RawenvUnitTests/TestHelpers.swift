@@ -4,19 +4,23 @@ import Foundation
 
 /// In-memory DataRepository for deterministic unit tests.
 final class TestDataRepository: DataRepository, @unchecked Sendable {
-    func fetchServices() async -> [Service] {
-        [
-            Service(
-                name: "PostgreSQL", port: 5432, version: "16", pid: 1234, cpu: "2.1%", mem: "84MB", uptime: "2h",
-                status: "running", icon: "🐘"),
-            Service(
-                name: "Redis", port: 6379, version: "7.4", pid: 1235, cpu: "0.3%", mem: "12MB", uptime: "2h",
-                status: "running", icon: "🔴"),
-            Service(
-                name: "SQL Server", port: 1433, version: "2025", pid: nil, cpu: nil, mem: nil, uptime: nil,
-                status: "stopped", icon: "🗄️"),
-        ]
+    /// When set, fetchServices throws this instead of returning the sample list.
+    var servicesError: Error?
+    func fetchServices() async throws -> [Service] {
+        if let servicesError { throw servicesError }
+        return Self.sampleServices
     }
+    private static let sampleServices: [Service] = [
+        Service(
+            name: "PostgreSQL", port: 5432, version: "16", pid: 1234, cpu: "2.1%", mem: "84MB", uptime: "2h",
+            status: "running", icon: "🐘"),
+        Service(
+            name: "Redis", port: 6379, version: "7.4", pid: 1235, cpu: "0.3%", mem: "12MB", uptime: "2h",
+            status: "running", icon: "🔴"),
+        Service(
+            name: "SQL Server", port: 1433, version: "2025", pid: nil, cpu: nil, mem: nil, uptime: nil,
+            status: "stopped", icon: "🗄️"),
+    ]
     func fetchLogs() async -> [LogEntry] {
         [LogEntry(time: "10:00:00", msg: "database system is ready", level: "info")]
     }

@@ -175,7 +175,7 @@ public struct ContentView: View {
     private var detailView: some View {
         switch appState.currentDestination {
         case .dashboard:
-            DashboardView(viewModel: appState.dashboardVM)
+            DashboardView(viewModel: appState.dashboardVM, onSetUp: { appState.navigate(to: .projects) })
         case .aiChat:
             AIChatView(viewModel: appState.aiChatVM)
         case .connections:
