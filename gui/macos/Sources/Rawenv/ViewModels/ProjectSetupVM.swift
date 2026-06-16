@@ -179,7 +179,12 @@ public final class ProjectSetupVM: ObservableObject {
         for rt in runtimes where !installedRuntimes.contains(rt.name) { await installRuntime(rt) }
         for s in services where !installed.contains(s.name) { await install(s) }
         log.append("$ rawenv up")
-        if let out = try? await cli.run(["up"], cwd: projectPath), !out.isEmpty { log.append(out) }
+        do {
+            let out = try await cli.run(["up"], cwd: projectPath)
+            if !out.isEmpty { log.append(out) }
+        } catch let caughtError {
+            error = "Failed to activate environment: \(caughtError.localizedDescription)"
+        }
     }
 
     // MARK: - Helpers (nonisolated: safe off the main actor)
