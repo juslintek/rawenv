@@ -19,6 +19,10 @@ public final class ProjectSetupVM: ObservableObject {
     @Published public var isDetecting = false
     @Published public var installing: Set<String> = []
     @Published public var installed: Set<String> = []
+    /// Runtimes already installed (so the runtime install isn't repeated).
+    @Published public var installedRuntimes: Set<String> = []
+    /// True while "Set Up Environment" is running (drives the button progress).
+    @Published public var isSettingUp = false
     @Published public var log: [String] = []
     @Published public var error: String?
 
@@ -145,9 +149,37 @@ public final class ProjectSetupVM: ObservableObject {
         }
     }
 
-    /// Install every not-yet-installed detected service.
+    /// Install a detected runtime via `rawenv add <name>@<version>`.
+    public func installRuntime(_ rt: DetectedRuntime) async {
+        installing.insert(rt.name)
+        defer { installing.remove(rt.name) }
+        let pkg = "\(rt.name)@\(rt.version)"
+        log.append("$ rawenv add \(pkg)")
+        guard let result = try? await cli.runStatus(["add", pkg], cwd: projectPath) else {
+            error = "Could not run rawenv add \(pkg)"
+            return
+        }
+        if !result.output.isEmpty { log.append(result.output) }
+        if result.status == 0 {
+            installedRuntimes.insert(rt.name)
+        } else {
+            error = "rawenv add \(pkg) failed (exit \(result.status)). Output: \(result.output)"
+        }
+    }
+
+    /// Set up the whole environment: install detected runtimes (e.g. php) AND
+    /// services, then activate via `rawenv up`. Installing runtimes is what makes
+    /// this do real work for runtime-only projects (previously it only handled
+    /// services, so a php-only project appeared to do nothing).
     public func setUpAll() async {
+        guard !isSettingUp else { return }
+        isSettingUp = true
+        error = nil
+        defer { isSettingUp = false }
+        for rt in runtimes where !installedRuntimes.contains(rt.name) { await installRuntime(rt) }
         for s in services where !installed.contains(s.name) { await install(s) }
+        log.append("$ rawenv up")
+        if let out = try? await cli.run(["up"], cwd: projectPath), !out.isEmpty { log.append(out) }
     }
 
     // MARK: - Helpers (nonisolated: safe off the main actor)

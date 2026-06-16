@@ -506,16 +506,26 @@ struct ProjectsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Summary").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.textPrimary)
-                    Text("\(setupVM.installed.count)/\(setupVM.services.count) services installed").font(
-                        .system(size: 12)
-                    ).foregroundStyle(Color.textMuted)
+                    Text(
+                        "\(setupVM.installedRuntimes.count)/\(setupVM.runtimes.count) runtimes · \(setupVM.installed.count)/\(setupVM.services.count) services installed"
+                    )
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.textMuted)
                 }
                 Spacer()
-                accentButton("Set Up Environment", id: "setup_generate_btn") {
-                    if let project = appState.activeProject { appState.addManagedProject(project) }
-                    Task {
-                        await setupVM.setUpAll()
-                        appState.markSetupComplete()
+                if setupVM.isSettingUp {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Setting up…").font(.system(size: 13)).foregroundStyle(Color.textMuted)
+                    }
+                    .accessibilityIdentifier("setup_in_progress")
+                } else {
+                    accentButton("Set Up Environment", id: "setup_generate_btn") {
+                        if let project = appState.activeProject { appState.addManagedProject(project) }
+                        Task {
+                            await setupVM.setUpAll()
+                            appState.markSetupComplete()
+                        }
                     }
                 }
             }
