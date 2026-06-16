@@ -402,6 +402,16 @@ struct ProjectsView: View {
 
     private var projectSetupView: some View {
         VStack(alignment: .leading, spacing: 20) {
+            Button(action: { page = .list }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left")
+                    Text("Back to projects")
+                }
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color.accent)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("setup_back_btn")
             VStack(alignment: .leading, spacing: 4) {
                 Text(
                     "⚙️ Environment Setup — \(setupVM.projectName.isEmpty ? (appState.activeProject?.name ?? "project") : setupVM.projectName)"

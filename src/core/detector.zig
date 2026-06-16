@@ -105,8 +105,8 @@ pub fn detect(allocator: std.mem.Allocator, dir: std.Io.Dir) !DetectionResult {
     // Extract the runtime from the build Dockerfile (its FROM base image). The
     // Dockerfile is authoritative for the runtime version (e.g. FrankenPHP
     // php8.5 over a manifest default), so it overrides an existing runtime of the
-    // same kind. SQLite-backed images (pdo_sqlite / sqlite-database-integration)
-    // record a sqlite service so a db-less-looking stack still surfaces its store.
+    // same kind. (SQLite and other embedded stores are intentionally not emitted
+    // as services — they have no installable server for `rawenv add`.)
     if (readFile(allocator, dir, dockerfile_name)) |dfdata| {
         defer allocator.free(dfdata);
         if (dockerfileRuntime(dfdata)) |rt| {
@@ -115,9 +115,6 @@ pub fn detect(allocator: std.mem.Allocator, dir: std.Io.Dir) !DetectionResult {
             } else {
                 try runtimes.append(allocator, rt);
             }
-        }
-        if (dockerfileUsesSqlite(dfdata) and !hasDatabaseService(&services)) {
-            try services.append(allocator, .{ .key = "sqlite", .value = "3" });
         }
     }
 
@@ -681,13 +678,6 @@ fn phpFromTag(tag: []const u8) ?[]const u8 {
         if (matchMajorMinor(tag[idx + 3 ..])) |v| return v;
     }
     return matchMajorMinor(tag);
-}
-
-/// True when the Dockerfile sets up a SQLite-backed store.
-fn dockerfileUsesSqlite(data: []const u8) bool {
-    return std.mem.indexOf(u8, data, "pdo_sqlite") != null or
-        std.mem.indexOf(u8, data, "sqlite-database-integration") != null or
-        std.mem.indexOf(u8, data, "sqlite3") != null;
 }
 
 fn hasService(services: *const std.ArrayList(DetectionResult.Entry), key: []const u8) bool {

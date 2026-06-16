@@ -876,7 +876,7 @@ test "detect non-WordPress composer adds no implicit database" {
     try testing.expectEqual(0, result.services.len);
 }
 
-test "detect extracts runtime from a compose build Dockerfile (FrankenPHP php8.5 + sqlite)" {
+test "detect extracts runtime from a compose build Dockerfile (FrankenPHP php8.5)" {
     var dir = try makeTmpDir();
     defer dir.close(std.testing.io);
     defer cleanFile(dir, "docker-compose.yml");
@@ -899,8 +899,8 @@ test "detect extracts runtime from a compose build Dockerfile (FrankenPHP php8.5
     try testing.expectEqual(1, result.runtimes.len);
     try testing.expectEqualStrings("php", result.runtimes[0].key);
     try testing.expectEqualStrings("8.5", result.runtimes[0].value);
-    try testing.expectEqual(1, result.services.len);
-    try testing.expectEqualStrings("sqlite", result.services[0].key);
+    // SQLite is embedded in the image; it is not emitted as an installable service.
+    try testing.expectEqual(0, result.services.len);
 }
 
 test "detect reads the root Dockerfile and maps wordpress base to php" {
