@@ -90,9 +90,35 @@ pub fn detect(allocator: std.mem.Allocator, dir: std.Io.Dir) !DetectionResult {
         try runtimes.append(allocator, .{ .key = "ruby", .value = "3.3" });
     }
 
+    var dockerfile_buf: [256]u8 = undefined;
+    var dockerfile_name: []const u8 = "Dockerfile";
     if (readFile(allocator, dir, "docker-compose.yml")) |data| {
         defer allocator.free(data);
         parseDockerComposeServices(allocator, data, &services) catch {};
+        if (parseComposeDockerfile(data)) |df| {
+            const n = @min(df.len, dockerfile_buf.len);
+            @memcpy(dockerfile_buf[0..n], df[0..n]);
+            dockerfile_name = dockerfile_buf[0..n];
+        }
+    }
+
+    // Extract the runtime from the build Dockerfile (its FROM base image). The
+    // Dockerfile is authoritative for the runtime version (e.g. FrankenPHP
+    // php8.5 over a manifest default), so it overrides an existing runtime of the
+    // same kind. SQLite-backed images (pdo_sqlite / sqlite-database-integration)
+    // record a sqlite service so a db-less-looking stack still surfaces its store.
+    if (readFile(allocator, dir, dockerfile_name)) |dfdata| {
+        defer allocator.free(dfdata);
+        if (dockerfileRuntime(dfdata)) |rt| {
+            if (findEntry(&runtimes, rt.key)) |idx| {
+                runtimes.items[idx].value = rt.value;
+            } else {
+                try runtimes.append(allocator, rt);
+            }
+        }
+        if (dockerfileUsesSqlite(dfdata) and !hasDatabaseService(&services)) {
+            try services.append(allocator, .{ .key = "sqlite", .value = "3" });
+        }
     }
 
     // WordPress requires a database but rarely declares it where a root-manifest
@@ -270,7 +296,7 @@ fn matchMajor(raw: []const u8) ?[]const u8 {
 
 /// Map a version constraint to a static "major.minor" literal.
 fn matchMajorMinor(raw: []const u8) ?[]const u8 {
-    const versions = [_][]const u8{ "7.4", "8.0", "8.1", "8.2", "8.3", "8.4" };
+    const versions = [_][]const u8{ "7.4", "8.0", "8.1", "8.2", "8.3", "8.4", "8.5", "8.6" };
     var i: usize = 0;
     while (i < raw.len and !std.ascii.isDigit(raw[i])) : (i += 1) {}
     if (i >= raw.len) return null;
@@ -592,6 +618,76 @@ fn extractImageValue(raw: []const u8) []const u8 {
 fn imageBasename(image: []const u8) []const u8 {
     const slash = std.mem.lastIndexOfScalar(u8, image, '/');
     return if (slash) |s| image[s + 1 ..] else image;
+}
+
+fn findEntry(list: *std.ArrayList(DetectionResult.Entry), key: []const u8) ?usize {
+    for (list.items, 0..) |e, i| {
+        if (std.mem.eql(u8, e.key, key)) return i;
+    }
+    return null;
+}
+
+/// The `dockerfile:` filename referenced by a compose `build:` block, if any.
+fn parseComposeDockerfile(data: []const u8) ?[]const u8 {
+    var it = std.mem.splitScalar(u8, data, '\n');
+    while (it.next()) |line| {
+        const t = std.mem.trim(u8, line, " \t\r");
+        if (std.mem.startsWith(u8, t, "dockerfile:")) {
+            const v = std.mem.trim(u8, t["dockerfile:".len..], " \t\r\"'");
+            if (v.len > 0) return v;
+        }
+    }
+    return null;
+}
+
+/// Map a Dockerfile's last `FROM` base image to a runtime + static version.
+fn dockerfileRuntime(data: []const u8) ?DetectionResult.Entry {
+    var from_image: ?[]const u8 = null;
+    var it = std.mem.splitScalar(u8, data, '\n');
+    while (it.next()) |line| {
+        const t = std.mem.trim(u8, line, " \t\r");
+        if (std.ascii.startsWithIgnoreCase(t, "FROM ")) {
+            var toks = std.mem.tokenizeAny(u8, t[5..], " \t");
+            if (toks.next()) |img| from_image = img;
+        }
+    }
+    const image = from_image orelse return null;
+    const colon = std.mem.lastIndexOfScalar(u8, image, ':');
+    const name = imageBasename(if (colon) |c| image[0..c] else image);
+    const tag = if (colon) |c| image[c + 1 ..] else "";
+    if (std.mem.indexOf(u8, name, "frankenphp") != null)
+        return .{ .key = "php", .value = phpFromTag(tag) orelse "8.4" };
+    if (std.mem.startsWith(u8, name, "wordpress"))
+        return .{ .key = "php", .value = phpFromTag(tag) orelse "8.3" };
+    if (std.mem.startsWith(u8, name, "php"))
+        return .{ .key = "php", .value = matchMajorMinor(tag) orelse "8.4" };
+    if (std.mem.startsWith(u8, name, "node"))
+        return .{ .key = "node", .value = matchMajor(tag) orelse "22" };
+    if (std.mem.startsWith(u8, name, "python"))
+        return .{ .key = "python", .value = matchMajorMinor(tag) orelse "3.13" };
+    if (std.mem.startsWith(u8, name, "ruby"))
+        return .{ .key = "ruby", .value = "3.3" };
+    if (std.mem.startsWith(u8, name, "golang") or std.mem.eql(u8, name, "go"))
+        return .{ .key = "go", .value = "1.22" };
+    if (std.mem.startsWith(u8, name, "bun"))
+        return .{ .key = "bun", .value = "1" };
+    return null;
+}
+
+/// Extract a php X.Y from a tag like "php8.5-alpine" (the part after "php"),
+/// falling back to scanning the whole tag.
+fn phpFromTag(tag: []const u8) ?[]const u8 {
+    if (std.mem.indexOf(u8, tag, "php")) |idx| {
+        if (matchMajorMinor(tag[idx + 3 ..])) |v| return v;
+    }
+    return matchMajorMinor(tag);
+}
+
+/// True when the Dockerfile sets up a SQLite-backed store.
+fn dockerfileUsesSqlite(data: []const u8) bool {
+    return std.mem.indexOf(u8, data, "pdo_sqlite") != null or
+        std.mem.indexOf(u8, data, "sqlite-database-integration") != null or
+        std.mem.indexOf(u8, data, "sqlite3") != null;
 }
 
 fn hasService(services: *const std.ArrayList(DetectionResult.Entry), key: []const u8) bool {

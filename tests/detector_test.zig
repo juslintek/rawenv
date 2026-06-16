@@ -875,3 +875,51 @@ test "detect non-WordPress composer adds no implicit database" {
     try testing.expectEqualStrings("php", result.runtimes[0].key);
     try testing.expectEqual(0, result.services.len);
 }
+
+test "detect extracts runtime from a compose build Dockerfile (FrankenPHP php8.5 + sqlite)" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "docker-compose.yml");
+    defer cleanFile(dir, "Dockerfile.franken");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, ".env");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "docker-compose.yml",
+        .data = "services:\n  app:\n    build:\n      context: .\n      dockerfile: Dockerfile.franken\n",
+    });
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "Dockerfile.franken",
+        .data = "FROM dunglas/frankenphp:php8.5-alpine\nRUN install-php-extensions pdo_sqlite sqlite3\n",
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("php", result.runtimes[0].key);
+    try testing.expectEqualStrings("8.5", result.runtimes[0].value);
+    try testing.expectEqual(1, result.services.len);
+    try testing.expectEqualStrings("sqlite", result.services[0].key);
+}
+
+test "detect reads the root Dockerfile and maps wordpress base to php" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "Dockerfile");
+    cleanFile(dir, "composer.json");
+    cleanFile(dir, "docker-compose.yml");
+    cleanFile(dir, ".env");
+
+    try dir.writeFile(std.testing.io, .{
+        .sub_path = "Dockerfile",
+        .data = "FROM wordpress:6-php8.3-apache\n",
+    });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("php", result.runtimes[0].key);
+    try testing.expectEqualStrings("8.3", result.runtimes[0].value);
+}
