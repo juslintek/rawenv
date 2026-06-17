@@ -24,6 +24,19 @@ _None found this iteration._ Build, launch, the 641-test suite, and core detecti
 - **Acceptance:** `rawenv detect` at the gratis root reports `frankenphp 8.5` and no mysql; a new
   Zig detector test covers a nested compose + `Dockerfile.franken` fixture (mirror the Swift
   `FrankenphpDetectionE2ETests`).
+- **Implementation investigation (2026-06-17) — needs a deliberate, reviewed change, not a tail
+  patch.** The blocker is directory *iteration* in Zig 0.16's `std.Io` era. `detect()` reads files
+  with `std.posix.openat(dir.handle, name)` (no Io), but listing a dir's children requires either:
+  (a) **`std.Io.Threaded`** — `Io.Threaded.init(gpa, InitOptions)` + `openDir(io, ".", .{.iterate=true})`
+  + `Iterator.next(io)`. This pulls a thread pool, SIGIO/SIGPIPE signal handlers, and environ
+  management into a one-shot CLI — heavy and side-effecting; or
+  (b) **libc `readdir`** — `std.c.opendir`/`fdopendir` are `pub`, but `readdir` is the versioned
+  `readdir$INODE64` shim on macOS (not cleanly `pub`) and `dirent` is per-OS — fragile.
+  The project already **punted on this exact problem**: `src/core/discover.zig`'s `discover()` is a
+  stub (`// TODO: openDirAbsolute needs Io in 0.16.0`, `continue;`). Fixing R1 should also unblock
+  `discover()`. Recommend choosing path (a) with a tightly-scoped helper + lifecycle + a unit test,
+  reviewed before merge. (A no-iteration alternative — auto-descend only when the root has exactly
+  one non-hidden child dir, found by a bounded probe — avoids listing but is weaker.)
 
 ## P2
 
@@ -48,6 +61,15 @@ _None found this iteration._ Build, launch, the 641-test suite, and core detecti
   **Set Up Environment** in the **Tart VM** (test-runner agent) — screen-hijacking + machine-
   mutating, so not on the active host. **Acceptance:** AX UI E2E green in the VM + a screenshot
   per screen + each project installed and `up` once.
+  - **Path confirmed available (2026-06-17):** `tart` is installed; VM `rawenv-test` exists
+    (stopped) + base image `ghcr.io/cirruslabs/macos-tahoe-xcode`; runner
+    `gui/macos/scripts/test-in-vm.sh` (build/run/test/screenshot/all) boots the VM with the repo
+    mounted over SSH (sshpass, non-interactive) and captures screenshots via screencapture/VNC.
+    Plan: `test-in-vm.sh build`, then `ssh` `RAWENV_RUN_UI_E2E=1 swift test` + per-project setup,
+    capturing screenshots. **Risk:** the AX API needs Accessibility permission for the test
+    runner *inside the VM* — if the cirruslabs image hasn't granted it, AX returns empty and the
+    UI E2E finds no controls; the VM may need a one-time `tccutil`/MDM AX grant. Delegate to the
+    `test-runner` subagent in a dedicated iteration (VM boot + `swift build` are slow).
 
 ## Go / No-Go (iteration 1)
 **Conditional GO for beta · NO-GO for GA until R1 (P1) ships.** No P0 blockers: the app builds,
