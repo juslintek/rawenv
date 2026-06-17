@@ -222,3 +222,60 @@ non-trivial changes; the same review rules (§4–§6) apply to the findings.
 - All interactive elements have accessibility identifiers.
 - After any code change: run the build/compile step, then the relevant tests, before
   presenting the result; clean up temp files.
+
+## 11. Detection ↔ installer alignment (rawenv)
+
+Detection and the installer/resolver are **one contract** — never let them drift:
+
+- **Only emit what `rawenv add` can install.** A detected runtime/service must be a
+  known resolver package, or the user gets an "Unknown package/version" failure when
+  they try to set it up. (Emitting a `sqlite` service that the resolver can't install
+  broke setup; SQLite is embedded — not an installable service.)
+- **When detection learns a new version or tool, add resolver support in the SAME
+  change.** Detecting php 8.5 while the resolver only knew 8.1–8.4 produced a dead-end
+  install. Add the version map + `availableVersions` + a download source together.
+- **Embedded stores are not services.** SQLite / a PHP extension / anything with no
+  separate server binary is part of the runtime, not an installable service entry.
+- **Detect tools by their real identity, and supersede the generic.** A FrankenPHP
+  Dockerfile is a `frankenphp` runtime (Caddy + embedded PHP), not plain `php` — emit
+  `frankenphp` and **remove** the composer-detected `php` so there's no duplicate.
+- **Extract the stack from where it actually lives**: root manifests, **Dockerfile
+  `FROM` base images**, compose **`build:` contexts**, and **nested subdirectories**
+  (a monorepo's compose/.env may sit one level down, e.g. `gratis/gratis-suite/`).
+
+## 12. GUI / UX
+
+- **Calm, actionable empty states — never leak a raw error for a normal state.** A
+  project with no `rawenv.toml` is "not set up yet" (friendly + a "Set up" CTA), not
+  *"the data couldn't be read because it isn't in the correct format."* Detect the
+  not-set-up signal and branch to a calm state; reserve the error state for genuine
+  failures (and still don't mask those).
+- **An action must do its full intended work and show progress — never a no-op
+  flicker.** "Set Up Environment" must install the detected **runtimes** (not only
+  services) and activate, with a progress indicator and the real log; a button that
+  loops over zero items and silently returns reads as a broken flicker.
+- **Prefer injected closures (with safe defaults) over `@EnvironmentObject`** for view
+  dependencies (e.g. navigation). A view with a missing `@EnvironmentObject` *crashes*
+  when rendered standalone in tests; an injected `var onSetUp: () -> Void = {}` renders
+  anywhere and stays testable.
+- **Keep the CLI the GUI calls current.** The app bundles a CLI and falls back to a
+  PATH binary; after a detector/resolver change, rebuild so the bundled CLI updates,
+  and don't let `~/.rawenv/bin/rawenv` go stale.
+
+## Operational lessons (2026-06-17 session)
+
+20. **Never read `$?` after a pipe.** `cmd | tail`/`| grep` makes `$?` the *filter's*
+    exit (usually 0), masking a failed `cmd`. I "verified" `zig build test` passed when
+    it had 2 compile errors because I checked `$?` after `| tail`. Use
+    `set -o pipefail`, redirect to a file then check (`cmd >/tmp/log 2>&1; echo $?`), or
+    read `${PIPESTATUS[0]}`. (Sharper form of §15.)
+21. **Verify against the rebuilt artifact, not stale output.** A detector/resolver
+    change needs `zig build` (the binary), not just `zig build test`; then exercise the
+    real CLI. The GUI runs a bundled/installed CLI — confirm *that* binary reflects the
+    change, not just the source/tests.
+22. **Local review resilience.** Run a local review (CodeRabbit + Codex) before
+    committing; if one backend is transiently down (CodeRabbit hung on "Connecting"),
+    fall back to the other and note it — don't block indefinitely, and never skip the
+    gate to compensate.
+23. **`var` that's never mutated is a Zig compile error** ("use const"). Default to
+    `const` for resolver/detector test bindings you only read.
