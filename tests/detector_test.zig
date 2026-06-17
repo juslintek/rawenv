@@ -897,7 +897,7 @@ test "detect extracts runtime from a compose build Dockerfile (FrankenPHP php8.5
     defer result.deinit(testing.allocator);
 
     try testing.expectEqual(1, result.runtimes.len);
-    try testing.expectEqualStrings("php", result.runtimes[0].key);
+    try testing.expectEqualStrings("frankenphp", result.runtimes[0].key);
     try testing.expectEqualStrings("8.5", result.runtimes[0].value);
     // SQLite is embedded in the image; it is not emitted as an installable service.
     try testing.expectEqual(0, result.services.len);
@@ -922,4 +922,23 @@ test "detect reads the root Dockerfile and maps wordpress base to php" {
     try testing.expectEqual(1, result.runtimes.len);
     try testing.expectEqualStrings("php", result.runtimes[0].key);
     try testing.expectEqualStrings("8.3", result.runtimes[0].value);
+}
+
+test "frankenphp Dockerfile supersedes a composer-detected php runtime" {
+    var dir = try makeTmpDir();
+    defer dir.close(std.testing.io);
+    defer cleanFile(dir, "composer.json");
+    defer cleanFile(dir, "Dockerfile");
+    cleanFile(dir, "docker-compose.yml");
+    cleanFile(dir, ".env");
+
+    try dir.writeFile(std.testing.io, .{ .sub_path = "composer.json", .data = "{\"require\":{}}" });
+    try dir.writeFile(std.testing.io, .{ .sub_path = "Dockerfile", .data = "FROM dunglas/frankenphp:php8.5-alpine\n" });
+
+    var result = try detector.detect(testing.allocator, dir);
+    defer result.deinit(testing.allocator);
+
+    try testing.expectEqual(1, result.runtimes.len);
+    try testing.expectEqualStrings("frankenphp", result.runtimes[0].key);
+    try testing.expectEqualStrings("8.5", result.runtimes[0].value);
 }

@@ -110,6 +110,11 @@ pub fn detect(allocator: std.mem.Allocator, dir: std.Io.Dir) !DetectionResult {
     if (readFile(allocator, dir, dockerfile_name)) |dfdata| {
         defer allocator.free(dfdata);
         if (dockerfileRuntime(dfdata)) |rt| {
+            // FrankenPHP embeds PHP, so it supersedes a composer-detected plain
+            // `php` runtime rather than appearing alongside it.
+            if (std.mem.eql(u8, rt.key, "frankenphp")) {
+                if (findEntry(&runtimes, "php")) |i| _ = runtimes.orderedRemove(i);
+            }
             if (findEntry(&runtimes, rt.key)) |idx| {
                 runtimes.items[idx].value = rt.value;
             } else {
@@ -652,8 +657,10 @@ fn dockerfileRuntime(data: []const u8) ?DetectionResult.Entry {
     const colon = std.mem.lastIndexOfScalar(u8, image, ':');
     const name = imageBasename(if (colon) |c| image[0..c] else image);
     const tag = if (colon) |c| image[c + 1 ..] else "";
+    // FrankenPHP (Caddy + embedded PHP) is the app runtime here, not plain PHP —
+    // surface it as its own runtime, versioned by the PHP line it serves.
     if (std.mem.indexOf(u8, name, "frankenphp") != null)
-        return .{ .key = "php", .value = phpFromTag(tag) orelse "8.4" };
+        return .{ .key = "frankenphp", .value = phpFromTag(tag) orelse "8.4" };
     if (std.mem.startsWith(u8, name, "wordpress"))
         return .{ .key = "php", .value = phpFromTag(tag) orelse "8.3" };
     if (std.mem.startsWith(u8, name, "php"))

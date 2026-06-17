@@ -45,6 +45,9 @@ pub const available_packages = [_][]const u8{
     // resolveMariadb. Kept as a distinct name so store paths match the config
     // key emitted by the detector for `mysql:*` compose images.
     "mysql",
+    // FrankenPHP: a single static binary (Caddy + embedded PHP) for apps served
+    // by FrankenPHP. Detected from a `FROM dunglas/frankenphp:*` Dockerfile.
+    "frankenphp",
 };
 
 const PlatformKey = struct {
@@ -101,6 +104,8 @@ pub fn resolve(allocator: std.mem.Allocator, package_name: []const u8, version: 
         return resolveMeilisearch(allocator, version);
     } else if (std.mem.eql(u8, package_name, "mariadb") or std.mem.eql(u8, package_name, "mysql")) {
         return resolveMariadb(allocator, package_name, version);
+    } else if (std.mem.eql(u8, package_name, "frankenphp")) {
+        return resolveFrankenphp(allocator, version);
     }
     return ResolveError.UnknownPackage;
 }
@@ -387,6 +392,7 @@ fn phpFullVersion(version: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, version, "8.2") or std.mem.eql(u8, version, "8.2.31")) return "8.2.31";
     if (std.mem.eql(u8, version, "8.3") or std.mem.eql(u8, version, "8.3.31")) return "8.3.31";
     if (std.mem.eql(u8, version, "8.4") or std.mem.eql(u8, version, "8.4.11")) return "8.4.11";
+    if (std.mem.eql(u8, version, "8.5") or std.mem.eql(u8, version, "8.5.7")) return "8.5.7";
     return null;
 }
 
@@ -434,6 +440,33 @@ fn meilisearchAsset(p: PlatformKey) ?[]const u8 {
     if (isPlatform(p, "darwin", "x64")) return "meilisearch-macos-amd64";
     if (isPlatform(p, "linux", "x64")) return "meilisearch-linux-amd64";
     if (isPlatform(p, "linux", "arm64")) return "meilisearch-linux-aarch64";
+    return null;
+}
+
+// ---------------------------------------------------------------------------
+// frankenphp — official single-binary releases (Caddy + embedded PHP) from
+// GitHub. One static binary per platform; no checksums published upstream, so
+// the hash is computed on download. The requested `version` is the PHP line the
+// project targets (e.g. 8.5) and is kept for display — the binary is the same.
+// ---------------------------------------------------------------------------
+const FRANKENPHP_VERSION = "1.12.4";
+
+fn resolveFrankenphp(allocator: std.mem.Allocator, version: []const u8) (ResolveError || std.mem.Allocator.Error)!ResolvedPackage {
+    const platform = try getPlatform();
+    const asset = frankenphpAsset(platform) orelse return ResolveError.UnsupportedPlatform;
+    const url = try std.fmt.allocPrint(
+        allocator,
+        "https://github.com/php/frankenphp/releases/download/v{s}/{s}",
+        .{ FRANKENPHP_VERSION, asset },
+    );
+    return .{ .name = "frankenphp", .version = version, .url = url, .sha256 = COMPUTE_ON_DOWNLOAD, .archive_type = .binary };
+}
+
+fn frankenphpAsset(p: PlatformKey) ?[]const u8 {
+    if (isPlatform(p, "darwin", "arm64")) return "frankenphp-mac-arm64";
+    if (isPlatform(p, "darwin", "x64")) return "frankenphp-mac-x86_64";
+    if (isPlatform(p, "linux", "x64")) return "frankenphp-linux-x86_64";
+    if (isPlatform(p, "linux", "arm64")) return "frankenphp-linux-aarch64";
     return null;
 }
 
@@ -511,6 +544,7 @@ fn fullVersion(package_name: []const u8, version: []const u8) ?[]const u8 {
         if (std.mem.eql(u8, version, "8.2")) return "8.2.31";
         if (std.mem.eql(u8, version, "8.3")) return "8.3.31";
         if (std.mem.eql(u8, version, "8.4")) return "8.4.11";
+        if (std.mem.eql(u8, version, "8.5")) return "8.5.7";
     } else if (std.mem.eql(u8, package_name, "meilisearch")) {
         if (std.mem.eql(u8, version, "1.12")) return "1.12.0";
     } else if (std.mem.eql(u8, package_name, "mariadb") or std.mem.eql(u8, package_name, "mysql")) {
@@ -535,7 +569,9 @@ pub fn availableVersions(package_name: []const u8) []const []const u8 {
     } else if (std.mem.eql(u8, package_name, "python")) {
         return &.{"3.12"};
     } else if (std.mem.eql(u8, package_name, "php")) {
-        return &.{ "8.1", "8.2", "8.3", "8.4" };
+        return &.{ "8.1", "8.2", "8.3", "8.4", "8.5" };
+    } else if (std.mem.eql(u8, package_name, "frankenphp")) {
+        return &.{ "8.3", "8.4", "8.5" };
     } else if (std.mem.eql(u8, package_name, "meilisearch")) {
         return &.{"1.12"};
     } else if (std.mem.eql(u8, package_name, "mariadb")) {
@@ -868,4 +904,19 @@ test "no source-compilation URLs are produced" {
         try std.testing.expect(std.mem.indexOf(u8, pkg.url, "www.php.net/distributions") == null);
         try std.testing.expect(std.mem.indexOf(u8, pkg.url, "www.python.org/ftp") == null);
     }
+}
+
+test "php 8.5 resolves to a static-php build" {
+    const pkg = try resolve(std.testing.allocator, "php", "8.5");
+    defer std.testing.allocator.free(pkg.url);
+    try std.testing.expectEqualStrings("php", pkg.name);
+    try std.testing.expectEqualStrings("8.5.7", pkg.version);
+}
+
+test "frankenphp is a known package resolving to a binary" {
+    try std.testing.expect(isKnownPackage("frankenphp"));
+    const pkg = try resolve(std.testing.allocator, "frankenphp", "8.5");
+    defer std.testing.allocator.free(pkg.url);
+    try std.testing.expectEqualStrings("frankenphp", pkg.name);
+    try std.testing.expect(std.mem.indexOf(u8, pkg.url, "frankenphp-") != null);
 }
