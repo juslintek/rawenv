@@ -1,0 +1,79 @@
+[
+  {
+    "action" : "initial",
+    "description" : "App launched (--ui-testing); initial window",
+    "file" : "100_launch_initial.png",
+    "screen" : "launch",
+    "step" : 100
+  },
+  {
+    "action" : "before-rescan",
+    "description" : "Discovery screen before forcing a rescan",
+    "file" : "101_discovery_before-rescan.png",
+    "screen" : "discovery",
+    "step" : 101
+  },
+  {
+    "action" : "scan-complete",
+    "description" : "After Force rescan — scan complete (banner present: true)",
+    "file" : "102_discovery_scan-complete.png",
+    "screen" : "discovery",
+    "step" : 102
+  },
+  {
+    "action" : "project-list",
+    "description" : "Project list after View Projects (clicked=true, demo-node visible=false)",
+    "file" : "103_projects_project-list.png",
+    "screen" : "projects",
+    "step" : 103
+  },
+  {
+    "action" : "detected",
+    "description" : "Setup view for demo-node: detected stack (opened=true, onSetup=true, detected=true)",
+    "file" : "104_setup_detected.png",
+    "screen" : "setup",
+    "step" : 104
+  },
+  {
+    "action" : "installing",
+    "description" : "Just clicked 'Set Up Environment' (start=true) — install in progress",
+    "file" : "105_setup_installing.png",
+    "screen" : "setup",
+    "step" : 105
+  },
+  {
+    "action" : "install-complete",
+    "description" : "After Set Up Environment finished (or timed out)",
+    "file" : "106_setup_install-complete.png",
+    "screen" : "setup",
+    "step" : 106
+  },
+  {
+    "action" : "after-setup",
+    "description" : "Dashboard after setting up demo-node",
+    "file" : "107_dashboard_after-setup.png",
+    "screen" : "dashboard",
+    "step" : 107
+  },
+  {
+    "action" : "after-start-all",
+    "description" : "Dashboard after clicking Start All — checking running services",
+    "file" : "108_dashboard_after-start-all.png",
+    "screen" : "dashboard",
+    "step" : 108
+  },
+  {
+    "action" : "tab-logs",
+    "description" : "Dashboard tab_logs after setup",
+    "file" : "109_dashboard_tab-logs.png",
+    "screen" : "dashboard",
+    "step" : 109
+  },
+  {
+    "action" : "tab-config",
+    "description" : "Dashboard tab_config after setup",
+    "file" : "110_dashboard_tab-config.png",
+    "screen" : "dashboard",
+    "step" : 110
+  }
+]
