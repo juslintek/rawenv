@@ -1,0 +1,210 @@
+[
+  {
+    "action" : "open",
+    "after" : "001_dashboard_open_after.png",
+    "before" : "001_dashboard_open_before.png",
+    "description" : "Navigate to the dashboard screen via the sidebar",
+    "screen" : "dashboard",
+    "step" : 1
+  },
+  {
+    "action" : "open",
+    "after" : "002_discovery_open_after.png",
+    "before" : "002_discovery_open_before.png",
+    "description" : "Navigate to the discovery screen via the sidebar",
+    "screen" : "discovery",
+    "step" : 2
+  },
+  {
+    "action" : "open",
+    "after" : "003_ai-chat_open_after.png",
+    "before" : "003_ai-chat_open_before.png",
+    "description" : "Navigate to the ai-chat screen via the sidebar",
+    "screen" : "ai-chat",
+    "step" : 3
+  },
+  {
+    "action" : "open",
+    "after" : "004_connections_open_after.png",
+    "before" : "004_connections_open_before.png",
+    "description" : "Navigate to the connections screen via the sidebar",
+    "screen" : "connections",
+    "step" : 4
+  },
+  {
+    "action" : "open",
+    "after" : "005_deploy_open_after.png",
+    "before" : "005_deploy_open_before.png",
+    "description" : "Navigate to the deploy screen via the sidebar",
+    "screen" : "deploy",
+    "step" : 5
+  },
+  {
+    "action" : "open",
+    "after" : "006_tunnel_open_after.png",
+    "before" : "006_tunnel_open_before.png",
+    "description" : "Navigate to the tunnel screen via the sidebar",
+    "screen" : "tunnel",
+    "step" : 6
+  },
+  {
+    "action" : "open",
+    "after" : "007_uninstall_open_after.png",
+    "before" : "007_uninstall_open_before.png",
+    "description" : "Navigate to the uninstall screen via the sidebar",
+    "screen" : "uninstall",
+    "step" : 7
+  },
+  {
+    "action" : "open",
+    "after" : "008_settings_open_after.png",
+    "before" : "008_settings_open_before.png",
+    "description" : "Navigate to the settings screen via the sidebar",
+    "screen" : "settings",
+    "step" : 8
+  },
+  {
+    "action" : "tab-logs",
+    "after" : "009_dashboard_tab-logs_after.png",
+    "before" : "009_dashboard_tab-logs_before.png",
+    "description" : "Open the logs detail tab on the Dashboard",
+    "screen" : "dashboard",
+    "step" : 9
+  },
+  {
+    "action" : "tab-config",
+    "after" : "010_dashboard_tab-config_after.png",
+    "before" : "010_dashboard_tab-config_before.png",
+    "description" : "Open the config detail tab on the Dashboard",
+    "screen" : "dashboard",
+    "step" : 10
+  },
+  {
+    "action" : "tab-connection",
+    "after" : "011_dashboard_tab-connection_after.png",
+    "before" : "011_dashboard_tab-connection_before.png",
+    "description" : "Open the connection detail tab on the Dashboard",
+    "screen" : "dashboard",
+    "step" : 11
+  },
+  {
+    "action" : "tab-cell",
+    "after" : "012_dashboard_tab-cell_after.png",
+    "before" : "012_dashboard_tab-cell_before.png",
+    "description" : "Open the cell detail tab on the Dashboard",
+    "screen" : "dashboard",
+    "step" : 12
+  },
+  {
+    "action" : "tab-backups",
+    "after" : "013_dashboard_tab-backups_after.png",
+    "before" : "013_dashboard_tab-backups_before.png",
+    "description" : "Open the backups detail tab on the Dashboard",
+    "screen" : "dashboard",
+    "step" : 13
+  },
+  {
+    "action" : "start-all",
+    "after" : "014_dashboard_start-all_after.png",
+    "before" : "014_dashboard_start-all_before.png",
+    "description" : "Click 'Start All' to start every configured service",
+    "screen" : "dashboard",
+    "step" : 14
+  },
+  {
+    "action" : "stop-all",
+    "after" : "015_dashboard_stop-all_after.png",
+    "before" : "015_dashboard_stop-all_before.png",
+    "description" : "Click 'Stop' to stop running services",
+    "screen" : "dashboard",
+    "step" : 15
+  },
+  {
+    "action" : "filter-api",
+    "after" : "016_discovery_filter-api_after.png",
+    "before" : "016_discovery_filter-api_before.png",
+    "description" : "Type 'api' into the projects filter field",
+    "screen" : "discovery",
+    "step" : 16
+  },
+  {
+    "action" : "filter-clear",
+    "after" : "017_discovery_filter-clear_after.png",
+    "before" : "017_discovery_filter-clear_before.png",
+    "description" : "Clear the projects filter",
+    "screen" : "discovery",
+    "step" : 17
+  },
+  {
+    "action" : "force-rescan",
+    "after" : "018_discovery_force-rescan_after.png",
+    "before" : "018_discovery_force-rescan_before.png",
+    "description" : "Click 'Force rescan' to re-scan for projects",
+    "screen" : "discovery",
+    "step" : 18
+  },
+  {
+    "action" : "scan-full-disk",
+    "after" : "019_discovery_scan-full-disk_after.png",
+    "before" : "019_discovery_scan-full-disk_before.png",
+    "description" : "Toggle 'Scan full disk'",
+    "screen" : "discovery",
+    "step" : 19
+  },
+  {
+    "action" : "type-question",
+    "after" : "020_ai-chat_type-question_after.png",
+    "before" : "020_ai-chat_type-question_before.png",
+    "description" : "Type a question into the AI assistant input",
+    "screen" : "ai-chat",
+    "step" : 20
+  },
+  {
+    "action" : "send",
+    "after" : "021_ai-chat_send_after.png",
+    "before" : "021_ai-chat_send_before.png",
+    "description" : "Click send to submit the AI question",
+    "screen" : "ai-chat",
+    "step" : 21
+  },
+  {
+    "action" : "revisit",
+    "after" : "022_connections_revisit_after.png",
+    "before" : "022_connections_revisit_before.png",
+    "description" : "Revisit the connections screen to capture its loaded content",
+    "screen" : "connections",
+    "step" : 22
+  },
+  {
+    "action" : "revisit",
+    "after" : "023_deploy_revisit_after.png",
+    "before" : "023_deploy_revisit_before.png",
+    "description" : "Revisit the deploy screen to capture its loaded content",
+    "screen" : "deploy",
+    "step" : 23
+  },
+  {
+    "action" : "revisit",
+    "after" : "024_tunnel_revisit_after.png",
+    "before" : "024_tunnel_revisit_before.png",
+    "description" : "Revisit the tunnel screen to capture its loaded content",
+    "screen" : "tunnel",
+    "step" : 24
+  },
+  {
+    "action" : "revisit",
+    "after" : "025_uninstall_revisit_after.png",
+    "before" : "025_uninstall_revisit_before.png",
+    "description" : "Revisit the uninstall screen to capture its loaded content",
+    "screen" : "uninstall",
+    "step" : 25
+  },
+  {
+    "action" : "revisit",
+    "after" : "026_settings_revisit_after.png",
+    "before" : "026_settings_revisit_before.png",
+    "description" : "Revisit the settings screen to capture its loaded content",
+    "screen" : "settings",
+    "step" : 26
+  }
+]
