@@ -1,0 +1,86 @@
+[
+  {
+    "action" : "scan-all-projects",
+    "description" : "Scan of \/Volumes\/Projects (all real projects mounted) complete",
+    "file" : "200_discovery_scan-all-projects.png",
+    "screen" : "discovery",
+    "step" : 200
+  },
+  {
+    "action" : "discovered-list",
+    "description" : "Full Discovered Projects list — all real projects found via the \/Volumes\/Projects mount",
+    "file" : "201_projects_discovered-list.png",
+    "screen" : "projects",
+    "step" : 201
+  },
+  {
+    "action" : "filter-demo-node",
+    "description" : "Filtered project list to demo-node",
+    "file" : "202_projects_filter-demo-node.png",
+    "screen" : "projects",
+    "step" : 202
+  },
+  {
+    "action" : "demo-node-detected",
+    "description" : "Setup view — detected stack for demo-node: node 22 + redis 7 (fully installable)",
+    "file" : "203_setup_demo-node-detected.png",
+    "screen" : "setup",
+    "step" : 203
+  },
+  {
+    "action" : "demo-node-version-picker",
+    "description" : "Node version picker opened on the setup view for demo-node",
+    "file" : "204_setup_demo-node-version-picker.png",
+    "screen" : "setup",
+    "step" : 204
+  },
+  {
+    "action" : "demo-node-result",
+    "description" : "After 'Set Up Environment' for demo-node — install result\/error",
+    "file" : "205_setup_demo-node-result.png",
+    "screen" : "setup",
+    "step" : 205
+  },
+  {
+    "action" : "filter-demo-rust",
+    "description" : "Filtered project list to demo-rust",
+    "file" : "206_projects_filter-demo-rust.png",
+    "screen" : "projects",
+    "step" : 206
+  },
+  {
+    "action" : "demo-rust-detected",
+    "description" : "Setup view — detected stack for demo-rust: rust (NOT an installable package → expect error)",
+    "file" : "207_setup_demo-rust-detected.png",
+    "screen" : "setup",
+    "step" : 207
+  },
+  {
+    "action" : "demo-rust-result",
+    "description" : "After 'Set Up Environment' for demo-rust — install result\/error",
+    "file" : "208_setup_demo-rust-result.png",
+    "screen" : "setup",
+    "step" : 208
+  },
+  {
+    "action" : "filter-demo-mysql",
+    "description" : "Filtered project list to demo-mysql",
+    "file" : "209_projects_filter-demo-mysql.png",
+    "screen" : "projects",
+    "step" : 209
+  },
+  {
+    "action" : "demo-mysql-detected",
+    "description" : "Setup view — detected stack for demo-mysql: node 22 + mysql 8 (mysql has no macOS binary → expect partial)",
+    "file" : "210_setup_demo-mysql-detected.png",
+    "screen" : "setup",
+    "step" : 210
+  },
+  {
+    "action" : "demo-mysql-result",
+    "description" : "After 'Set Up Environment' for demo-mysql — install result\/error",
+    "file" : "211_setup_demo-mysql-result.png",
+    "screen" : "setup",
+    "step" : 211
+  }
+]

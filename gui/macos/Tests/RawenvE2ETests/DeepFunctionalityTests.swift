@@ -284,11 +284,35 @@ private func makeOfflineInstallerEngine() -> (engine: InstallerEngine, binPath: 
     @Test @MainActor func multiProjectScanner() async {
         let engine = ScannerEngine()
         engine.addCustomPath(path: testRoot)
-        try? await Task.sleep(nanoseconds: 2_000_000_000)
-        #expect(engine.discoveredProjects.count >= 2)
+        // Poll instead of a fixed sleep — a recursive scan of large default roots can take
+        // longer than any single fixed delay, so wait for the expected repos to appear.
+        let deadline = Date().addingTimeInterval(30)
+        while Date() < deadline {
+            let found = Set(engine.discoveredProjects.map(\.name))
+            if found.contains("myapp"), found.contains("backend") { break }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
         let names = engine.discoveredProjects.map(\.name)
         #expect(names.contains("myapp"))
         #expect(names.contains("backend"))
+    }
+
+    /// Regression: a project nested one level below the scan root inside a *container*
+    /// directory (no manifest of its own) must still be discovered — mirrors a mounted
+    /// "Projects" volume nested under a VM share (`<share>/Projects/<repo>`).
+    @Test @MainActor func nestedContainerScannerFindsDeeperRepos() async {
+        let root = NSTemporaryDirectory() + "rawenv-scan-nested-\(ProcessInfo.processInfo.processIdentifier)"
+        let repo = "\(root)/container/webapp"
+        try? FileManager.default.createDirectory(atPath: repo, withIntermediateDirectories: true)
+        try? "{\"name\":\"webapp\"}".write(toFile: "\(repo)/package.json", atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(atPath: root) }
+
+        let engine = ScannerEngine()
+        engine.addCustomPath(path: root)
+        let deadline = Date().addingTimeInterval(8)
+        while !engine.scanComplete, Date() < deadline { try? await Task.sleep(nanoseconds: 200_000_000) }
+        #expect(engine.scanComplete)
+        #expect(engine.discoveredProjects.map(\.name).contains("webapp"))
     }
 
     @Test @MainActor func multiProjectSwitching() {

@@ -63,3 +63,46 @@ accurate for those stages.
 ## Severity summary
 **P1:** F-RUN (services can't be started). **P2:** F-DASH (dashboard doesn't reflect setup),
 F-A11Y. The install pipeline is solid; the **run + manage** half of the loop is the gap.
+
+---
+
+## Update — all real projects (mounted `/Volumes/Projects`, 2026-06-18 PM)
+
+Mounted the host's `/Volumes/Projects` into the VM and ran detect + install across **every**
+real project, plus drove the GUI setup view. Screenshots `200–211` (`manifest-projects.json`).
+
+### Detection works broadly (read-only `detect` per project)
+`gratis → frankenphp 8.5` (R1 nested-stack fix confirmed on the real repo), `gratis-deploy → php 8.1`,
+`rahcolours-b2b2c → node 22 + php 8.3 + redis 7 + mysql 8`, `qwik-fullstack → bun 1 + redis 7 + mssql 2022`,
+`zelkai-trends → node 22 + python 3.11`, `mcp-for-page-builders → rust`, `Gotas01 → mssql 2022`.
+Swift/FoxPro/docs repos correctly detect nothing.
+
+### F-DETECT-INSTALL (P1) — detects stacks it cannot install (RULES §11 contract violation)
+Attempting `add` for every detected package: ✅ node, redis, php 8.1, php 8.3, **frankenphp 8.5**, bun.
+❌ **rust** → "Unknown package" (detected for mcp, not an installable package);
+❌ **mssql** → "Unknown package" (detected for qwik-fullstack, Gotas01);
+❌ **mysql@8** → "no prebuilt binary for this OS/architecture" (detected for rahcolours; macOS arm64);
+❌ **python@3.11** → resolver only offers 3.12 (version the detector emits can't be installed).
+So GUI "Set Up Environment" for those projects fails/partially-fails. **Fix:** for each detectable
+runtime/service, either add resolver support (rust, mssql, macOS mysql/mariadb) or stop emitting it
+(and map detected versions onto installable ones, e.g. python 3.11→3.12). Verified the GUI surfaces
+this gracefully — demo-mysql setup showed a red *"rawenv add mysql@8 failed … no prebuilt binary"*
+with Summary "1/1 runtimes · 0/1 services installed" (no crash). (`211_setup_demo-mysql-result.png`)
+
+### F-SCAN-DEPTH (P2) — FIXED this session
+The GUI scanner only inspected *direct children* of each root, so a mounted "Projects" volume
+nested under the VM share (`/Volumes/My Shared Files/Projects/<repo>`) — and monorepo
+`~/Projects/<client>/<app>` — surfaced **0** projects. Fixed `ScannerEngine.scanDirectory` to descend
+a bounded depth (`maxScanDepth`) into non-project container dirs, skipping dependency/build noise.
+After the fix the scan discovers gratis, rahcolours, qwik-fullstack, mcp, zelkai, gratis-deploy.
+Regression test `nestedContainerScannerFindsDeeperRepos` added; full host suite green (642 tests).
+
+### F-DISCOVER-CLI (P2) — `rawenv discover` finds nothing
+The CLI `rawenv discover` returned **"No projects found"** in the VM while the GUI `ScannerEngine`
+found projects — the CLI discover's scan roots/logic diverge from the GUI scanner. **Fix:** align
+the CLI `discover` scan roots/recursion with the GUI scanner (shared logic), or document the gap.
+
+### Positive
+Node version picker works (22/20/18/16). Install-failure UX is graceful (red error + partial
+summary, no crash). The version-picker + per-service Install controls render correctly
+(`204_setup_demo-mysql-version-picker.png`).

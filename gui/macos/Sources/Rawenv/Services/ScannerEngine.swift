@@ -25,6 +25,21 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
         "build.zig", "Gemfile", "requirements.txt", "pyproject.toml",
     ]
 
+    /// How many directory levels below a scan root to descend when a directory is not
+    /// itself a project. Lets a *container* dir surface the repos inside it — e.g. a
+    /// projects volume mounted one level below a VM share root, or a monorepo-style
+    /// `~/Projects/<client>/<app>` where repos live under a parent folder.
+    private static let maxScanDepth = 2
+
+    /// Directories never worth descending into (dependency/build/VCS noise). Keeps the
+    /// recursive scan bounded and fast. Note: a directory that is itself a project is not
+    /// descended into, so a project nested inside another project (rare) is not surfaced.
+    private static let skipDirs: Set<String> = [
+        "node_modules", "vendor", "target", "build", "dist", "out",
+        ".next", ".nuxt", ".cache", "Pods", "DerivedData", ".venv", "venv",
+        "__pycache__", ".gradle", ".idea", ".vscode", "bower_components",
+    ]
+
     public init() {
         let home = NSHomeDirectory()
         var scanDirs = [
@@ -137,7 +152,7 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
         "requirements.txt": "Python", "pyproject.toml": "Python",
     ]
 
-    private func scanDirectory(_ path: String) -> [Project] {
+    private func scanDirectory(_ path: String, depth: Int = 0) -> [Project] {
         let fm = FileManager.default
         guard let contents = try? fm.contentsOfDirectory(atPath: path) else { return [] }
         var projects: [Project] = []
@@ -145,7 +160,7 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
             let full = "\(path)/\(item)"
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: full, isDirectory: &isDir),
-                isDir.boolValue, !item.hasPrefix(".")
+                isDir.boolValue, !item.hasPrefix("."), !Self.skipDirs.contains(item)
             else { continue }
             var stack: [String] = []
             for marker in markers where fm.fileExists(atPath: "\(full)/\(marker)") {
@@ -153,6 +168,10 @@ public final class ScannerEngine: ObservableObject, @unchecked Sendable {
             }
             if !stack.isEmpty {
                 projects.append(Project(name: item, path: full, stack: stack, deps: Self.depsSummary(full)))
+            } else if depth < Self.maxScanDepth {
+                // Not a project itself — descend so a container dir (e.g. a mounted
+                // "Projects" volume) surfaces the repos one or more levels inside it.
+                projects.append(contentsOf: scanDirectory(full, depth: depth + 1))
             }
         }
         return projects

@@ -11,9 +11,13 @@ project setup/install flow.
   discovery + ai-chat, each with a before/after pair and a context description.
 - **`manifest-setup.json`** — project setup/install flow (steps 100–110): scan → View Projects →
   Set Up → detect → install → dashboard, with a context description per shot.
+- **`manifest-projects.json`** — all-projects setup pass (steps 200–211): scan of the mounted
+  `/Volumes/Projects`, the full Discovered Projects list, and per-project setup (version picker,
+  install success/partial/error UX) for the success/unsupported/partial cases.
 - **`FINDINGS.md`** — what works vs what's broken (read this first).
 - **`explore.swift`** — standalone AX harness for the navigation pass.
 - **`explore-setup.swift`** — standalone AX harness for the setup/install flow.
+- **`explore-projects.swift`** — standalone AX harness for the all-projects setup pass.
 
 ## How it was produced
 1. Boot the VM with graphics: `tart run rawenv-test --dir=rawenv:<repo>`.
