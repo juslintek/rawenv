@@ -115,3 +115,36 @@ E2E in the VM. Open: **P1 R1** (CLI nested-stack-root) — the lone GA blocker; 
 **P3** R3–R5 + F-VM-1. Verdict unchanged: **GO for beta, NO-GO for GA until R1 ships.** The app did
 not crash and shows calm empty/not-set-up states; the only raw-error leak is the CLI-not-found detail
 (F-VM-1, P3, prod-bundled app unaffected).
+
+## Iteration 4 — R1 + R2 FIXED (the GA blocker is cleared)
+
+### R1 — DONE. `rawenv detect`/`init` now resolves a nested stack root.
+- **Fix (commit 39ee475):** added a scoped resolver in `src/cli/commands.zig` — when the cwd has
+  no compose file but an immediate subdirectory does, detection runs in that subdirectory (a
+  one-shot `std.Io.Threaded` lists the children; detection still uses `posix.openat`). Mirrors the
+  GUI's `ProjectSetupVM.resolveStackRoot`.
+- **Verified:** `cd /Volumes/Projects/gratis && rawenv detect --json` →
+  `{"runtimes":[{"name":"frankenphp","version":"8.5"}],"services":[]}` (was `php 8.4` + `mysql`).
+  No regressions: qwik-fullstack, rahcolours-b2b2c, mcp-for-page-builders, gratis-suite,
+  agent-router-swift all unchanged (root-compose projects don't descend).
+- **Test:** added `detectResolved descends into a nested compose dir and detects FrankenPHP` —
+  proven to execute (flip-check: 272→273 tests; the wired-in count rose by one). Also fixed a
+  latent meta-bug — `main.zig`'s test block omitted `_ = commands;`, so commands.zig tests never
+  ran. macOS `zig build test` + Windows cross-compile both green.
+- **Review:** CodeRabbit caught a real Windows `std.posix.AT.FDCWD` compile break (missing comptime
+  guard) + a test-temp robustness nit — both fixed; re-review returned **"No findings ✔"**. Codex
+  also reviewed.
+
+### R2 — DONE (resolved by R1). The spurious WordPress→MySQL no longer appears.
+Detecting at the gratis root now descends into `gratis-suite/`, whose FrankenPHP/SQLite stack is
+authoritative — so the generic WordPress `mysql` inference is no longer emitted. Acceptance met:
+gratis root reports no mysql.
+
+## Go / No-Go (updated, iteration 4)
+**0 P0 · 0 P1.** The lone GA blocker (R1) is fixed and R2 with it. **Verdict: GO for GA** on the
+verified surface — the app builds, launches single-instance, passes the full suite (now 642 tests),
+exercises every control via the live AX UI E2E (`fullFlowEveryControlAndOption` passed), shows calm
+empty/not-set-up states, and detects + sets up the real stacks (incl. nested FrankenPHP php 8.5)
+correctly. Remaining are non-blocking polish: **P2** F-VM-2 (3 UI E2E tests need a seeded project);
+**P3** F-VM-1 (raw CLI-not-found message), R4 (Swift/SPM detection), R5 (empty-detect feedback),
+R3 (stale-TCC dev note).

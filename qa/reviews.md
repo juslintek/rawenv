@@ -42,3 +42,14 @@ S=live screenshot, C=CLI output, R=code/script read.
 
 **Criterion 1 status:** now **MET** — every control exercised via the AX `fullFlowEveryControlAndOption`
 (passed) + screenshots of the loaded (host), failed (vm-02), and empty (vm-03) dashboard states.
+
+## Iteration 4 (R1 fix) — updates
+
+| Area | Feature | Verdict | Sev | Evidence |
+|---|---|---|---|---|
+| Projects/Setup | CLI detect at a monorepo root | **PASS** | — | commit 39ee475: gratis root → frankenphp 8.5 (was php 8.4 + mysql); nested-detect test runs |
+| Detection | WordPress→MySQL not over-emitted (R2) | **PASS** | — | gratis root no longer emits mysql (descends to the authoritative nested stack) |
+| Build | Windows cross-compile | PASS | — | `zig build -Dtarget=x86_64-windows` exit 0 after the AT.FDCWD guard |
+| Testing | commands.zig tests actually run | **PASS** | — | fixed `main.zig` test block (`_ = commands;`); count 272→273 |
+
+**P1 count now 0.** Only non-blocking P2/P3 polish remains (F-VM-2, F-VM-1, R3–R5).
