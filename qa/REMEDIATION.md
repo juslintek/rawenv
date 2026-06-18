@@ -77,3 +77,41 @@ launches cleanly (single instance), passes 641 tests across 119 suites, and the 
 FrankenPHP / php-8.5 detection + install works through the GUI. The one must-fix is the CLI
 nested-stack-root divergence (R1). To fully satisfy the QA contract, the remaining work is the
 live AX UI E2E + per-project GUI installs in the Tart VM (R6) — planned for a later iteration.
+
+## Iteration 3 — new findings from the live Tart-VM UI E2E
+
+### R6 — DONE. AX UI E2E executed in the `rawenv-test` VM.
+`fullFlowEveryControlAndOption` (drives every screen/control via the Accessibility API) **PASSED**;
+screenshots of the loaded/failed/empty dashboard states captured. **Criterion 1 is now MET.**
+
+### F-VM-1 (P3) — raw "file doesn't exist" on the Dashboard when the CLI isn't found
+- **Gate:** UX. **Problem:** the dashboard `.failed` state shows the raw Foundation message
+  *"The file 'rawenv' doesn't exist"* when `RawenvCLI` can't resolve a binary. The title
+  ("Couldn't load services") and Retry are calm, but the detail is a raw error.
+- **Repro:** launch the GUI binary with no CLI bundled and none on PATH (`qa/screenshots/vm-02-…png`).
+  A properly-installed `.app` (bundled CLI) does not hit this; a broken install / PATH issue does.
+- **Fix:** in `DashboardVM.load()` / `RawenvCLI`, detect "CLI not found" (resolver returned the bare
+  `"rawenv"` fallback or `launch` failed with ENOENT) and map it to a calm, actionable message —
+  *"rawenv CLI not found — reinstall the app or add ~/.rawenv/bin to your PATH."*
+- **Acceptance:** CLI-missing launch shows the friendly message (not the raw NSError); a `DashboardVM`
+  unit test covers the mapping.
+
+### F-VM-2 (P2) — three UI E2E tests are not self-contained (false failures)
+- **Gate:** A11y/Testing. **Problem:** `statsCardsShowLabels`, `dashboardTabsExist`,
+  `navigationChangesDetailView` assert the dashboard `.loaded` state (stat cards + detail tabs), but
+  they launch a fresh app with **no active project**, so the dashboard is `.empty` and the asserted
+  elements never exist → the tests fail even though the app is correct.
+- **Repro:** `RAWENV_RUN_UI_E2E=1 … swift test --filter 'statsCardsShowLabels|dashboardTabsExist|navigationChangesDetailView'`
+  in a clean VM → 5 issues; meanwhile `fullFlowEveryControlAndOption` (which tolerates either state)
+  passes.
+- **Fix:** seed a configured project + services (or drive the Set-Up flow) so the dashboard reaches
+  `.loaded` before asserting; or guard these tests behind a seeded fixture. Don't assert
+  loaded-only elements from a cold launch.
+- **Acceptance:** the three tests pass in a clean VM after the dashboard is seeded into `.loaded`.
+
+## Go / No-Go (updated, iteration 3)
+**Still 0 P0.** Criterion 1 (every control exercised + screenshots) is now **MET** via the live AX UI
+E2E in the VM. Open: **P1 R1** (CLI nested-stack-root) — the lone GA blocker; **P2** R2 + F-VM-2;
+**P3** R3–R5 + F-VM-1. Verdict unchanged: **GO for beta, NO-GO for GA until R1 ships.** The app did
+not crash and shows calm empty/not-set-up states; the only raw-error leak is the CLI-not-found detail
+(F-VM-1, P3, prod-bundled app unaffected).

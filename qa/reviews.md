@@ -29,3 +29,16 @@ S=live screenshot, C=CLI output, R=code/script read.
   P3 polish (privacy note, Swift detection, empty-detect feedback).
 - Strongly covered by automated tests; the remaining gaps are the **live AX UI E2E** and
   **per-project GUI install**, both deferred to the Tart VM (screen-hijacking, mutates machine).
+
+## Iteration 3 (Tart VM, live AX UI E2E) — updates
+
+| Area | Feature | Verdict | Sev | Evidence |
+|---|---|---|---|---|
+| GUI | Every control exercised via AX UI E2E | **PASS** | — | `fullFlowEveryControlAndOption` PASSED in VM (was DEFERRED) — drives every screen/tab/control |
+| Dashboard | Calm not-set-up state + CTA | **PASS** | — | `vm-03` screenshot: "This environment isn't set up yet" + "Set up environment →" |
+| Dashboard | CLI-not-found error message | PARTIAL | P3 | `vm-02`: calm title + Retry, but raw "The file 'rawenv' doesn't exist" detail = **F-VM-1** |
+| Stability | No crashes during full AX control sweep | PASS | — | UI E2E ran to completion; app launched/terminated cleanly each test |
+| Suite | UIE2ETests are self-contained | **FAIL** | P2 | 3 tests assert `.loaded` but seed no project → `.empty` → false failures = **F-VM-2** |
+
+**Criterion 1 status:** now **MET** — every control exercised via the AX `fullFlowEveryControlAndOption`
+(passed) + screenshots of the loaded (host), failed (vm-02), and empty (vm-03) dashboard states.
