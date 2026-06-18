@@ -38,6 +38,77 @@ fn writeFileSimple(path: [*:0]const u8, content: []const u8) bool {
     }
     return true;
 }
+// ─── Nested stack-root resolution (mirrors the GUI's ProjectSetupVM.resolveStackRoot) ──
+// A monorepo often keeps its docker-compose.yml / Dockerfile one level down (e.g.
+// gratis/ -> gratis-suite/). `rawenv detect`/`init` at the repo root would otherwise
+// miss that stack and fall back to a generic guess. When the cwd has no compose file
+// but an immediate subdirectory does, detection runs in that subdirectory instead.
+
+const compose_names = [_][]const u8{ "docker-compose.yml", "docker-compose.yaml", "compose.yml" };
+const skip_scan_dirs = [_][]const u8{ "node_modules", "vendor", "dist", "build", ".git", ".github" };
+
+fn dirHasCompose(dir_fd: std.posix.fd_t) bool {
+    if (comptime builtin.os.tag == .windows) return false;
+    for (compose_names) |name| {
+        const fd = std.posix.openat(dir_fd, name, .{}, 0) catch continue;
+        _ = std.c.close(fd);
+        return true;
+    }
+    return false;
+}
+
+/// Resolve the directory to scan: the cwd, or — when the cwd has no compose file —
+/// the first immediate subdirectory that does. Returns a `std.Io.Dir`; when it is
+/// not the cwd, its `.handle` is an open fd the caller must close.
+/// ponytail: descends a single level and takes the first compose-bearing subdir in
+/// iteration order; a deeper or multi-stack monorepo would need a richer search.
+fn resolveScanDir(allocator: std.mem.Allocator) std.Io.Dir {
+    const cwd = std.Io.Dir.cwd();
+    if (comptime builtin.os.tag == .windows) return cwd;
+    if (dirHasCompose(std.posix.AT.FDCWD)) return cwd;
+
+    // Listing a directory needs an Io in Zig 0.16; spin up a scoped Threaded Io.
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var iter_dir = cwd.openDir(io, ".", .{ .iterate = true }) catch return cwd;
+    defer iter_dir.close(io);
+
+    var it = iter_dir.iterate();
+    while (it.next(io) catch null) |entry| {
+        if (entry.kind != .directory) continue;
+        if (entry.name.len == 0 or entry.name[0] == '.') continue;
+        var skip = false;
+        for (skip_scan_dirs) |s| {
+            if (std.mem.eql(u8, entry.name, s)) {
+                skip = true;
+                break;
+            }
+        }
+        if (skip) continue;
+        const sub_fd = std.posix.openat(std.posix.AT.FDCWD, entry.name, .{}, 0) catch continue;
+        if (dirHasCompose(sub_fd)) return .{ .handle = sub_fd };
+        _ = std.c.close(sub_fd);
+    }
+    return cwd;
+}
+
+/// `detector.detect` on the resolved stack root (cwd or a nested compose dir).
+fn detectResolved(allocator: std.mem.Allocator) !detector.DetectionResult {
+    // Windows is a compile-check target with no nested-resolution path; the POSIX
+    // descend below references std.posix.AT.FDCWD, which Windows lacks. Returning
+    // early here keeps that code out of the Windows compilation.
+    if (comptime builtin.os.tag == .windows) {
+        return detector.detect(allocator, std.Io.Dir.cwd());
+    }
+    const scan = resolveScanDir(allocator);
+    defer if (scan.handle != std.posix.AT.FDCWD) {
+        _ = std.c.close(scan.handle);
+    };
+    return detector.detect(allocator, scan);
+}
+
 const store = @import("store");
 const service = @import("service");
 const shell = @import("shell");
@@ -80,7 +151,7 @@ pub fn runInit(allocator: std.mem.Allocator, stdout: anytype) !u8 {
     }
 
     // Detect project
-    var result = detector.detect(allocator, std.Io.Dir.cwd()) catch {
+    var result = detectResolved(allocator) catch {
         try stdout.writeAll("Error: failed to scan the current directory. Check that you have read access.\n");
         return ExitCode.system;
     };
@@ -199,7 +270,7 @@ pub fn runImport(allocator: std.mem.Allocator, stdout: anytype, path: [:0]const 
 /// emits a single JSON object `{"runtimes":[...],"services":[...]}` so callers
 /// (e.g. the GUI ProjectSetupVM) can read detection results without side effects.
 pub fn runDetect(allocator: std.mem.Allocator, stdout: anytype, json_mode: bool) !u8 {
-    var result = detector.detect(allocator, std.Io.Dir.cwd()) catch {
+    var result = detectResolved(allocator) catch {
         if (json_mode) {
             try stdout.writeAll("{\"runtimes\":[],\"services\":[]}\n");
         } else {
@@ -1125,4 +1196,60 @@ fn cleanRcFile(home: []const u8, filename: []const u8) !void {
     }
 
     _ = writeFileSimple(path, out_buf[0..out_len]);
+}
+
+test "detectResolved descends into a nested compose dir and detects FrankenPHP" {
+    if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
+    const a = std.testing.allocator;
+
+    // Build a gratis-like layout: a parent with no compose, and a nested suite
+    // dir whose docker-compose.yml builds from a FrankenPHP Dockerfile.
+    var base_buf: [96]u8 = undefined;
+    const base = std.fmt.bufPrintZ(&base_buf, "/tmp/rawenv-r1-nested-{d}", .{std.c.getpid()}) catch return error.SkipZigTest;
+    var suite_buf: [128]u8 = undefined;
+    const suite = std.fmt.bufPrintZ(&suite_buf, "{s}/franken-suite", .{base}) catch return error.SkipZigTest;
+    var dc_buf: [160]u8 = undefined;
+    const dc_path = std.fmt.bufPrintZ(&dc_buf, "{s}/docker-compose.yml", .{suite}) catch return error.SkipZigTest;
+    var df_buf: [160]u8 = undefined;
+    const df_path = std.fmt.bufPrintZ(&df_buf, "{s}/Dockerfile.franken", .{suite}) catch return error.SkipZigTest;
+    // Clean any leftovers from a prior crashed run, then create fresh.
+    _ = std.c.rmdir(suite);
+    _ = std.c.rmdir(base);
+    if (std.c.mkdir(base, 0o755) != 0) return error.SkipZigTest;
+    if (std.c.mkdir(suite, 0o755) != 0) {
+        _ = std.c.rmdir(base);
+        return error.SkipZigTest;
+    }
+    defer {
+        _ = std.c.unlink(dc_path);
+        _ = std.c.unlink(df_path);
+        _ = std.c.rmdir(suite);
+        _ = std.c.rmdir(base);
+    }
+    try std.testing.expect(writeFileSimple(df_path, "FROM dunglas/frankenphp:php8.5-alpine\n"));
+    try std.testing.expect(writeFileSimple(
+        dc_path,
+        "services:\n  app:\n    build:\n      context: .\n      dockerfile: Dockerfile.franken\n",
+    ));
+
+    // Run detection from the PARENT; it must descend into the suite.
+    // Save/restore the cwd via an fd (getcwd returns a non-sentinel pointer).
+    const cwd_fd = std.posix.openat(std.posix.AT.FDCWD, ".", .{}, 0) catch return error.NoCwd;
+    defer {
+        _ = std.c.fchdir(cwd_fd);
+        _ = std.c.close(cwd_fd);
+    }
+    try std.testing.expect(std.c.chdir(base) == 0);
+
+    var result = try detectResolved(a);
+    defer result.deinit(a);
+
+    var has_frankenphp = false;
+    var has_php = false;
+    for (result.runtimes) |r| {
+        if (std.mem.eql(u8, r.key, "frankenphp")) has_frankenphp = true;
+        if (std.mem.eql(u8, r.key, "php")) has_php = true;
+    }
+    try std.testing.expect(has_frankenphp);
+    try std.testing.expect(!has_php); // frankenphp supersedes a bare php entry
 }

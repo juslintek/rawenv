@@ -486,4 +486,5 @@ test {
     _ = gui;
     _ = deploy;
     _ = ai;
+    _ = commands;
 }
