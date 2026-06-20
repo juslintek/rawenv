@@ -106,3 +106,41 @@ the CLI `discover` scan roots/recursion with the GUI scanner (shared logic), or 
 Node version picker works (22/20/18/16). Install-failure UX is graceful (red error + partial
 summary, no crash). The version-picker + per-service Install controls render correctly
 (`204_setup_demo-mysql-version-picker.png`).
+
+---
+
+## Update — full setup run against the REAL projects (2026-06-20, write permission granted)
+
+Ran `init → add → up → status` against each real mounted project (writing real `rawenv.toml`).
+**Pitfall caught:** `~/.rawenv/bin/rawenv` had been silently replaced by a stale **Apr-16 1.3 MB**
+binary (vs the current 3.3 MB build) — likely the GUI installer clobbering it with an embedded
+old CLI (**F-STALE-CLI**, P2). The first run's "unknown package" results were bogus; re-ran after
+reinstalling the correct binary.
+
+### Per-project verdict (correct binary)
+| Project | Detected → toml | Install result | Verdict |
+|---|---|---|---|
+| **gratis** | `frankenphp 8.5` (R1 nested-stack fix ✅) | frankenphp installed, **runs PHP 8.5.7** | ✅ works |
+| **gratis-deploy** | `php 8.1` | php 8.1.34 installed, "No issues" | ✅ works |
+| **rahcolours-b2b2c** | node 22 + php 8.3 + redis 7 + mysql 8 | node+php installed, redis config gen'd; **mysql ✗ no macOS binary** | ⚠️ partial |
+| **qwik-fullstack** | bun 1 + redis 7 + mssql 2022 | bun+redis ok; **mssql ✗ Unknown package** | ⚠️ partial |
+| **zelkai-trends** | node 22 + python 3.11 | node ok; **python 3.11 ✗ (only 3.12 installable)** | ⚠️ partial |
+| **mcp-for-page-builders** | `rust stable` | **rust ✗ Unknown package** — nothing installable | ❌ fails |
+
+### Confirmed end-to-end
+- **F-DETECT-INSTALL (P1):** `init` writes the *full* detected stack into `rawenv.toml` — including
+  `rust`, `mssql`, `mysql`, `python = "3.11"` — yet `add` cannot install any of them (not in the
+  resolver / no macOS binary / version not offered). So projects whose stack includes those can
+  only be *partially* set up (or not at all, e.g. mcp). The detection↔installer contract (RULES §11)
+  is violated at authoring time. Fix options: (a) add resolver support (rust, mssql, macOS
+  mysql/mariadb) — large; (b) map detected versions onto installable ones (python 3.11→3.12) and
+  omit/flag truly-unsupported stacks at `init` — smaller.
+- **F-RUN (P1):** redis installs + generates a config but stays `stopped`; no CLI start.
+- **Runtimes work:** node (`v22.15.0`) and frankenphp (`PHP 8.5.7`) execute from the store; `up`
+  activates into a single global `~/.rawenv/bin` (one project active at a time — by design).
+- **F-STALE-CLI (P2):** the GUI app overwrote `~/.rawenv/bin/rawenv` with an old embedded binary;
+  it should ship/install the current CLI (or never downgrade a newer one).
+
+`rawenv.toml` was written to: gratis, gratis-deploy, rahcolours-b2b2c, qwik-fullstack,
+zelkai-trends, mcp-for-page-builders (under the mounted projects volume). Reversible — `rm
+rawenv.toml` per project (or `git clean`) to remove.
