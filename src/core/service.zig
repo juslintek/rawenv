@@ -34,24 +34,50 @@ fn accessPath(allocator: std.mem.Allocator, path: []const u8) bool {
 
 /// Run a command using fork/exec, wait for completion. Returns exit code.
 fn runCommand(allocator: std.mem.Allocator, argv: []const []const u8) !u8 {
+    return runCommandImpl(allocator, argv, false);
+}
+
+/// Like `runCommand` but discards the child's stdout/stderr. Used for calls
+/// whose "failure" is expected and benign — e.g. `launchctl bootout` of a job
+/// that isn't loaded prints "Boot-out failed: 3: No such process" to stderr.
+fn runCommandSilent(allocator: std.mem.Allocator, argv: []const []const u8) !u8 {
+    return runCommandImpl(allocator, argv, true);
+}
+
+fn runCommandImpl(allocator: std.mem.Allocator, argv: []const []const u8, silent: bool) !u8 {
     if (comptime builtin.os.tag == .windows) return 1;
 
-    const argv_z = try allocator.alloc(?[*:0]const u8, argv.len + 1);
+    // execve(2) does NOT search $PATH, so a bare argv[0] like "launchctl" /
+    // "systemctl" would die with ENOENT (_exit 127) — which silently broke
+    // every service start/stop/status (services never actually launched). Exec
+    // through `/usr/bin/env`, which resolves the command against $PATH.
+    const argv_z = try allocator.alloc(?[*:0]const u8, argv.len + 2);
     defer allocator.free(argv_z);
-    for (argv, 0..) |arg, idx| {
-        argv_z[idx] = (try allocator.dupeZ(u8, arg)).ptr;
-    }
-    argv_z[argv.len] = null;
-    defer for (argv_z[0..argv.len]) |ptr| {
+    // Start all-null so the cleanup below is safe even if a dupeZ fails partway,
+    // and so the trailing slot serves as the exec argv sentinel.
+    @memset(argv_z, null);
+    defer for (argv_z) |ptr| {
         if (ptr) |p| allocator.free(std.mem.sliceTo(p, 0));
     };
+    argv_z[0] = (try allocator.dupeZ(u8, "env")).ptr;
+    for (argv, 0..) |arg, idx| {
+        argv_z[idx + 1] = (try allocator.dupeZ(u8, arg)).ptr;
+    }
 
     const argv_sentinel: [*:null]const ?[*:0]const u8 = @ptrCast(argv_z.ptr);
 
     const pid = std.c.fork();
     if (pid < 0) return 1;
     if (pid == 0) {
-        _ = std.c.execve(argv_z[0].?, argv_sentinel, std.c.environ);
+        if (silent) {
+            const nul = std.posix.openat(std.posix.AT.FDCWD, "/dev/null", .{ .ACCMODE = .WRONLY }, 0) catch -1;
+            if (nul >= 0) {
+                _ = std.c.dup2(nul, 1);
+                _ = std.c.dup2(nul, 2);
+                _ = std.c.close(nul);
+            }
+        }
+        _ = std.c.execve("/usr/bin/env", argv_sentinel, std.c.environ);
         std.c._exit(127);
     }
     var status: c_int = 0;
@@ -429,6 +455,19 @@ pub fn freeServiceArgs(allocator: std.mem.Allocator, args: [][]const u8) void {
     allocator.free(args);
 }
 
+/// The actual executable name inside a service package's `bin/`. Usually the
+/// package name, but some servers ship the daemon under a different name
+/// (redis -> redis-server, mariadb -> mariadbd, mysql -> mysqld). Both `up`'s
+/// installed-check and `startService` use this so we look for / launch the real
+/// binary instead of a non-existent `bin/<base>` — otherwise the service is
+/// wrongly reported "not installed" and never started.
+pub fn serviceBinaryName(base: []const u8) []const u8 {
+    if (std.mem.eql(u8, base, "redis")) return "redis-server";
+    if (std.mem.eql(u8, base, "mariadb")) return "mariadbd";
+    if (std.mem.eql(u8, base, "mysql")) return "mysqld";
+    return base;
+}
+
 /// Get the plist path: ~/Library/LaunchAgents/com.rawenv.{name}.plist
 fn getPlistPath(allocator: std.mem.Allocator, home: []const u8, name: []const u8) ![]const u8 {
     const filename = try std.fmt.allocPrint(allocator, "com.rawenv.{s}.plist", .{name});
@@ -473,7 +512,20 @@ pub fn startServiceMacOS(allocator: std.mem.Allocator, name: []const u8, binary_
     const plist_path = try writePlist(allocator, name, plist);
     defer allocator.free(plist_path);
 
-    _ = runCommand(allocator, &.{ "launchctl", "load", plist_path }) catch {};
+    // Register with launchd. `launchctl load` is deprecated and silently no-ops
+    // when a stale job is still registered (so a re-`up` never restarts the
+    // service). Boot out any prior instance, then `bootstrap` the fresh plist
+    // into the per-user GUI domain (works from a login shell and over SSH when
+    // a GUI session is active).
+    const label = try std.fmt.allocPrint(allocator, "com.rawenv.{s}", .{name});
+    defer allocator.free(label);
+    const domain = try std.fmt.allocPrint(allocator, "gui/{d}", .{std.c.geteuid()});
+    defer allocator.free(domain);
+    const target = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ domain, label });
+    defer allocator.free(target);
+    _ = runCommandSilent(allocator, &.{ "launchctl", "bootout", target }) catch {};
+    const code = runCommand(allocator, &.{ "launchctl", "bootstrap", domain, plist_path }) catch return error.LaunchdBootstrapFailed;
+    if (code != 0) return error.LaunchdBootstrapFailed;
 }
 
 /// Stop a service on macOS using launchd
@@ -482,7 +534,11 @@ pub fn stopServiceMacOS(allocator: std.mem.Allocator, name: []const u8) !void {
     const plist_path = try getPlistPath(allocator, home, name);
     defer allocator.free(plist_path);
 
-    _ = runCommand(allocator, &.{ "launchctl", "unload", plist_path }) catch {};
+    // Boot the job out of the per-user GUI domain (mirrors `bootstrap` in start;
+    // `launchctl unload` is the deprecated counterpart).
+    const target = try std.fmt.allocPrint(allocator, "gui/{d}/com.rawenv.{s}", .{ std.c.geteuid(), name });
+    defer allocator.free(target);
+    _ = runCommandSilent(allocator, &.{ "launchctl", "bootout", target }) catch {};
 
     if (comptime builtin.os.tag != .windows) {
         const pz = try std.fmt.allocPrintSentinel(allocator, "{s}", .{plist_path}, 0);
@@ -496,7 +552,7 @@ pub fn getServiceStatusMacOS(allocator: std.mem.Allocator, name: []const u8) !Se
     const label = try std.fmt.allocPrint(allocator, "com.rawenv.{s}", .{name});
     defer allocator.free(label);
 
-    const exit_code = runCommand(allocator, &.{ "launchctl", "list", label }) catch return .stopped;
+    const exit_code = runCommandSilent(allocator, &.{ "launchctl", "list", label }) catch return .stopped;
     if (exit_code != 0) return .stopped;
     return .running;
 }
@@ -631,7 +687,7 @@ pub fn startService(allocator: std.mem.Allocator, project: []const u8, name: []c
 
     const store_path = try buildStorePath(allocator, home, name, version);
     defer allocator.free(store_path);
-    const binary_path = try std.fs.path.join(allocator, &.{ store_path, "bin", name });
+    const binary_path = try std.fs.path.join(allocator, &.{ store_path, "bin", serviceBinaryName(baseTypeOf(name)) });
     defer allocator.free(binary_path);
 
     const data_dir = try buildDataDir(allocator, home, project, name);
@@ -1121,7 +1177,7 @@ pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !Up
         const base = baseTypeOf(svc.name);
         const store_path = try buildStorePath(allocator, home, base, svc.version);
         defer allocator.free(store_path);
-        const binary_path = try std.fs.path.join(allocator, &.{ store_path, "bin", base });
+        const binary_path = try std.fs.path.join(allocator, &.{ store_path, "bin", serviceBinaryName(base) });
         defer allocator.free(binary_path);
         if (!accessPath(allocator, binary_path)) {
             try stdout.print("  {s}@{s} — not installed, skipping (run `rawenv add {s}@{s}`)\n", .{ svc.name, svc.version, base, svc.version });
@@ -1281,6 +1337,15 @@ test "defaultPort known services" {
     try std.testing.expect(defaultPort("redis") == 6379);
     try std.testing.expect(defaultPort("node") == 3000);
     try std.testing.expect(defaultPort("unknown") == 0);
+}
+
+test "serviceBinaryName maps daemons whose executable differs from the package name" {
+    try std.testing.expectEqualStrings("redis-server", serviceBinaryName("redis"));
+    try std.testing.expectEqualStrings("mariadbd", serviceBinaryName("mariadb"));
+    try std.testing.expectEqualStrings("mysqld", serviceBinaryName("mysql"));
+    // Packages whose executable matches the name pass through unchanged.
+    try std.testing.expectEqualStrings("postgres", serviceBinaryName("postgres"));
+    try std.testing.expectEqualStrings("meilisearch", serviceBinaryName("meilisearch"));
 }
 
 test "generateLaunchdPlist" {

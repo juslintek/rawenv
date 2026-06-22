@@ -135,7 +135,19 @@ reinstalling the correct binary.
   is violated at authoring time. Fix options: (a) add resolver support (rust, mssql, macOS
   mysql/mariadb) — large; (b) map detected versions onto installable ones (python 3.11→3.12) and
   omit/flag truly-unsupported stacks at `init` — smaller.
-- **F-RUN (P1):** redis installs + generates a config but stays `stopped`; no CLI start.
+- **F-RUN (P1): FIXED (2026-06-22).** Three root causes, all in `src/core/service.zig`: (1)
+  `runCommand` exec'd via `execve`, which does **not** search `$PATH`, so `launchctl`/`systemctl`
+  were never found → every service start/stop/status silently failed (now exec'd via
+  `/usr/bin/env`); (2) `up`/`startService` looked for `bin/<name>`, but redis ships `bin/redis-server`
+  (added `serviceBinaryName`: redis→redis-server, mariadb→mariadbd, mysql→mysqld); (3) used the
+  deprecated `launchctl load` (no-ops on a stale job) → now `bootout`+`bootstrap gui/<uid>`.
+  **Verified:** `rawenv up` on rahcolours → `▶ redis started · ✓ ready`, `redis-cli ping → PONG`,
+  `status → redis running`. The install→run→verify loop now closes.
+- **F-PORT (P2, exposed by the F-RUN fix):** `status` re-runs port allocation (`PortAllocator.claim`
+  → `isPortFree`), and a *running* service's own port reads as "in use", so status bumps redis
+  6379→6380, then probes 6380 and falsely warns "stale PID — port not responding". `up` (run before
+  the service was up) used 6379. **Fix:** read the persisted/allocated port instead of re-allocating
+  on every `status`/`up` (or honor the preferred port when the only listener is the service itself).
 - **Runtimes work:** node (`v22.15.0`) and frankenphp (`PHP 8.5.7`) execute from the store; `up`
   activates into a single global `~/.rawenv/bin` (one project active at a time — by design).
 - **F-STALE-CLI (P2):** the GUI app overwrote `~/.rawenv/bin/rawenv` with an old embedded binary;
