@@ -46,3 +46,6 @@ PROMPT.md
 test_io*
 test_ascii
 crash-screen.jpg
+
+# JetBrains IDE
+.idea/
