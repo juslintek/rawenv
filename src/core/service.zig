@@ -323,24 +323,125 @@ pub const PortAllocator = struct {
         if (port != 0) try self.used.put(self.allocator, port, {});
     }
 
-    /// Claim a free port starting at `preferred`, skipping already-claimed and
-    /// OS-bound ports. Returns 0 if none available.
-    ///
-    /// When `preferred` is 0 (an unrecognised service with no published port)
-    /// the scan starts in the IANA dynamic/ephemeral range rather than at 1024,
-    /// so auto-allocated ports are always meaningful (never 0 or the privileged
-    /// 1024 fallback).
+    /// Claim a port for a service, preferring ports that keep the service's
+    /// default port recognisable. Search order for a base port B (skipping any
+    /// already-claimed or OS-bound port):
+    ///   1. B itself;
+    ///   2. B's "decade" neighbourhood (e.g. 5430..5440 for 5433);
+    ///   3. B + 100·k        (5533, 5633, … 5933);
+    ///   4. B + 1000·k       (6433, 7433, …);
+    ///   5. B + 10000·k, k=2..6  (25433, 35433, 45433, 55433, 65433);
+    ///   6. fallback: linear scan upward from B.
+    /// Candidates above 65535 are skipped. When `preferred` is 0 (an
+    /// unrecognised service) the search scans the IANA ephemeral range.
     pub fn claim(self: *PortAllocator, preferred: u16) !u16 {
-        var p: u16 = if (preferred == 0) 49152 else preferred;
+        if (preferred == 0) return self.scanFrom(49152);
+
+        if (try self.tryClaim(preferred)) |p| return p;
+
+        // Decade neighbourhood (round down to nearest 10): 5433 -> 5430..5440.
+        const dec_start: u32 = (@as(u32, preferred) / 10) * 10;
+        var dd: u32 = dec_start;
+        while (dd <= dec_start + 10 and dd <= 65535) : (dd += 1) {
+            const c: u16 = @intCast(dd);
+            if (c != preferred) {
+                if (try self.tryClaim(c)) |p| return p;
+            }
+        }
+
+        // Structured offsets that keep the base port visible: +100·k, +1000·k,
+        // then the +20k..+60k "prefix" ports (e.g. 25433, 35433, … 65433).
+        const offsets = [_]u32{
+            100,   200,   300,   400,   500,
+            1000,  2000,  3000,  4000,  5000,
+            20000, 30000, 40000, 50000, 60000,
+        };
+        for (offsets) |off| {
+            const sum = @as(u32, preferred) + off;
+            if (sum <= 65535) {
+                if (try self.tryClaim(@intCast(sum))) |p| return p;
+            }
+        }
+
+        // Fallback: linear scan upward from the base to fill any remaining gap.
+        return self.scanFrom(preferred);
+    }
+
+    /// Claim `port` if it is free — not already taken in this pass and bindable
+    /// at the OS level. Returns the port on success, null if unavailable.
+    fn tryClaim(self: *PortAllocator, port: u16) !?u16 {
+        if (port == 0) return null;
+        if (self.used.contains(port)) return null;
+        if (!isPortFree(port)) return null;
+        try self.used.put(self.allocator, port, {});
+        return port;
+    }
+
+    /// Linear upward scan from `start`, skipping claimed + OS-bound ports.
+    fn scanFrom(self: *PortAllocator, start: u16) !u16 {
+        var p: u16 = if (start == 0) 49152 else start;
         while (p < 65535) : (p += 1) {
-            if (self.used.contains(p)) continue;
-            if (!isPortFree(p)) continue;
-            try self.used.put(self.allocator, p, {});
-            return p;
+            if (try self.tryClaim(p)) |c| return c;
         }
         return 0;
     }
 };
+
+/// Read a service instance's persisted auto-allocated port from its data dir
+/// (`<data_dir>/port`), or null if absent/invalid. Persisting the port keeps
+/// `status`/`up` reporting a stable value instead of re-deriving it live (which
+/// drifts once the service is running on it). Explicit `port =` in rawenv.toml
+/// is honored separately and is never persisted here.
+pub fn readPersistedPort(allocator: std.mem.Allocator, data_dir: []const u8) ?u16 {
+    if (comptime builtin.os.tag == .windows) return null;
+    if (data_dir.len == 0) return null;
+    const path = std.fmt.allocPrintSentinel(allocator, "{s}/port", .{data_dir}, 0) catch return null;
+    defer allocator.free(path);
+    const fd = std.posix.openat(std.posix.AT.FDCWD, path, .{}, 0) catch return null;
+    defer _ = std.c.close(fd);
+    var buf: [16]u8 = undefined;
+    const n = std.posix.read(fd, &buf) catch return null;
+    const trimmed = std.mem.trim(u8, buf[0..n], " \t\r\n");
+    return std.fmt.parseInt(u16, trimmed, 10) catch null;
+}
+
+/// Persist a service instance's auto-allocated port to `<data_dir>/port` so
+/// later calls (and the generated service config) agree on it. Best-effort.
+pub fn writePersistedPort(allocator: std.mem.Allocator, data_dir: []const u8, port: u16) void {
+    if (comptime builtin.os.tag == .windows) return;
+    if (data_dir.len == 0 or port == 0) return;
+    mkdirP(allocator, data_dir);
+    const path = std.fmt.allocPrintSentinel(allocator, "{s}/port", .{data_dir}, 0) catch return;
+    defer allocator.free(path);
+    const fd = std.posix.openat(std.posix.AT.FDCWD, path, .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o644) catch return;
+    defer _ = std.c.close(fd);
+    var buf: [16]u8 = undefined;
+    const s = std.fmt.bufPrint(&buf, "{d}\n", .{port}) catch return;
+    var written: usize = 0;
+    while (written < s.len) {
+        const w = std.c.write(fd, s.ptr + written, s.len - written);
+        if (w < 0) return;
+        written += @intCast(w);
+    }
+}
+
+/// Resolve a service instance's listening port and keep it stable across calls:
+///   1. an explicit `port` in rawenv.toml always wins (never persisted here);
+///   2. else a previously-persisted auto-allocated port;
+///   3. else a freshly allocated free port (structured search), then persisted
+///      so `status`, `up`, and the generated service config all agree on it.
+/// `pa` dedups within a single multi-service pass (reserve explicit ports
+/// first); `data_dir` is the instance's data dir where the port is persisted.
+pub fn resolveServicePort(allocator: std.mem.Allocator, data_dir: []const u8, explicit_port: u16, base: []const u8, pa: *PortAllocator) !u16 {
+    if (explicit_port != 0) return explicit_port;
+    if (readPersistedPort(allocator, data_dir)) |p| {
+        try pa.reserve(p);
+        return p;
+    }
+    const claimed = try pa.claim(defaultPort(base));
+    if (claimed != 0) writePersistedPort(allocator, data_dir, claimed);
+    return claimed;
+}
 
 /// Compute a filesystem-safe, collision-resistant key for a project's data dir.
 /// Format: {sanitized-name}-{hash} so dirs stay human-readable while remaining
@@ -764,11 +865,11 @@ pub fn listServices(allocator: std.mem.Allocator, cfg: config.Config) ![]Service
     for (cfg.services) |svc| {
         const base = svc.baseType();
         const full_version = resolver.resolveVersion(base, svc.value);
-        const port: u16 = if (svc.port != 0) svc.port else try pa.claim(defaultPort(base));
         const data_dir = if (home.len > 0)
             try buildDataDir(allocator, home, cfg.project_name, svc.key)
         else
             try allocator.dupe(u8, "");
+        const port: u16 = try resolveServicePort(allocator, data_dir, svc.port, base, &pa);
         try list_arr.append(allocator, .{
             .name = svc.key,
             .version = full_version,
@@ -1346,6 +1447,38 @@ test "serviceBinaryName maps daemons whose executable differs from the package n
     // Packages whose executable matches the name pass through unchanged.
     try std.testing.expectEqualStrings("postgres", serviceBinaryName("postgres"));
     try std.testing.expectEqualStrings("meilisearch", serviceBinaryName("meilisearch"));
+}
+
+test "PortAllocator.claim falls to the decade neighbourhood when the base is taken" {
+    var pa = PortAllocator.init(std.testing.allocator);
+    defer pa.deinit();
+    const base: u16 = 54330; // high + uncommon so the OS reports it free
+    try pa.reserve(base); // simulate the base already claimed this pass
+    const p = try pa.claim(base);
+    try std.testing.expect(p != base);
+    try std.testing.expect(p >= 54330 and p <= 54340);
+}
+
+test "PortAllocator.claim uses a +100 offset once the decade is exhausted" {
+    var pa = PortAllocator.init(std.testing.allocator);
+    defer pa.deinit();
+    const base: u16 = 54330;
+    var d: u16 = 54330;
+    while (d <= 54340) : (d += 1) try pa.reserve(d); // base + whole decade taken
+    try std.testing.expectEqual(@as(u16, 54430), try pa.claim(base)); // base + 100
+}
+
+test "writePersistedPort then readPersistedPort round-trips" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+    var buf: [256]u8 = undefined;
+    const dir = try std.fmt.bufPrint(&buf, "/tmp/rawenv-porttest-{d}", .{std.time.milliTimestamp()});
+    defer {
+        _ = runCommand(std.testing.allocator, &.{ "/bin/rm", "-rf", dir }) catch {};
+    }
+    writePersistedPort(std.testing.allocator, dir, 25433);
+    try std.testing.expectEqual(@as(?u16, 25433), readPersistedPort(std.testing.allocator, dir));
+    // A directory with no port file reads back null.
+    try std.testing.expectEqual(@as(?u16, null), readPersistedPort(std.testing.allocator, "/tmp/rawenv-porttest-missing"));
 }
 
 test "generateLaunchdPlist" {

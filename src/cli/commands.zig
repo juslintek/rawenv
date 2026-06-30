@@ -423,11 +423,18 @@ fn configureAfterAdd(allocator: std.mem.Allocator, pkg: resolver.ResolvedPackage
             var cfg = parsed;
             defer config.deinit(allocator, &cfg);
             const home = (if (std.c.getenv("HOME")) |s| std.mem.sliceTo(s, 0) else null) orelse return;
+            var pa = service.PortAllocator.init(allocator);
+            defer pa.deinit();
+            for (cfg.services) |svc| {
+                pa.reserve(svc.port) catch {};
+            }
             for (cfg.services) |svc| {
                 if (!service.sameServiceFamily(svc.baseType(), pkg.name)) continue;
-                const port: u16 = if (svc.port != 0) svc.port else service.defaultPort(svc.baseType());
                 const data_dir = service.buildDataDir(allocator, home, cfg.project_name, svc.key) catch continue;
                 defer allocator.free(data_dir);
+                // Same resolver listServices/status use, so the generated config
+                // and the reported/started port always agree (persisted once).
+                const port: u16 = service.resolveServicePort(allocator, data_dir, svc.port, svc.baseType(), &pa) catch service.defaultPort(svc.baseType());
                 service.autoConfigure(allocator, pkg.name, pkg.version, data_dir, port, stdout) catch {};
                 configured_any = true;
             }
