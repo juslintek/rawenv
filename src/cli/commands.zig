@@ -484,6 +484,16 @@ pub fn runUp(allocator: std.mem.Allocator, stdout: anytype) !u8 {
     // successful `up` — instead we persist configs and print next steps.
     setupNetwork(allocator, result.cfg, stdout) catch {};
 
+    // Surface a visitable URL for a served web runtime (frankenphp) and open it
+    // in the browser. Best-effort — never fails `up`.
+    if (outcome.web_port != 0) {
+        if (std.fmt.allocPrint(allocator, "http://127.0.0.1:{d}", .{outcome.web_port}) catch null) |url| {
+            defer allocator.free(url);
+            try stdout.print("\n  \u{2192} Open your app: {s}\n", .{url});
+            service.openURL(allocator, url);
+        }
+    }
+
     // Surface a non-zero exit if any configured service failed to start or
     // never became ready, so scripts and CI can detect the failure. Uninstalled
     // or user-managed services are skipped (not failures) and don't trip this.

@@ -146,6 +146,9 @@ pub const UpOutcome = struct {
     /// Services intentionally not started (uninstalled, user-managed app,
     /// unsupported platform). These do not count as failures.
     skipped: usize = 0,
+    /// Port a web runtime (frankenphp) is serving the project on, 0 if none.
+    /// Lets `runUp` wire the domain + print/open the visitable URL.
+    web_port: u16 = 0,
 };
 
 /// Sleep for `ms` milliseconds using poll(2) with no descriptors. Avoids
@@ -280,6 +283,7 @@ pub fn defaultPort(name: []const u8) u16 {
     if (std.mem.eql(u8, name, "node")) return 3000;
     if (std.mem.eql(u8, name, "python")) return 8000;
     if (std.mem.eql(u8, name, "php")) return 8000;
+    if (std.mem.eql(u8, name, "frankenphp")) return 8080;
     return 0;
 }
 
@@ -569,6 +573,82 @@ pub fn serviceBinaryName(base: []const u8) []const u8 {
     return base;
 }
 
+/// True for runtimes rawenv runs as an HTTP server for the project (rather than
+/// only PATH-activating). FrankenPHP is a full web server (Caddy + embedded PHP).
+pub fn isWebRuntime(key: []const u8) bool {
+    return std.mem.eql(u8, key, "frankenphp");
+}
+
+/// Pick the docroot to serve for a project rooted at `cwd`: the first existing
+/// of public/, web/, public_html/, else `cwd` itself. Caller owns the result.
+pub fn webDocroot(allocator: std.mem.Allocator, cwd: []const u8) ![]const u8 {
+    const candidates = [_][]const u8{ "public", "web", "public_html" };
+    for (candidates) |sub| {
+        const p = try std.fs.path.join(allocator, &.{ cwd, sub });
+        if (accessPath(allocator, p)) return p;
+        allocator.free(p);
+    }
+    return allocator.dupe(u8, cwd);
+}
+
+/// Start a web runtime (frankenphp) as a managed HTTP server for the project,
+/// serving its docroot on a resolved + persisted port via launchd. Returns the
+/// port (0 if it couldn't start or the platform is unsupported). The current
+/// working directory is the project root (source of the docroot), so call this
+/// from the project directory. Best-effort: a launch failure prints ✗ and
+/// returns 0 rather than failing the whole `up`.
+pub fn startWebRuntime(allocator: std.mem.Allocator, project: []const u8, rt_key: []const u8, version: []const u8, stdout: anytype) !u16 {
+    if (comptime builtin.os.tag != .macos) return 0;
+    const home = getHome() orelse return 0;
+
+    const store_path = try buildStorePath(allocator, home, rt_key, version);
+    defer allocator.free(store_path);
+    const bin = try std.fs.path.join(allocator, &.{ store_path, "bin", rt_key });
+    defer allocator.free(bin);
+    if (!accessPath(allocator, bin)) return 0;
+
+    var cwd_buf: [4096]u8 = undefined;
+    const cwd_z = std.c.getcwd(&cwd_buf, cwd_buf.len) orelse return 0;
+    const cwd = std.mem.sliceTo(cwd_z, 0);
+    const docroot = try webDocroot(allocator, cwd);
+    defer allocator.free(docroot);
+
+    const data_dir = try buildDataDir(allocator, home, project, "web");
+    defer allocator.free(data_dir);
+    var pa = PortAllocator.init(allocator);
+    defer pa.deinit();
+    const port = try resolveServicePort(allocator, data_dir, 0, rt_key, &pa);
+    if (port == 0) return 0;
+
+    const listen = try std.fmt.allocPrint(allocator, "127.0.0.1:{d}", .{port});
+    defer allocator.free(listen);
+    const args = [_][]const u8{ "php-server", "--root", docroot, "--listen", listen };
+
+    launchdStart(allocator, "web", bin, &args, data_dir) catch {
+        try stdout.print("  \u{2717} {s} web server failed to start\n", .{rt_key});
+        return 0;
+    };
+    // Wait until the server actually accepts connections before reporting the
+    // URL (and before the caller opens a browser) — frankenphp takes ~2-3s to
+    // boot, and opening the browser too early shows "can't connect".
+    var tries: u8 = 0;
+    while (tries < 40) : (tries += 1) {
+        if (tcpProbe(port)) break;
+        sleepMs(250);
+    }
+    try stdout.print("  \u{25b6} {s} serving {s}\n     on http://{s}\n", .{ rt_key, docroot, listen });
+    return port;
+}
+
+/// Open `url` in the default browser (macOS `open`). No-op off macOS or when
+/// RAWENV_NO_OPEN is set (so tests/CI don't pop a browser). Fire-and-forget —
+/// `open` launches the browser and returns promptly.
+pub fn openURL(allocator: std.mem.Allocator, url: []const u8) void {
+    if (comptime builtin.os.tag != .macos) return;
+    if (std.c.getenv("RAWENV_NO_OPEN") != null) return;
+    _ = runCommand(allocator, &.{ "open", url }) catch {};
+}
+
 /// Get the plist path: ~/Library/LaunchAgents/com.rawenv.{name}.plist
 fn getPlistPath(allocator: std.mem.Allocator, home: []const u8, name: []const u8) ![]const u8 {
     const filename = try std.fmt.allocPrint(allocator, "com.rawenv.{s}.plist", .{name});
@@ -601,23 +681,25 @@ pub fn writePlist(allocator: std.mem.Allocator, name: []const u8, plist_content:
 /// Start a service on macOS using launchd. `data_dir` is the per-project,
 /// per-instance data directory (created if missing).
 pub fn startServiceMacOS(allocator: std.mem.Allocator, name: []const u8, binary_path: []const u8, data_dir: []const u8) !void {
-    mkdirP(allocator, data_dir);
-
     const base = baseTypeOf(name);
     const args = try serviceStartArgs(allocator, base, data_dir);
     defer freeServiceArgs(allocator, args);
+    try launchdStart(allocator, name, binary_path, args, data_dir);
+}
 
+/// Write a launchd plist running `binary_path` + `args` (WorkingDirectory =
+/// `data_dir`) and (re)bootstrap it into the per-user GUI domain. `launchctl
+/// load` is deprecated and silently no-ops when a stale job is still
+/// registered, so we boot out any prior instance first, then `bootstrap` the
+/// fresh plist (works from a login shell and over SSH with a GUI session).
+/// Shared by service start and the web-runtime server. Returns
+/// error.LaunchdBootstrapFailed if launchctl rejects the job.
+pub fn launchdStart(allocator: std.mem.Allocator, name: []const u8, binary_path: []const u8, args: []const []const u8, data_dir: []const u8) !void {
+    mkdirP(allocator, data_dir);
     const plist = try generateLaunchdPlist(allocator, name, binary_path, args, data_dir);
     defer allocator.free(plist);
-
     const plist_path = try writePlist(allocator, name, plist);
     defer allocator.free(plist_path);
-
-    // Register with launchd. `launchctl load` is deprecated and silently no-ops
-    // when a stale job is still registered (so a re-`up` never restarts the
-    // service). Boot out any prior instance, then `bootstrap` the fresh plist
-    // into the per-user GUI domain (works from a login shell and over SSH when
-    // a GUI session is active).
     const label = try std.fmt.allocPrint(allocator, "com.rawenv.{s}", .{name});
     defer allocator.free(label);
     const domain = try std.fmt.allocPrint(allocator, "gui/{d}", .{std.c.geteuid()});
@@ -1244,6 +1326,15 @@ pub fn up(allocator: std.mem.Allocator, cfg: config.Config, stdout: anytype) !Up
         try stdout.writeAll(" activated\n");
     }
 
+    // Run web runtimes (frankenphp) as managed servers so the project is
+    // actually served (not just PATH-activated) and gets a visitable URL.
+    for (cfg.runtimes) |rt| {
+        if (!isWebRuntime(rt.key)) continue;
+        const wv = resolver.resolveVersion(rt.key, rt.value);
+        const wp = startWebRuntime(allocator, cfg.project_name, rt.key, wv, stdout) catch 0;
+        if (wp != 0) outcome.web_port = wp;
+    }
+
     // Start services, then gate on readiness. Using listServices gives us the
     // resolved (non-conflicting) port and per-service health policy.
     const services = try listServices(allocator, cfg);
@@ -1479,6 +1570,34 @@ test "writePersistedPort then readPersistedPort round-trips" {
     try std.testing.expectEqual(@as(?u16, 25433), readPersistedPort(std.testing.allocator, dir));
     // A directory with no port file reads back null.
     try std.testing.expectEqual(@as(?u16, null), readPersistedPort(std.testing.allocator, "/tmp/rawenv-porttest-missing"));
+}
+
+test "isWebRuntime + frankenphp default web port" {
+    try std.testing.expect(isWebRuntime("frankenphp"));
+    try std.testing.expect(!isWebRuntime("node"));
+    try std.testing.expect(!isWebRuntime("redis"));
+    try std.testing.expectEqual(@as(u16, 8080), defaultPort("frankenphp"));
+}
+
+test "webDocroot prefers public/ then falls back to the project root" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+    var buf: [256]u8 = undefined;
+    const root = try std.fmt.bufPrint(&buf, "/tmp/rawenv-docroot-{d}", .{std.time.milliTimestamp()});
+    defer {
+        _ = runCommand(std.testing.allocator, &.{ "/bin/rm", "-rf", root }) catch {};
+    }
+    mkdirP(std.testing.allocator, root);
+    // No public/ yet → returns the project root itself.
+    const d1 = try webDocroot(std.testing.allocator, root);
+    defer std.testing.allocator.free(d1);
+    try std.testing.expectEqualStrings(root, d1);
+    // Create public/ → returns <root>/public.
+    var pub_buf: [300]u8 = undefined;
+    const pubdir = try std.fmt.bufPrint(&pub_buf, "{s}/public", .{root});
+    mkdirP(std.testing.allocator, pubdir);
+    const d2 = try webDocroot(std.testing.allocator, root);
+    defer std.testing.allocator.free(d2);
+    try std.testing.expectEqualStrings(pubdir, d2);
 }
 
 test "generateLaunchdPlist" {
