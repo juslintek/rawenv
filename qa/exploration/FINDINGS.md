@@ -143,14 +143,15 @@ reinstalling the correct binary.
   deprecated `launchctl load` (no-ops on a stale job) → now `bootout`+`bootstrap gui/<uid>`.
   **Verified:** `rawenv up` on rahcolours → `▶ redis started · ✓ ready`, `redis-cli ping → PONG`,
   `status → redis running`. The install→run→verify loop now closes.
-- **F-PORT (P2, exposed by the F-RUN fix):** `status` re-runs port allocation (`PortAllocator.claim`
-  → `isPortFree`), and a *running* service's own port reads as "in use", so status bumps redis
-  6379→6380, then probes 6380 and falsely warns "stale PID — port not responding". `up` (run before
-  the service was up) used 6379. **Fix needs port persistence, not an allocator tweak:** tried having
-  `claim` honor the preferred port — but that re-introduces real foreign-conflict bugs (e.g. when
-  OrbStack already holds 6379) and is ambiguous for multiple instances of the same service. The
-  right fix is to persist each service's allocated port (in `rawenv.toml`/state at `add`/`up` time)
-  and have `status`/`up` *read* it instead of re-deriving it live. Deferred — F-RUN landed without it.
+- **F-PORT (P2): FIXED (2026-06-30).** Auto-allocated service ports now use a structured free-port
+  search and are **persisted** so `status`/`up` report a stable value (no more drift / false
+  "stale PID" once a service runs on its own port). `PortAllocator.claim` tries, for base B: B, its
+  decade (5430..5440 for 5433), +100..+500, +1000..+5000, then +20k/30k/40k/50k/60k prefix ports
+  (25433..65433), then a linear fallback — skipping busy/claimed ports. A shared `resolveServicePort`
+  (explicit `port =` ?? persisted ?? claim+persist to `<data_dir>/port`) is used by both
+  `listServices` and the `add`-time config generation, so the generated config, `status`, and `up`
+  all agree. Verified: default free → 6379 stable; 6379 held by a foreign process → redis runs on
+  6370 (decade), `redis-cli ping` PONG.
 - **Runtimes work:** node (`v22.15.0`) and frankenphp (`PHP 8.5.7`) execute from the store; `up`
   activates into a single global `~/.rawenv/bin` (one project active at a time — by design).
 - **F-STALE-CLI (P2):** the GUI app overwrote `~/.rawenv/bin/rawenv` with an old embedded binary;
