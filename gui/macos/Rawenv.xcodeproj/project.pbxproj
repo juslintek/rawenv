@@ -61,6 +61,7 @@
 		B47A00DDEFA5EA53C3961F41 /* DataRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE44232717E6492548D844B /* DataRepository.swift */; };
 		B61C4A3DC1FEDB61FF8BFC8F /* DataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84435FF8154F8BF6515A505E /* DataStore.swift */; };
 		BCE826DF2F1F1245BC32DEA3 /* Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BB6952E2E92B9E79914A25B /* Connection.swift */; };
+		BDE61BBE509297A294289B58 /* DeployWizardVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5243F85044A2AC86F439C74F /* DeployWizardVM.swift */; };
 		C9803FB8EBF854C86C7E192E /* AIEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54E2267AB383421DB46FB185 /* AIEngine.swift */; };
 		CB755ABC2207054FB39742B0 /* AIProviderCascade.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EFCCEBF254D55395B70261E /* AIProviderCascade.swift */; };
 		CFB0DFF1C67EDDEBCB51921A /* ProjectCreator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31CBAF749731FA5411402A68 /* ProjectCreator.swift */; };
@@ -126,6 +127,7 @@
 		4899D9CBC3F6F6AADAFA470D /* DashboardVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardVM.swift; sourceTree = "<group>"; };
 		499B02BDA9AF408217DA814D /* MenuBarActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarActions.swift; sourceTree = "<group>"; };
 		4B2877DB0CEB471074B77F16 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		5243F85044A2AC86F439C74F /* DeployWizardVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeployWizardVM.swift; sourceTree = "<group>"; };
 		54E2267AB383421DB46FB185 /* AIEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIEngine.swift; sourceTree = "<group>"; };
 		56917DD674BC10FA6A851C64 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		5BE4FAF4054CF58F9B4C4D6B /* MarkdownRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRenderer.swift; sourceTree = "<group>"; };
@@ -372,6 +374,7 @@
 				B36BC2EEFB92025E32E259F6 /* ConnectionsVM.swift */,
 				4899D9CBC3F6F6AADAFA470D /* DashboardVM.swift */,
 				9575A31439CDB7DFD1649456 /* DeployVM.swift */,
+				5243F85044A2AC86F439C74F /* DeployWizardVM.swift */,
 				331A2FFF08ACA2B5A43D374B /* InstallerVM.swift */,
 				613D50A8F335F6BD7E3136F6 /* InstallFlowVM.swift */,
 				732FF04D8952B7A92F534169 /* ProjectSetupVM.swift */,
@@ -550,6 +553,7 @@
 				0C9416769624BFFD8D6F87C3 /* DeployEngine.swift in Sources */,
 				11E28BB428362A4F49F8C873 /* DeployVM.swift in Sources */,
 				11B50D23B5DA27888BB700B2 /* DeployView.swift in Sources */,
+				BDE61BBE509297A294289B58 /* DeployWizardVM.swift in Sources */,
 				A1404794225989BDF7632210 /* InstallFlowVM.swift in Sources */,
 				7DF3335A6459A59165348077 /* InstallerEngine.swift in Sources */,
 				AF0825FCF51F5F5C81E8CFAE /* InstallerVM.swift in Sources */,

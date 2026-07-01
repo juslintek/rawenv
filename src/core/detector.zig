@@ -14,11 +14,20 @@ pub const DetectionResult = struct {
         /// passed to `detect` and freed by `deinit`; its elements are static
         /// literals (the package keys) and must not be freed individually.
         depends_on: []const []const u8 = &.{},
+        /// Comma-joined PHP extensions parsed from a Dockerfile's
+        /// `install-php-extensions …` line (e.g. "gd,intl,pdo_sqlite"), for
+        /// frankenphp/php runtimes. Allocated by `detect` when non-empty; freed
+        /// by `deinit`. Empty ("") means none detected.
+        extensions: []const u8 = "",
     };
 
     pub fn deinit(self: *DetectionResult, allocator: std.mem.Allocator) void {
+        for (self.runtimes) |rt| {
+            if (rt.extensions.len > 0) allocator.free(rt.extensions);
+        }
         for (self.services) |svc| {
             if (svc.depends_on.len > 0) allocator.free(svc.depends_on);
+            if (svc.extensions.len > 0) allocator.free(svc.extensions);
         }
         allocator.free(self.runtimes);
         allocator.free(self.services);

@@ -2,7 +2,23 @@ import Foundation
 
 public final class DataStore: DataRepository, @unchecked Sendable {
     private let cli: RawenvCLI
-    private let projectPath: String
+    private let projectPathLock = NSLock()
+    private var _projectPath: String
+    /// The directory the CLI runs in. Lock-guarded because it is set from the
+    /// main actor (when the active project changes) but read on background
+    /// queues inside the async CLI calls.
+    private var projectPath: String {
+        get {
+            projectPathLock.lock()
+            defer { projectPathLock.unlock() }
+            return _projectPath
+        }
+        set {
+            projectPathLock.lock()
+            _projectPath = newValue
+            projectPathLock.unlock()
+        }
+    }
     private let stats: ProcessStatsProvider
 
     public init(
@@ -10,8 +26,17 @@ public final class DataStore: DataRepository, @unchecked Sendable {
         stats: ProcessStatsProvider = SystemProcessStatsProvider()
     ) {
         self.cli = cli
-        self.projectPath = projectPath ?? FileManager.default.currentDirectoryPath
+        self._projectPath = projectPath ?? FileManager.default.currentDirectoryPath
         self.stats = stats
+    }
+
+    /// Retarget the CLI's working directory to the active project so all
+    /// project-scoped reads (services, connections, config) resolve against the
+    /// correct `rawenv.toml`. No-op for an empty path so a missing project can't
+    /// blank out a previously-valid directory.
+    public func useProject(path: String) {
+        guard !path.isEmpty else { return }
+        projectPath = path
     }
 
     public func fetchServices() async throws -> [Service] {
@@ -149,7 +174,17 @@ public final class DataStore: DataRepository, @unchecked Sendable {
             let from: String
             let to: String
         }
-        let conns: [CLIConn] = try await cli.runJSON(["connections"], as: [CLIConn].self, cwd: projectPath)
+        // Run raw (not runJSON) so a "not set up yet" CLI message degrades to an
+        // empty list rather than a decode failure. Without this guard an
+        // un-initialized project (or the app's "/" launch directory) surfaced a
+        // scary "data isn't in the correct format" error instead of the calm
+        // "No connections detected" empty state.
+        let output = try await cli.run(["connections", "--json"], cwd: projectPath)
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed.contains("No rawenv.toml") { return [] }
+        guard let data = trimmed.data(using: .utf8),
+            let conns = try? JSONDecoder().decode([CLIConn].self, from: data)
+        else { throw RepositoryError("Could not read connections.") }
         // The reverse-proxy routes (<host> -> localhost:<port>) generated
         // by rawenv proxy, used to surface a real proxy URL per connection.
         let routes = await fetchProxyRoutes()

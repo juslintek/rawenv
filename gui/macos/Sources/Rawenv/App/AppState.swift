@@ -6,7 +6,21 @@ public final class AppState: ObservableObject, NavigationService {
     @Published public var currentDestination: Destination = .dashboard
     @Published public var isInstalled: Bool
     @Published public var hasCompletedSetup: Bool
-    @Published public var activeProject: Project?
+    @Published public var activeProject: Project? {
+        didSet {
+            guard let path = activeProject?.path else { return }
+            // Point the data layer at the active project's directory so
+            // project-scoped CLI reads (services/connections/config) resolve
+            // against the right rawenv.toml instead of the app's launch dir ("/").
+            repository.useProject(path: ProjectSetupVM.resolveStackRoot(path))
+            // Reload the dashboard so it reflects the now-active project. The
+            // dashboard is the landing view and often loads on launch BEFORE the
+            // project (and its directory) are known — without this it stays stuck
+            // on the stale "isn't set up yet" empty state even for a configured
+            // project.
+            Task { await dashboardVM.load() }
+        }
+    }
     @Published public var managedProjects: [Project] = []
 
     public let repository: DataRepository

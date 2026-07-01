@@ -525,6 +525,15 @@ struct ProjectsView: View {
                         Task {
                             await setupVM.setUpAll()
                             appState.markSetupComplete()
+                            // On success, take the user to the Dashboard so the
+                            // completed setup is visible. Without this, finishing
+                            // setup from the Discovery pane left the screen
+                            // unchanged (markSetupComplete is a no-op once setup
+                            // is already complete) — so it looked like nothing
+                            // happened. Stay put on error so it stays on screen.
+                            if setupVM.error == nil {
+                                appState.navigate(to: .dashboard)
+                            }
                         }
                     }
                 }

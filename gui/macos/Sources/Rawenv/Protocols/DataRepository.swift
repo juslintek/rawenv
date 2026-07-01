@@ -31,6 +31,13 @@ public protocol DataRepository: Sendable {
     /// The configuration section for a single service (from `rawenv.toml`).
     /// `nil` returns the full project configuration.
     func fetchConfig(service: String?) async throws -> String
+
+    /// Point the repository at a project's working directory. The CLI is
+    /// project-scoped (it reads `rawenv.toml` from its cwd), so the GUI must
+    /// tell the data layer which directory the active project lives in —
+    /// otherwise reads run from the app's launch directory ("/" for an app in
+    /// /Applications) and every project-scoped fetch fails with "No rawenv.toml".
+    func useProject(path: String)
 }
 
 public extension DataRepository {
@@ -43,6 +50,10 @@ public extension DataRepository {
     /// Default: no configuration available. The production store overrides this
     /// to read the project's `rawenv.toml`.
     func fetchConfig(service: String?) async throws -> String { "" }
+
+    /// Default: ignore. Test doubles and in-memory stores are not project-scoped;
+    /// only `DataStore` overrides this to retarget the CLI's working directory.
+    func useProject(path: String) {}
 }
 
 public extension DataRepository {
