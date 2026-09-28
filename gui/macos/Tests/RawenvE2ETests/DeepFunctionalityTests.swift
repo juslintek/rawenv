@@ -11,8 +11,7 @@ private let testRoot = "/tmp/rawenv-deep-test"
 private let cli = RawenvCLI(
     binaryPath: resolvedRawenvBinary())
 
-private func ensureMyAppFixture() async throws {
-    let dir = "\(testRoot)/myapp"
+private func ensureMyAppFixture(at dir: String) async throws {
     try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
     try """
     {"name":"myapp","engines":{"node":">=22"},"dependencies":{"express":"^4","pg":"^8","redis":"^4"}}
@@ -47,7 +46,7 @@ private func makeOfflineInstallerEngine() -> (engine: InstallerEngine, binPath: 
     @Test func setup() async throws {
         try? FileManager.default.removeItem(atPath: testRoot)
         try FileManager.default.createDirectory(atPath: testRoot, withIntermediateDirectories: true)
-        try await ensureMyAppFixture()
+        try await ensureMyAppFixture(at: "\(testRoot)/myapp")
     }
 
     // MARK: - Isolation Cells
@@ -98,8 +97,11 @@ private func makeOfflineInstallerEngine() -> (engine: InstallerEngine, binPath: 
     }
 
     @Test func proxyPerServiceRouting() async throws {
-        try await ensureMyAppFixture()
-        let output = try await cli.run(["proxy"], cwd: "\(testRoot)/myapp")
+        let projectDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("rawenv-proxy-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: projectDir) }
+        try await ensureMyAppFixture(at: projectDir.path)
+        let output = try await cli.run(["proxy"], cwd: projectDir.path)
         // The fixture's detected dependencies should each have a route.
         #expect(output.contains("redis"))
         #expect(output.contains("postgresql"))
