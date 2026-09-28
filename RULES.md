@@ -38,8 +38,6 @@ line? (6) only then write the minimum that works.
 - No abstractions/dependencies/boilerplate nobody asked for. Deletion over addition,
   boring over clever, fewest files possible.
 - Pick the edge-case-correct option when two stdlib approaches are the same size.
-- Mark intentional simplifications with a `ponytail:` comment naming the ceiling and
-  upgrade path.
 - **Not lazy about**: input validation at trust boundaries, error handling that
   prevents data loss, security, accessibility, anything explicitly requested.
 - Non-trivial logic leaves ONE runnable check behind (smallest thing that fails if
