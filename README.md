@@ -230,7 +230,7 @@ zig build test
 The Cloudflare Pages project `rawenv` uses Direct Upload. From the repository root, deploy only the static files in `docs/public`:
 
 ```bash
-npx wrangler pages deploy docs/public --config docs/wrangler.toml --project-name rawenv --branch main
+npx wrangler pages deploy docs/public --project-name rawenv --branch main
 ```
 
 Wrangler must be authenticated to the Cloudflare account that owns the project. The command uploads `docs/public`; it does not build the site.
