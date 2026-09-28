@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rawenv — Project runtimes, ready when you are</title>
+  <meta name="description" content="rawenv detects runtimes and services in your project, writes a rawenv.toml, and helps you install and activate them from one CLI.">
+  <link rel="canonical" href="https://rawenv.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://rawenv.com/">
+  <meta property="og:title" content="rawenv — Project runtimes, ready when you are">
+  <meta property="og:description" content="Detect your project setup, pin it in rawenv.toml, and manage runtimes with one CLI.">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="rawenv — Project runtimes, ready when you are">
+  <meta name="twitter:description" content="Detect your project setup, pin it in rawenv.toml, and manage runtimes with one CLI.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <nav class="nav wrap" aria-label="Main navigation">
+      <a class="brand" href="/" aria-label="rawenv home"><span class="brand-mark" aria-hidden="true">r</span>rawenv</a>
+      <div class="nav-links">
+        <a href="#workflow">How it works</a>
+        <a href="https://github.com/juslintek/rawenv/tree/main/docs/guide/quickstart.md">Docs</a>
+        <a class="nav-github" href="https://github.com/juslintek/rawenv">GitHub <span aria-hidden="true">↗</span></a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> v0.2.0 <span class="eyebrow-divider">/</span> active development</p>
+        <h1>Get your project’s runtimes in place <span>with one project-level config.</span></h1>
+        <p class="lede">rawenv reads common project files, suggests runtimes and services, then records the setup in a project-level config. Manage it all from a small CLI.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#install">Install rawenv <span aria-hidden="true">↓</span></a>
+          <a class="button button-quiet" href="https://github.com/juslintek/rawenv">Explore the source <span aria-hidden="true">↗</span></a>
+        </div>
+        <p class="platform-note">Available for macOS and Linux. Windows has a release binary; setup is manual.</p>
+      </div>
+      <div class="terminal" aria-label="Example output from rawenv init">
+        <div class="terminal-bar"><span class="terminal-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>~/projects/my-app</span><span class="terminal-label">EXAMPLE</span></div>
+        <div class="terminal-body">
+          <p><span class="prompt">$</span> rawenv init</p>
+          <p class="output">Created rawenv.toml</p>
+          <p class="output">Detected runtimes:</p>
+          <p class="output indent">node 22</p>
+          <p class="output">Detected services:</p>
+          <p class="output indent">postgresql 16</p>
+        </div>
+        <div class="terminal-foot"><span>GENERATED CONFIG</span><code>rawenv.toml</code></div>
+      </div>
+    </section>
+
+    <section class="value-section">
+      <div class="wrap value-grid">
+        <div class="section-intro">
+          <p class="eyebrow">A smaller setup loop</p>
+          <h2>From project files<br>to a working setup.</h2>
+          <p>Stop re-deriving the same runtime versions every time you switch projects. rawenv gives your setup a home alongside the code.</p>
+        </div>
+        <div class="value-cards">
+          <article class="value-card">
+            <span class="card-index">01</span>
+            <div><h3>Start with what’s already there</h3><p>Detects runtimes and services from files such as <code>package.json</code>, <code>composer.json</code> and <code>docker-compose.yml</code>.</p></div>
+          </article>
+          <article class="value-card">
+            <span class="card-index">02</span>
+            <div><h3>Keep setup project-scoped</h3><p>Writes detected choices to <code>rawenv.toml</code>; runtimes live in rawenv’s own store instead of changing global installs.</p></div>
+          </article>
+          <article class="value-card">
+            <span class="card-index">03</span>
+            <div><h3>Check before you get to work</h3><p>Use <code>rawenv status</code> to see whether configured runtimes are installed and review setup warnings.</p></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="workflow wrap" id="workflow">
+      <div class="section-heading">
+        <p class="eyebrow">The first few commands</p>
+        <h2>A repeatable path into a project.</h2>
+        <p>Run these from the project directory. Detection creates a starting point; review the config before installing anything.</p>
+      </div>
+      <ol class="steps">
+        <li><span class="step-num">01</span><code>rawenv init</code><p>Detect runtimes and services, then create <code>rawenv.toml</code>.</p></li>
+        <li><span class="step-num">02</span><code>rawenv add node@22</code><p>Install a runtime version selected for this project.</p></li>
+        <li><span class="step-num">03</span><code>rawenv up</code><p>Activate configured runtimes for the project.</p></li>
+        <li><span class="step-num">04</span><code>rawenv shell</code><p>Open a shell with rawenv’s configured PATH.</p></li>
+      </ol>
+      <a class="text-link" href="https://github.com/juslintek/rawenv/blob/main/docs/guide/quickstart.md">Read the quickstart <span aria-hidden="true">→</span></a>
+    </section>
+
+    <section class="install-section" id="install">
+      <div class="wrap install-layout">
+        <div>
+          <p class="eyebrow">Try the current release</p>
+          <h2>Install on macOS or Linux.</h2>
+          <p>The installer downloads the latest release for your OS and CPU architecture into <code>~/.rawenv/bin</code>.</p>
+          <p class="windows-note"><strong>On Windows?</strong> Download the x86_64 ZIP from Releases and follow the manual setup notes in the README. The shell installer does not support Windows.</p>
+        </div>
+        <div class="install-command">
+          <span class="command-label">macOS · Linux</span>
+          <code>curl -fsSL https://rawenv.com/install | sh</code>
+          <p>Then add <code>~/.rawenv/bin</code> to your <code>PATH</code>.</p>
+          <a class="button button-primary" href="https://github.com/juslintek/rawenv/releases/latest">Get release v0.2.0 <span aria-hidden="true">↗</span></a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <a class="brand" href="/" aria-label="rawenv home"><span class="brand-mark" aria-hidden="true">r</span>rawenv</a>
+      <p>Open source · MIT License · v0.2.0</p>
+      <nav aria-label="Footer navigation"><a href="https://github.com/juslintek/rawenv">GitHub</a><a href="https://github.com/juslintek/rawenv/releases">Releases</a><a href="https://github.com/juslintek/rawenv/issues">Issues</a></nav>
+    </div>
+  </footer>
+</body>
+</html>
