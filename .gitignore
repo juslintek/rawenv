@@ -36,6 +36,7 @@ lib/raylib/
 .ralph/
 .ralph-tui/
 AGENTS.md
+!/AGENTS.md
 ralph.yml
 prd.json
 RALPH_HANDOVER.md
