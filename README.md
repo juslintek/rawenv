@@ -37,10 +37,17 @@ chmod +x "$HOME/.rawenv/bin/rawenv"
 Prefer a one-liner? `curl -fsSL https://raw.githubusercontent.com/juslintek/rawenv/main/install.sh | sh`
 detects your OS and architecture automatically.
 
-For **Windows**, download `rawenv-windows-x64.exe` from the
-[releases page](https://github.com/juslintek/rawenv/releases/latest) and rename it to `rawenv.exe`.
+For **Windows**, download and extract the x86_64 ZIP from the
+[releases page](https://github.com/juslintek/rawenv/releases/latest) with PowerShell:
 
-Add the binary to your `PATH` (add this line to `~/.zshrc` or `~/.bashrc` to make it permanent):
+```powershell
+$installDir = "$HOME\.rawenv\bin"
+New-Item -ItemType Directory -Force -Path $installDir
+Invoke-WebRequest "https://github.com/juslintek/rawenv/releases/latest/download/rawenv-x86_64-windows.zip" -OutFile "$env:TEMP\rawenv-windows.zip"
+Expand-Archive -Path "$env:TEMP\rawenv-windows.zip" -DestinationPath $installDir -Force
+```
+
+Add `$HOME\.rawenv\bin` to your user `Path` in Windows Environment Variables, then open a new terminal. On macOS or Linux, add this line to `~/.zshrc` or `~/.bashrc` to make the install directory permanent on your `PATH`:
 
 ```bash
 export PATH="$HOME/.rawenv/bin:$PATH"
