@@ -32,6 +32,7 @@ code { font-family: var(--mono); font-size: .91em; }
 .brand { gap: 10px; font-size: 19px; font-weight: 700; letter-spacing: -.04em; text-decoration: none; }
 .brand-mark { display: grid; width: 30px; aspect-ratio: 1; place-items: center; border-radius: 8px; background: var(--green); color: #16200e; font-family: var(--mono); font-size: 20px; font-weight: 700; }
 .nav-links { gap: 32px; color: var(--muted); font-size: 13px; }
+.nav-links a { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; gap: 5px; }
 .nav-links a, .site-footer a { text-decoration: none; }
 .nav-links a:hover, .site-footer a:hover { color: var(--green); }
 .nav-github { color: var(--text); }
