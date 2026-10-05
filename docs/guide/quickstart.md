@@ -6,12 +6,12 @@ global installs.
 ## 1. Install (30 seconds)
 
 ```bash
-curl -fsSL rawenv.sh/install | sh
+curl -fsSL https://rawenv.com/install | sh
 ```
 
-The installer downloads a single static binary to `~/.rawenv/bin/rawenv` and
-adds that directory to your `PATH` in `~/.zshrc`, `~/.bashrc`, and
-`~/.profile`. Restart your shell, or load the new `PATH` now:
+The installer downloads the latest release binary to `~/.rawenv/bin/rawenv` and
+prints the command to add that directory to your `PATH`. Add it to `~/.zshrc`
+or `~/.bashrc`, or load the new `PATH` now:
 
 ```bash
 export PATH="$HOME/.rawenv/bin:$PATH"
